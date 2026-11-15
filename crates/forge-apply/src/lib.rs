@@ -9,6 +9,7 @@
 //! exercised against a scratch directory instead of `/`.
 
 mod state;
+mod bootloader;
 mod users;
 
 use std::fmt;
@@ -489,6 +490,8 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             });
         }
     }
+    // The Limine files on the boot partition follow the limine package.
+    bootloader::plan(&mut p, package_names.iter().any(|n| n == "limine"), profile_switch.is_some());
     // systemd's own users (journal, network, ...) and dbus's runtime directories are created at boot, but doing it
     // now means the first boot starts with them in place (a dbus that races its user at first boot is not a good
     // first impression). Best effort: the units order themselves after these at boot anyway.

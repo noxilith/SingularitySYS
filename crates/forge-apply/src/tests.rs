@@ -795,3 +795,25 @@ fn systemd_machines_are_not_given_openrc_services() {
     assert!(defaults.iter().any(|s| s == "/usr/bin/wifi"), "the shared defaults still apply: {defaults:?}");
     assert!(defaults.iter().all(|s| !s.contains("init.d") && !s.contains("runlevels")), "no OpenRC services for systemd: {defaults:?}");
 }
+
+// ---- the boot loader ------------------------------------------------------------------
+
+#[test]
+fn the_limine_files_on_the_boot_partition_follow_the_package() {
+    let r = root();
+    fs::create_dir_all(r.path().join("boot/EFI/BOOT")).unwrap();
+    fs::create_dir_all(r.path().join("usr/share/limine")).unwrap();
+    fs::write(r.path().join("boot/EFI/BOOT/BOOTX64.EFI"), "OLD").unwrap();
+    fs::write(r.path().join("usr/share/limine/BOOTX64.EFI"), "NEW").unwrap();
+    publish_all(r.path(), &["limine"]);
+    let d = pkg_decl(&["limine"]);
+    let p = plan(&d, r.path());
+    assert!(p.changes.iter().any(|c| c.section == "boot" && c.summary.contains("BOOTX64.EFI")), "{:?}", p.changes);
+    apply(&p).unwrap();
+    assert_eq!(fs::read_to_string(r.path().join("boot/EFI/BOOT/BOOTX64.EFI")).unwrap(), "NEW");
+    assert!(plan(&d, r.path()).is_empty(), "already current");
+    // Not touched when limine is not part of the system.
+    fs::write(r.path().join("boot/EFI/BOOT/BOOTX64.EFI"), "OLD").unwrap();
+    let q = plan(&pkg_decl(&[]), r.path());
+    assert!(q.changes.iter().all(|c| c.section != "boot"));
+}

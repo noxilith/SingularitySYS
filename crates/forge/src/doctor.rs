@@ -75,6 +75,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
 
     init_link(&mut r, root, &system);
     limine(&mut r, root);
+    limine_current(&mut r, root);
     microcode(&mut r, root);
     defaults(&mut r, root, &system);
     if root == Path::new("/") {
@@ -182,6 +183,22 @@ fn defaults(r: &mut Report, root: &Path, system: &str) {
         let shown: Vec<&str> = stale.iter().take(4).map(String::as_str).collect();
         let more = if stale.len() > 4 { format!(" and {} more", stale.len() - 4) } else { String::new() };
         r.warn(G, format!("out of date: {}{more}", shown.join(", ")), "sudo forge apply");
+    }
+}
+
+/// The boot loader on the boot partition should be the one in the limine package.
+fn limine_current(r: &mut Report, root: &Path) {
+    const G: &str = "Boot";
+    for (installed, packaged) in [("/boot/EFI/BOOT/BOOTX64.EFI", "/usr/share/limine/BOOTX64.EFI"), ("/boot/limine-bios.sys", "/usr/share/limine/limine-bios.sys")] {
+        let (a, b) = (under(root, installed), under(root, packaged));
+        if !a.is_file() || !b.is_file() {
+            continue;
+        }
+        if matches!((fs::read(&a), fs::read(&b)), (Ok(x), Ok(y)) if x == y) {
+            r.ok(G, "the boot loader on the boot partition is the one in the limine package");
+        } else {
+            r.warn(G, format!("{installed} is older than the limine package"), "sudo forge apply");
+        }
     }
 }
 

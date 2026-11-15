@@ -534,6 +534,17 @@ impl Exec<'_> {
                 self.cmd(&Cmd::new("limine", &["bios-install"]).arg(&disk))?;
             }
         }
+        // How the boot loader was installed, so `forge apply` can update it when the limine package changes.
+        let record = match fw {
+            Firmware::Uefi => "firmware = \"uefi\"\n".to_string(),
+            Firmware::Bios => {
+                let disk = split_partition(&self.req.plan.boot_dev).map(|(d, _)| d).unwrap_or_default();
+                format!("firmware = \"bios\"\ndisk = \"{disk}\"\n")
+            }
+        };
+        let etc = self.mp().join("etc/forge");
+        fs::create_dir_all(&etc).map_err(io_ctx("creating /etc/forge"))?;
+        write_file(&etc.join("boot.toml"), &format!("# Written by forge strap: how the boot loader was installed, so forge can update it.\n{record}"))?;
         Ok(())
     }
 

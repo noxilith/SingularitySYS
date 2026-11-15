@@ -137,3 +137,16 @@ fn stale_forge_owned_files_are_a_warning() {
     let o = doctor(&r, "");
     assert!(o.status.success() && text(&o).contains("out of date:") && text(&o).contains("/usr/bin/wifi"), "{}", text(&o));
 }
+
+#[test]
+fn an_old_boot_loader_is_a_warning() {
+    let (_t, r) = healthy();
+    fs::create_dir_all(r.join("boot/EFI/BOOT")).unwrap();
+    fs::create_dir_all(r.join("usr/share/limine")).unwrap();
+    fs::write(r.join("boot/EFI/BOOT/BOOTX64.EFI"), "OLD").unwrap();
+    fs::write(r.join("usr/share/limine/BOOTX64.EFI"), "NEW").unwrap();
+    let o = doctor(&r, "");
+    assert!(o.status.success() && text(&o).contains("is older than the limine package"), "{}", text(&o));
+    fs::write(r.join("boot/EFI/BOOT/BOOTX64.EFI"), "NEW").unwrap();
+    assert!(text(&doctor(&r, "")).contains("is the one in the limine package"));
+}
