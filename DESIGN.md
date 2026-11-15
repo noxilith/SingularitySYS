@@ -7,7 +7,8 @@ Independent Linux distribution. Declarative, generation-based, OpenRC by default
 | Area | Decision |
 |---|---|
 | Base | Independent, built from source (not Arch/Debian derived) |
-| libc | glibc **and** musl: two ISOs, two package repos, one recipe tree. libc is fixed at install time and never mixed |
+| libc | **glibc only** (decided 2026-11-15; musl is dropped). Packages are dynamically linked; only `forge`, the rescue BusyBox and the initramfs shell are static. The musl history below (stages 0 to 3, the musl ISO that was tested on hardware) is kept as the record of how the toolchain was bootstrapped |
+| System tree | Packages are copied into the real `/usr` by `forge apply` (reflinks on btrfs), with merged `/usr`; see the last section |
 | Init | OpenRC default; `forge swap-init` switches (creates a generation first) |
 | Root fs | btrfs: `@` (live), `@snapshots` (generations) |
 | Firmware | UEFI and BIOS |
@@ -746,7 +747,7 @@ every package build uses, from packages it fetches itself:
 - **Not done**: `--menuconfig` in the sandbox; glibc (no glibc toolchain package exists); testing `forge kernel install`
   and the rebuilt kernel on a real Singularity machine.
 
-## Proposed (not implemented): the glibc base system, and how `forge upgrade` updates it
+## The glibc base system, and how `forge upgrade` updates it (DECIDED 2026-11-15: option A, materialize)
 
 Status 2026-11-15: every recipe builds for glibc, dynamically linked, in `repo/glibc-world2` (see
 `scripts/build-glibc-world.sh`). Nothing is published and nothing has been booted. This section is the decision
