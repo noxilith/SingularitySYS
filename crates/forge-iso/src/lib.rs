@@ -14,8 +14,9 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-pub use live::{SETUID_FILES, SQUASHFS_PATH, STANDARD_GROUPS, init_script, limine_conf, set_setuid};
-pub use rootfs::{fetch, merge};
+pub use live::{SQUASHFS_PATH, STANDARD_GROUPS, init_script, limine_conf};
+pub use forge_store::SETUID_FILES;
+pub use rootfs::{fetch, materialize_into};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IsoError {
@@ -102,7 +103,7 @@ fn args(a: &[&str]) -> Vec<String> {
 
 /// Check that everything the build needs is there, before anything is written.
 pub fn check_inputs(spec: &IsoSpec) -> Result<(), IsoError> {
-    let busybox = spec.rootfs.join("bin/busybox");
+    let busybox = spec.rootfs.join("usr/bin/busybox");
     for p in [&spec.kernel, &busybox] {
         if !p.is_file() {
             return Err(IsoError::Missing(p.clone()));
@@ -141,7 +142,6 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
     // The live system.
     let hash = runner.run("openssl", &args(&["passwd", "-6", "-salt", "singularitylive", "-stdin"]), Some(&format!("{}\n", spec.root_password)))?;
     live::write_live_root(&spec.rootfs, &spec.hostname, hash.trim())?;
-    live::set_setuid(&spec.rootfs)?;
     let keys_dir = spec.rootfs.join("etc/forge/keys");
     fs::create_dir_all(&keys_dir).map_err(io_ctx("creating /etc/forge/keys"))?;
     for key in &spec.trusted_keys {
@@ -161,7 +161,7 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
 
     // The initramfs.
     let rd = spec.work.join("initramfs");
-    live::write_initramfs_tree(&rd, &spec.rootfs.join("bin/busybox"), &spec.label)?;
+    live::write_initramfs_tree(&rd, &spec.rootfs.join("usr/bin/busybox"), &spec.label)?;
     let img = fs::File::create(boot.join("initramfs.img")).map_err(io_ctx("creating the initramfs"))?;
     let mut gz = flate2::GzBuilder::new().mtime(0).write(img, flate2::Compression::best());
     cpio::write_tree(&mut gz, &rd, &[("console", 0o020600, (5, 1)), ("null", 0o020666, (1, 3))]).map_err(io_ctx("writing the initramfs"))?;
@@ -220,8 +220,8 @@ mod tests {
 
     fn fixture(t: &Path) -> IsoSpec {
         let root = t.join("root");
-        fs::create_dir_all(root.join("bin")).unwrap();
-        fs::write(root.join("bin/busybox"), "ELF").unwrap();
+        fs::create_dir_all(root.join("usr/bin")).unwrap();
+        fs::write(root.join("usr/bin/busybox"), "ELF").unwrap();
         let lim = t.join("limine");
         fs::create_dir_all(&lim).unwrap();
         for f in LIMINE_FILES {
@@ -293,7 +293,7 @@ mod tests {
         spec.label = "not valid".into();
         assert!(matches!(build(&spec, &mut r), Err(IsoError::Invalid { .. })));
         spec = fixture(t2.path());
-        fs::remove_file(spec.rootfs.join("bin/busybox")).unwrap();
+        fs::remove_file(spec.rootfs.join("usr/bin/busybox")).unwrap();
         assert!(matches!(build(&spec, &mut r), Err(IsoError::Missing(_))));
     }
 
@@ -315,8 +315,8 @@ mod key_tests {
     fn trusted_keys_are_installed_where_forge_looks_for_them() {
         let t = tempfile::tempdir().unwrap();
         let root = t.path().join("root");
-        fs::create_dir_all(root.join("bin")).unwrap();
-        fs::write(root.join("bin/busybox"), "ELF").unwrap();
+        fs::create_dir_all(root.join("usr/bin")).unwrap();
+        fs::write(root.join("usr/bin/busybox"), "ELF").unwrap();
         let lim = t.path().join("limine");
         fs::create_dir_all(&lim).unwrap();
         for f in LIMINE_FILES {

@@ -479,8 +479,15 @@ impl Exec<'_> {
                 .or_else(|| detect_libc(&mp))
                 .ok_or(StrapError::UnknownLibc)?;
             let libc = if libc == Libc::Musl { "musl" } else { "glibc" };
+            // The base system is declared in full: every package the live image was built from, so that `forge
+            // apply` and `forge upgrade` keep all of it current (and know nothing is to be removed).
+            let packages = base_packages(&self.req.source)
+                .iter()
+                .map(|p| format!("\"{p}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
             let mut decl = format!(
-                "hostname = \"{}\"\nlibc = \"{libc}\"\nrepos = [\"{}\"]\npackages = [\"forge\"]\n",
+                "hostname = \"{}\"\nlibc = \"{libc}\"\nrepos = [\"{}\"]\npackages = [{packages}]\n",
                 self.req.hostname,
                 forge_schema::DEFAULT_REPO_URL
             );
@@ -627,3 +634,41 @@ pub fn execute(req: &Request, run: &mut dyn Runner, ui: &mut dyn Ui) -> Result<(
 
 #[cfg(test)]
 mod tests;
+
+/// Names of the packages the live system was built from (its recorded package generation), except the kernel,
+/// which `forge kernel` manages and `forge apply` must never touch. If the record is missing (a live system not
+/// built by this version), only `forge` itself, so the installed system can fetch the rest.
+pub fn base_packages(source: &Path) -> Vec<String> {
+    let ids = forge_store::Profile::new(source.join("forge/profiles/system")).current_packages().unwrap_or_default();
+    let mut names: Vec<String> = ids.iter().map(|id| id.name().to_string()).filter(|n| n != "linux").collect();
+    names.sort();
+    names.dedup();
+    if names.is_empty() {
+        names.push("forge".to_string());
+    }
+    names
+}
+
+#[cfg(test)]
+mod base_packages_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn id(name: &str) -> forge_store::StoreId {
+        forge_store::StoreId::new(name, "1.0", &"ab".repeat(32)).unwrap()
+    }
+
+    #[test]
+    fn the_declaration_lists_the_live_systems_packages_but_not_the_kernel() {
+        let t = tempfile::tempdir().unwrap();
+        let ids: BTreeSet<_> = ["linux", "glibc", "forge", "coreutils", "glibc"].iter().map(|n| id(n)).collect();
+        forge_store::Profile::new(t.path().join("forge/profiles/system")).record(&ids, 1).unwrap();
+        assert_eq!(base_packages(t.path()), ["coreutils", "forge", "glibc"]);
+    }
+
+    #[test]
+    fn without_a_record_only_forge_is_declared() {
+        let t = tempfile::tempdir().unwrap();
+        assert_eq!(base_packages(t.path()), ["forge"]);
+    }
+}

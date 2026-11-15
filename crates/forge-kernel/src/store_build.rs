@@ -16,9 +16,9 @@ use crate::build::{Mode, Staged, lsmod_file};
 use crate::install::staged_release;
 use crate::{CONFIG_SCRIPT, BUILD_SCRIPT, KernelError, io_ctx, write};
 
-/// What the kernel build needs from the store (musl systems; a glibc toolchain is not packaged yet).
+/// What the kernel build needs from the store.
 pub const BUILD_PACKAGES: &[&str] = &[
-    "busybox", "make", "binutils", "gcc", "musl", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4", "zlib",
+    "busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4", "zlib",
     "pkgconf", "bash", "openssl", "kmod",
 ];
 
@@ -102,8 +102,8 @@ pub fn write_recipe(dir: &Path, spec: &StoreBuildSpec) -> Result<(), KernelError
 
 /// Build, then unpack the resulting package into a private store and return it as a staged kernel.
 pub fn build_in_store(spec: &StoreBuildSpec) -> Result<Staged, KernelError> {
-    if spec.libc != Libc::Musl {
-        return Err(KernelError::Invalid("building in the store needs the musl toolchain; glibc has none packaged yet".into()));
+    if spec.libc != Libc::Glibc {
+        return Err(KernelError::Invalid("building in the store needs the glibc toolchain (musl is no longer supported)".into()));
     }
     let recipe_dir = spec.work.join(format!("recipe-{}", spec.version));
     if recipe_dir.exists() {
@@ -160,7 +160,7 @@ mod tests {
             work: t.join("work"),
             mode,
             jobs: 4,
-            libc: Libc::Musl,
+            libc: Libc::Glibc,
             repos: vec!["https://example.test/repo".into()],
             trust: Trust::AllowUnsigned,
             fetch: FetchHandle::default(),
@@ -224,12 +224,12 @@ mod tests {
     }
 
     #[test]
-    fn only_musl_is_supported_and_an_existing_recipe_directory_is_not_overwritten() {
+    fn only_glibc_is_supported_and_an_existing_recipe_directory_is_not_overwritten() {
         let t = tempfile::tempdir().unwrap();
         let mut s = spec(t.path(), Mode::Full);
-        s.libc = Libc::Glibc;
+        s.libc = Libc::Musl; // no longer supported
         assert!(build_in_store(&s).is_err());
-        s.libc = Libc::Musl;
+        s.libc = Libc::Glibc;
         fs::create_dir_all(t.path().join("work/recipe-7.3.3")).unwrap();
         assert!(matches!(build_in_store(&s), Err(KernelError::Exists(_))));
     }
@@ -258,7 +258,7 @@ mod cleanup_tests {
         fs::create_dir_all(src.join("usr/bin")).unwrap();
         fs::write(src.join("usr/bin").join(name), name).unwrap();
         let out = scratch.join(format!("{name}.tar.zst"));
-        let opts = PackOptions { name: name.into(), version: "1".into(), libc: Libc::Musl, hash: None, deps: vec![] };
+        let opts = PackOptions { name: name.into(), version: "1".into(), libc: Libc::Glibc, hash: None, deps: vec![] };
         pack_dir(&src, &opts, &out).unwrap();
         store.install(fs::File::open(&out).unwrap(), None).unwrap()
     }

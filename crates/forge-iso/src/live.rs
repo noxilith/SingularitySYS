@@ -96,7 +96,7 @@ pub fn write_initramfs_tree(root: &Path, busybox: &Path, label: &str) -> Result<
 
 /// The live root's `/etc` and mount points, written into the merged package tree.
 pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Result<(), IsoError> {
-    for d in ["dev", "proc", "sys", "run", "tmp", "mnt", "medium", "root", "home", "var/log", "etc/init.d", "sbin", "bin"] {
+    for d in ["dev", "proc", "sys", "run", "tmp", "mnt", "medium", "root", "home", "var/log", "etc/init.d", "usr/sbin", "usr/bin"] {
         fs::create_dir_all(root.join(d)).map_err(io_ctx(format!("creating /{d}")))?;
     }
     fs::set_permissions(root.join("tmp"), fs::Permissions::from_mode(0o1777)).map_err(io_ctx("setting permissions"))?;
@@ -119,12 +119,18 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
         "etc/sudoers",
         0o440,
         "# Written by the image builder. Edit with visudo.\n\
-         Defaults secure_path=\"/forge/profiles/system/current/usr/sbin:/forge/profiles/system/current/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"\n\
+         Defaults secure_path=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"\n\
          root ALL=(ALL:ALL) ALL\n\
          %wheel ALL=(ALL:ALL) ALL\n"
             .into(),
     )?;
-    put("etc/shells", 0o644, "/bin/sh\n".into())?;
+    put("etc/shells", 0o644, "/bin/sh\n/bin/bash\n".into())?;
+    // glibc looks names up through this file: local files, then DNS for hosts.
+    put(
+        "etc/nsswitch.conf",
+        0o644,
+        "passwd: files\ngroup: files\nshadow: files\nhosts: files dns\nnetworks: files\nprotocols: files\nservices: files\nethers: files\nrpc: files\n".into(),
+    )?;
     put(
         "etc/os-release",
         0o644,
@@ -138,7 +144,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/profile",
         0o644,
-        "# Packages installed with forge are linked into this profile; they win over the base system.\nP=/forge/profiles/system/current\nexport PATH=$P/usr/sbin:$P/usr/bin:$P/sbin:$P/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nexport PS1='\\u@\\h:\\w\\$ '\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
+        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
     )?;
     if root.join("sbin/openrc-init").exists() {
         write_openrc(root)?;
@@ -271,7 +277,9 @@ mod tests {
         assert_eq!(fs::metadata(t.path().join("tmp")).unwrap().permissions().mode() & 0o7777, 0o1777);
         assert!(fs::read_to_string(t.path().join("etc/inittab")).unwrap().contains("getty"));
         let profile = fs::read_to_string(t.path().join("etc/profile")).unwrap();
-        assert!(profile.contains("P=/forge/profiles/system/current") && profile.contains("$P/usr/bin"), "installed packages are on PATH: {profile}");
+        assert!(profile.contains("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"), "the merged /usr is on PATH: {profile}");
+        assert!(!profile.contains("forge/profiles"), "the store links (no setuid) must never shadow the real programs");
+        assert!(fs::read_to_string(t.path().join("etc/nsswitch.conf")).unwrap().contains("hosts: files dns"));
         assert!(profile.contains("/etc/profile.d/*.sh"), "forge apply writes its environment there");
         let rcs = fs::read_to_string(t.path().join("etc/init.d/rcS")).unwrap();
         assert!(rcs.contains("mountpoint -q /proc || mount -t proc proc /proc"), "installed systems need /proc too");
@@ -608,67 +616,3 @@ pub const STANDARD_GROUPS: &[(&str, u32)] = &[
     ("nogroup", 65534),
 ];
 
-/// Programs that must run as root for ordinary users, and nothing else. The package store never keeps
-/// setuid bits, so these are made setuid here, in the base system image, on the copies the image holds;
-/// a package installed later can never add to this list. (`su` is deliberately absent: `sudo -i` does that.)
-pub const SETUID_FILES: &[&str] = &["usr/bin/sudo", "usr/bin/passwd"];
-
-/// Make the allowlisted files that exist setuid root (mode 4755). A symlink is refused: the bit would land on
-/// whatever it points to.
-pub fn set_setuid(root: &Path) -> Result<Vec<&'static str>, IsoError> {
-    let mut done = vec![];
-    for f in SETUID_FILES {
-        let p = root.join(f);
-        match fs::symlink_metadata(&p) {
-            Ok(m) if m.file_type().is_file() => {
-                fs::set_permissions(&p, fs::Permissions::from_mode(0o4755)).map_err(io_ctx(format!("making /{f} setuid")))?;
-                done.push(*f);
-            }
-            Ok(_) => return Err(IsoError::Invalid { what: "setuid file", value: format!("/{f} is not a regular file") }),
-            Err(_) => {}
-        }
-    }
-    Ok(done)
-}
-
-#[cfg(test)]
-mod setuid_tests {
-    use super::*;
-
-    #[test]
-    fn only_allowlisted_regular_files_become_setuid() {
-        let t = tempfile::tempdir().unwrap();
-        fs::create_dir_all(t.path().join("usr/bin")).unwrap();
-        fs::write(t.path().join("usr/bin/sudo"), "ELF").unwrap();
-        fs::write(t.path().join("usr/bin/other"), "ELF").unwrap();
-        fs::set_permissions(t.path().join("usr/bin/sudo"), fs::Permissions::from_mode(0o555)).unwrap();
-        let done = set_setuid(t.path()).unwrap();
-        assert_eq!(done, ["usr/bin/sudo"], "passwd is absent, so it is skipped");
-        let mode = |f: &str| fs::metadata(t.path().join(f)).unwrap().permissions().mode() & 0o7777;
-        assert_eq!(mode("usr/bin/sudo"), 0o4755);
-        assert_eq!(mode("usr/bin/other"), 0o644, "nothing outside the list is touched");
-    }
-
-    #[test]
-    fn a_symlink_in_the_list_is_refused() {
-        let t = tempfile::tempdir().unwrap();
-        fs::create_dir_all(t.path().join("usr/bin")).unwrap();
-        fs::write(t.path().join("target"), "x").unwrap();
-        symlink("../../target", t.path().join("usr/bin/sudo")).unwrap();
-        assert!(set_setuid(t.path()).is_err());
-        assert_eq!(fs::metadata(t.path().join("target")).unwrap().permissions().mode() & 0o4000, 0, "the target was not touched");
-    }
-
-    #[test]
-    fn the_live_root_has_wheel_and_a_sudoers_that_names_it() {
-        let t = tempfile::tempdir().unwrap();
-        write_live_root(t.path(), "h", "x").unwrap();
-        let group = fs::read_to_string(t.path().join("etc/group")).unwrap();
-        for g in ["root:x:0:", "wheel:x:10:", "audio:x:18:", "video:x:27:", "users:x:100:"] {
-            assert!(group.contains(g), "{g} missing: {group}");
-        }
-        let sudoers = fs::read_to_string(t.path().join("etc/sudoers")).unwrap();
-        assert!(sudoers.contains("%wheel ALL=(ALL:ALL) ALL"), "{sudoers}");
-        assert_eq!(fs::metadata(t.path().join("etc/sudoers")).unwrap().permissions().mode() & 0o777, 0o440, "sudo refuses a writable sudoers");
-    }
-}

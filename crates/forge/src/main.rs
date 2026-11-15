@@ -899,7 +899,7 @@ fn search_cmd(a: SearchArgs) -> Result<()> {
         Some(d) if !d.repos.is_empty() => d.repos.clone(),
         _ => vec![forge_schema::DEFAULT_REPO_URL.to_string()],
     };
-    let libc = decl.as_ref().map(|d| d.libc).unwrap_or(forge_schema::Libc::Musl);
+    let libc = decl.as_ref().map(|d| d.libc).unwrap_or(forge_schema::Libc::Glibc);
     let trust = load_trust(a.keys, a.allow_unsigned, a.root.join("etc/forge/keys"))?;
     let fetch = forge_store::SystemFetch;
     let term = a.term.as_deref().unwrap_or("").to_lowercase();
@@ -1451,9 +1451,9 @@ struct IsoArgs {
     #[arg(long, required = true)]
     repo: Vec<PathBuf>,
     /// Packages in the live system; their dependencies come along
-    #[arg(long = "package", default_values_t = ["linux", "busybox", "musl", "openrc", "sudo", "forge", "rsync", "util-linux", "ncurses", "btrfs-progs", "shadow", "limine", "efibootmgr", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi"].map(String::from))]
+    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales"].map(String::from))]
     packages: Vec<String>,
-    #[arg(long, default_value = "musl")]
+    #[arg(long, default_value = "glibc")]
     libc: String,
     /// The ISO file to write
     #[arg(long, default_value = "singularity-live.iso")]
@@ -1508,7 +1508,7 @@ fn iso_cmd(a: IsoArgs) -> Result<()> {
     eprintln!("fetching {} (and dependencies) from {} repositor{}", a.packages.join(", "), a.repo.len(), if a.repo.len() == 1 { "y" } else { "ies" });
     let trees = forge_iso::fetch(&a.repo, &trust, &a.packages, libc, &work.join("store"))?;
     let rootfs = work.join("rootfs");
-    forge_iso::merge(&trees, &rootfs)?;
+    forge_iso::materialize_into(&work.join("store"), &trees, &rootfs)?;
 
     let kernel = match a.kernel {
         Some(k) => k,
@@ -1787,7 +1787,7 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             work,
             mode,
             jobs,
-            libc: forge_schema::Libc::Musl,
+            libc: forge_schema::Libc::Glibc,
             repos,
             trust: load_trust(b.keys.clone(), b.allow_unsigned, PathBuf::from("/etc/forge/keys"))?,
             fetch: Default::default(),

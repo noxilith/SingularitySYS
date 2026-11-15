@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Package forge itself for the live system: a statically linked build with the host's Rust
-# toolchain (static glibc: the binary needs no libc on the target, so it runs on musl).
+# toolchain (static glibc: the binary needs no libc package on the target).
 # IMPURE, like stage 0: the toolchain and static glibc come from the build host. Published,
 # signed, into $REPO.
 set -euo pipefail
@@ -9,8 +9,8 @@ cd "$(dirname "$0")/.."
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 FORGE=${FORGE:-target/debug/forge}
-REPO=${REPO:-repo/tools}
-OUT=${OUT:-packages/tools}
+REPO=${REPO:-repo/glibc-world2}
+OUT=${OUT:-packages/glibc-world2}
 VERSION=${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)_r$(git rev-list --count HEAD)}
 
 [ -x "$FORGE" ] || fail "build forge first (cargo build), or set FORGE=/path/to/forge"
@@ -31,6 +31,6 @@ strip "$tree/usr/bin/forge"
 
 mkdir -p "$OUT"
 archive=$OUT/forge-$VERSION.tar.zst
-"$FORGE" store pack "$tree" --name forge --version "$VERSION" --libc musl --out "$archive"
+"$FORGE" store pack "$tree" --name forge --version "$VERSION" --libc glibc --out "$archive"
 "$FORGE" store publish "$archive" --repo "$REPO" "${SIGN[@]}"
 echo "PASS: forge $VERSION is in $REPO"

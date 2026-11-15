@@ -348,16 +348,15 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
 const STORE_DIR: &str = "/forge/store";
 const SYSTEM_PROFILE_DIR: &str = "/forge/profiles/system";
 
-/// Put the system profile on `PATH` for login shells.
+/// The standard directories on `PATH` for login shells. Packages are copied into /usr by `forge apply`, so there is
+/// no profile directory to add (and the store's links, which carry no setuid bit, must never come first).
 fn profile_env() -> String {
-    let base = format!("{SYSTEM_PROFILE_DIR}/current");
-    format!(
-        "# managed by forge: puts the system profile on PATH\n\
-         for d in {base}/usr/bin {base}/usr/sbin {base}/bin {base}/sbin; do\n\
-         \x20   case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$d:$PATH\" ;; esac\n\
-         done\n\
-         export PATH\n"
-    )
+    "# managed by forge: the system's programs are in /usr\n\
+     for d in /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin; do\n\
+     \x20   case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac\n\
+     done\n\
+     export PATH\n"
+        .to_string()
 }
 
 /// Resolve the declared packages against the repositories and plan the
@@ -537,11 +536,6 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
         let store = Store::new(&sw.store_root);
-        Profile::new(&sw.profile_dir).switch(&store, &sw.ids, now).map_err(|e| ApplyError {
-            summary: "switch the system profile".into(),
-            path: sw.profile_dir.clone(),
-            source: io::Error::other(e.to_string()),
-        })?;
         // The system itself: the packages' files copied into the real tree, replacing what the last apply put
         // there. The profile above is the record of which generation of packages this is.
         let fail = |what: &str, e: StoreError| ApplyError {
@@ -553,6 +547,13 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
         let state = forge_store::materialize(&store, &sw.ids, &sw.root, &old, &forge_store::MaterializeOptions { adopt: sw.adopt })
             .map_err(|e| fail("update", e))?;
         state.save(&sw.root).map_err(|e| fail("record the state of", e))?;
+        // Only now, with the tree updated, is the new set recorded as a generation (so a failed update, a conflict
+        // for instance, leaves the record saying what is really installed).
+        Profile::new(&sw.profile_dir).record(&sw.ids, now).map_err(|e| ApplyError {
+            summary: "record the system generation".into(),
+            path: sw.profile_dir.clone(),
+            source: io::Error::other(e.to_string()),
+        })?;
     }
     if let Some((path, content)) = &plan.state_write {
         write_atomic(path, content).map_err(|source| ApplyError {

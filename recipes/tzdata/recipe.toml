@@ -1,0 +1,35 @@
+# The IANA time zone database, compiled with the reference `zic` from tzcode. "Fat" files (-b fat) so that older
+# software that cannot read the compact form still works. Only /usr/share/zoneinfo; /etc/localtime is the system
+# declaration's business.
+name        = "tzdata"
+version     = "2026f"
+description = "IANA time zone database"
+license     = "BSD-3-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+# $SRC is the first source: tzcode (the `zic` compiler). The data is unpacked beside it in prepare.
+[[source]]
+url    = "https://data.iana.org/time-zones/releases/tzcode2026f.tar.gz"
+sha256 = "5a18da01393679ef2559214dc687563f7f3d05691f6f58b7fbc0166f3e796cd6"
+
+[[source]]
+url    = "https://data.iana.org/time-zones/releases/tzdata2026f.tar.gz"
+sha256 = "01b4a91cec5167ed48c11e8ab78f2048cead78ce94b0cafcad0ae8c5a3044d3d"
+
+[build]
+prepare = '''
+tar -o -xzf /sources/tzdata2026f.tar.gz -C "$SRC"
+'''
+compile = "make -j$JOBS CC='gcc -std=gnu17' CFLAGS='-O2' zic"
+install = '''
+zones="africa antarctica asia australasia europe northamerica southamerica etcetera backward"
+mkdir -p "$DESTDIR/usr/share/zoneinfo"
+./zic -b fat -d "$DESTDIR/usr/share/zoneinfo" $zones
+cp zone.tab zone1970.tab iso3166.tab "$DESTDIR/usr/share/zoneinfo/"
+test -f "$DESTDIR/usr/share/zoneinfo/UTC"
+test -f "$DESTDIR/usr/share/zoneinfo/Europe/London"
+test -f "$DESTDIR/usr/share/zoneinfo/America/New_York"
+'''

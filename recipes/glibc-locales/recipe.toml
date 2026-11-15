@@ -1,0 +1,27 @@
+# Locales for glibc: en_US.UTF-8, compiled with the installed glibc's own `localedef` from glibc's locale sources.
+# (C.UTF-8 and POSIX are built into glibc itself.) Written as plain directories under /usr/lib/locale, not an
+# archive, so the package owns exactly its own files and installing it never rewrites a shared archive.
+name        = "glibc-locales"
+version     = "2.42"
+description = "glibc locales (en_US.UTF-8)"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://ftpmirror.gnu.org/gnu/glibc/glibc-2.42.tar.xz"
+sha256 = "d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f"
+
+[build]
+install = '''
+mkdir -p "$DESTDIR/usr/lib/locale"
+export I18NPATH="$SRC/localedata"
+for spec in "en_US:UTF-8"; do
+    loc=${spec%%:*}; cs=${spec##*:}
+    localedef --no-archive --prefix="$DESTDIR" -i "$loc" -f "$cs" "$loc.$cs"
+done
+test -d "$DESTDIR/usr/lib/locale/en_US.utf8"
+test -f "$DESTDIR/usr/lib/locale/en_US.utf8/LC_CTYPE"
+'''

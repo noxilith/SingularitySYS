@@ -1,12 +1,11 @@
 //! Assembling a root filesystem tree from repository packages.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
 use forge_schema::Libc;
-use forge_store::{LocalRepo, Store, Trust};
+use forge_store::{LocalRepo, Materialized, MaterializeOptions, Store, StoreId, Trust};
 
 use crate::{IsoError, io_ctx};
 
@@ -44,58 +43,55 @@ pub fn fetch(repos: &[PathBuf], trust: &Trust, names: &[String], libc: Libc, sto
     Ok(paths)
 }
 
-/// Copy the package trees into `dest`. Two packages providing the same file is an
-/// error (like profiles), and `dest` must start out empty.
-pub fn merge(trees: &[PathBuf], dest: &Path) -> Result<(), IsoError> {
+/// Put the packages (store paths from [`fetch`]) into `dest`, the live root, exactly as `forge apply` puts
+/// packages into a system: real copies, the same merge rules (two packages providing one file is an error),
+/// setuid on the allowlisted programs, and the state file recording which files forge owns, so that the first
+/// `forge apply` on a system installed from this image knows what it may replace. `dest` must start out empty.
+pub fn materialize_into(store_dir: &Path, trees: &[PathBuf], dest: &Path) -> Result<(), IsoError> {
     fs::create_dir_all(dest).map_err(io_ctx(format!("creating {}", dest.display())))?;
     if fs::read_dir(dest).map_err(io_ctx("reading the root directory"))?.next().is_some() {
         return Err(IsoError::Invalid { what: "root directory", value: format!("{} is not empty", dest.display()) });
     }
-    let mut files = BTreeMap::<PathBuf, bool>::new(); // path -> is a BusyBox applet link
+    let mut ids = BTreeSet::new();
     for t in trees {
-        copy_into(t, dest, Path::new(""), &mut files)?;
+        let name = t.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        ids.insert(StoreId::parse(name).ok_or_else(|| IsoError::Invalid { what: "package directory", value: t.display().to_string() })?);
     }
+    let store = Store::new(store_dir);
+    let state = forge_store::materialize(&store, &ids, dest, &Materialized::default(), &MaterializeOptions::default())?;
+    state.save(dest)?;
+
+    // The image carries the packages too (the squashfs stores identical files once), so that a system installed
+    // from it has them in its store: a later `forge apply` needs every package of the set to merge from, and
+    // downloads nothing when the repository has the same builds.
+    let dest_store = dest.join("forge/store");
+    fs::create_dir_all(&dest_store).map_err(io_ctx("creating /forge/store"))?;
+    for t in trees {
+        let name = t.file_name().expect("checked above");
+        copy_tree(t, &dest_store.join(name))?;
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    forge_store::Profile::new(dest.join("forge/profiles/system")).record(&ids, now)?;
     Ok(())
 }
 
-fn copy_into(src: &Path, dest: &Path, rel: &Path, files: &mut BTreeMap<PathBuf, bool>) -> Result<(), IsoError> {
-    let dir = src.join(rel);
-    let mut names: Vec<_> = fs::read_dir(&dir).map_err(io_ctx(format!("reading {}", dir.display())))?.collect::<Result<_, _>>().map_err(io_ctx("reading a directory"))?;
-    names.sort_by_key(|e| e.file_name());
-    for e in names {
-        let r = rel.join(e.file_name());
-        if r == Path::new(forge_store::MANIFEST_PATH.split('/').next().unwrap_or(".forge")) {
-            continue; // the package's own bookkeeping
+/// Copy a package tree, keeping modes and symlinks; directories get their (read-only) modes last.
+fn copy_tree(src: &Path, dst: &Path) -> Result<(), IsoError> {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let meta = fs::symlink_metadata(src).map_err(io_ctx(format!("reading {}", src.display())))?;
+    if meta.file_type().is_symlink() {
+        let target = fs::read_link(src).map_err(io_ctx(format!("reading {}", src.display())))?;
+        symlink(target, dst).map_err(io_ctx(format!("linking {}", dst.display())))?;
+    } else if meta.is_dir() {
+        fs::create_dir_all(dst).map_err(io_ctx(format!("creating {}", dst.display())))?;
+        let mut names: Vec<_> = fs::read_dir(src).map_err(io_ctx(format!("reading {}", src.display())))?.collect::<Result<_, _>>().map_err(io_ctx("reading a directory"))?;
+        names.sort_by_key(|e| e.file_name());
+        for e in names {
+            copy_tree(&e.path(), &dst.join(e.file_name()))?;
         }
-        let from = src.join(&r);
-        let to = dest.join(&r);
-        let meta = fs::symlink_metadata(&from).map_err(io_ctx(format!("reading {}", from.display())))?;
-        if meta.is_dir() {
-            fs::create_dir_all(&to).map_err(io_ctx(format!("creating {}", to.display())))?;
-            // Store trees are read-only; the live root is edited afterwards, so keep directories writable.
-            fs::set_permissions(&to, fs::Permissions::from_mode(meta.permissions().mode() | 0o200)).map_err(io_ctx("setting permissions"))?;
-            copy_into(src, dest, &r, files)?;
-        } else {
-            let applet = meta.file_type().is_symlink() && is_applet_link(&from);
-            if let Some(&existing_applet) = files.get(&r) {
-                // A BusyBox applet link is only a fallback: a real package's file replaces it,
-                // and an applet link never replaces a real file.
-                if applet {
-                    continue;
-                } else if existing_applet {
-                    fs::remove_file(&to).map_err(io_ctx(format!("replacing {}", to.display())))?;
-                } else {
-                    return Err(IsoError::Conflict(r));
-                }
-            }
-            files.insert(r.clone(), applet);
-            if meta.file_type().is_symlink() {
-                let target = fs::read_link(&from).map_err(io_ctx("reading a symlink"))?;
-                symlink(target, &to).map_err(io_ctx(format!("creating {}", to.display())))?;
-            } else {
-                fs::copy(&from, &to).map_err(io_ctx(format!("copying {}", from.display())))?;
-            }
-        }
+        fs::set_permissions(dst, fs::Permissions::from_mode(meta.permissions().mode() & 0o7777)).map_err(io_ctx(format!("setting the mode of {}", dst.display())))?;
+    } else {
+        fs::copy(src, dst).map_err(io_ctx(format!("copying {}", src.display())))?;
     }
     Ok(())
 }
@@ -103,104 +99,81 @@ fn copy_into(src: &Path, dest: &Path, rel: &Path, files: &mut BTreeMap<PathBuf, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
-    fn tree(files: &[(&str, &str)]) -> tempfile::TempDir {
-        let t = tempfile::tempdir().unwrap();
-        for (p, c) in files {
-            let f = t.path().join(p);
-            fs::create_dir_all(f.parent().unwrap()).unwrap();
-            fs::write(f, c).unwrap();
+    fn install(store: &Store, scratch: &Path, name: &str, files: &[(&str, &str)]) -> PathBuf {
+        let src = scratch.join(format!("src-{name}"));
+        for (path, content) in files {
+            let p = src.join(path);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+            if path.contains("bin/") {
+                fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+            }
         }
-        t
+        let out = scratch.join(format!("{name}.tar.zst"));
+        let opts = forge_store::PackOptions { name: name.into(), version: "1.0".into(), libc: Libc::Glibc, hash: None, deps: vec![] };
+        forge_store::pack_dir(&src, &opts, &out).unwrap();
+        let id = store.install(fs::File::open(&out).unwrap(), None).unwrap();
+        store.path(&id)
     }
 
     #[test]
-    fn packages_share_directories_and_keep_modes_and_links() {
-        let a = tree(&[("bin/tool", "a"), (".forge/manifest.toml", "m")]);
-        let b = tree(&[("bin/other", "b"), ("lib/x", "x")]);
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(a.path().join("bin/tool"), fs::Permissions::from_mode(0o755)).unwrap();
-        symlink("tool", a.path().join("bin/alias")).unwrap();
-        let out = tempfile::tempdir().unwrap();
-        let dest = out.path().join("root");
-        merge(&[a.path().into(), b.path().into()], &dest).unwrap();
-        assert_eq!(fs::read_to_string(dest.join("bin/other")).unwrap(), "b");
-        assert_eq!(fs::metadata(dest.join("bin/tool")).unwrap().permissions().mode() & 0o777, 0o755);
-        assert_eq!(fs::read_link(dest.join("bin/alias")).unwrap(), Path::new("tool"));
-        assert!(!dest.join(".forge").exists(), "bookkeeping is not part of the system");
+    fn packages_share_directories_keep_modes_and_record_what_forge_owns() {
+        let t = tempfile::tempdir().unwrap();
+        let store_dir = t.path().join("store");
+        let store = Store::new(&store_dir);
+        let a = install(&store, t.path(), "a", &[("usr/bin/a", "A"), ("usr/share/doc/a", "doc")]);
+        let b = install(&store, t.path(), "b", &[("usr/bin/b", "B")]);
+        let dest = t.path().join("root");
+        materialize_into(&store_dir, &[a, b], &dest).unwrap();
+        assert_eq!(fs::read_to_string(dest.join("usr/bin/a")).unwrap(), "A");
+        assert_eq!(fs::read_to_string(dest.join("usr/bin/b")).unwrap(), "B");
+        assert_eq!(fs::metadata(dest.join("usr/bin/a")).unwrap().permissions().mode() & 0o777, 0o755);
+        assert!(!dest.join(".forge").exists(), "the package bookkeeping is not part of the system");
+        let state = Materialized::load(&dest).unwrap();
+        assert_eq!(state.packages.len(), 2);
+        assert!(state.entries.iter().any(|e| e.path == "usr/bin/a"));
+        // The packages travel with the image, and the generation records which ones they are.
+        let ids = forge_store::Profile::new(dest.join("forge/profiles/system")).current_packages().unwrap();
+        assert_eq!(ids.len(), 2);
+        for id in &ids {
+            assert!(dest.join("forge/store").join(id.as_str()).join(".forge/manifest.toml").is_file(), "{id} is in the image's store");
+        }
     }
 
     #[test]
-    fn read_only_package_directories_stay_writable_in_the_live_root() {
-        let a = tree(&[("etc/x", "1")]);
-        fs::set_permissions(a.path().join("etc"), fs::Permissions::from_mode(0o555)).unwrap();
-        let out = tempfile::tempdir().unwrap();
-        let dest = out.path().join("r");
-        merge(&[a.path().into()], &dest).unwrap();
-        fs::write(dest.join("etc/new"), "ok").unwrap();
-        fs::set_permissions(a.path().join("etc"), fs::Permissions::from_mode(0o755)).unwrap();
+    fn the_live_root_stays_editable() {
+        // The store's trees are read-only; the live root is written to afterwards (hostname, passwd, ...).
+        let t = tempfile::tempdir().unwrap();
+        let store_dir = t.path().join("store");
+        let store = Store::new(&store_dir);
+        let a = install(&store, t.path(), "a", &[("usr/bin/a", "A")]);
+        let dest = t.path().join("root");
+        materialize_into(&store_dir, &[a], &dest).unwrap();
+        fs::write(dest.join("usr/new-file"), "x").unwrap();
+        fs::create_dir(dest.join("usr/bin/../newdir")).unwrap();
     }
 
     #[test]
     fn a_file_in_two_packages_is_a_conflict() {
-        let a = tree(&[("bin/x", "1")]);
-        let b = tree(&[("bin/x", "2")]);
-        let out = tempfile::tempdir().unwrap();
-        let err = merge(&[a.path().into(), b.path().into()], &out.path().join("r")).unwrap_err();
-        assert!(matches!(err, IsoError::Conflict(p) if p == Path::new("bin/x")));
+        let t = tempfile::tempdir().unwrap();
+        let store_dir = t.path().join("store");
+        let store = Store::new(&store_dir);
+        let a = install(&store, t.path(), "a", &[("usr/bin/x", "1")]);
+        let b = install(&store, t.path(), "b", &[("usr/bin/x", "2")]);
+        assert!(materialize_into(&store_dir, &[a, b], &t.path().join("root")).is_err());
     }
 
     #[test]
     fn a_non_empty_destination_is_refused() {
-        let a = tree(&[("bin/x", "1")]);
-        let out = tree(&[("stale", "")]);
-        assert!(merge(&[a.path().into()], out.path()).is_err());
-    }
-}
-
-/// Is `p` a symlink to BusyBox (`busybox`, `../bin/busybox`, `/bin/busybox`)?
-fn is_applet_link(p: &Path) -> bool {
-    fs::read_link(p).ok().is_some_and(|t| t.file_name().is_some_and(|n| n == "busybox"))
-}
-
-#[cfg(test)]
-mod applet_tests {
-    use super::*;
-
-    fn pkg(files: &[(&str, &str)], links: &[(&str, &str)]) -> tempfile::TempDir {
         let t = tempfile::tempdir().unwrap();
-        for (p, c) in files {
-            let f = t.path().join(p);
-            fs::create_dir_all(f.parent().unwrap()).unwrap();
-            fs::write(f, c).unwrap();
-        }
-        for (p, target) in links {
-            let f = t.path().join(p);
-            fs::create_dir_all(f.parent().unwrap()).unwrap();
-            symlink(target, f).unwrap();
-        }
-        t
-    }
-
-    #[test]
-    fn a_real_package_replaces_a_busybox_applet_link_in_either_order() {
-        for busybox_first in [true, false] {
-            let bb = pkg(&[("bin/busybox", "BB")], &[("sbin/blkid", "../bin/busybox"), ("bin/ls", "busybox")]);
-            let real = pkg(&[("sbin/blkid", "REAL")], &[]);
-            let out = tempfile::tempdir().unwrap();
-            let dest = out.path().join("r");
-            let order: Vec<PathBuf> = if busybox_first { vec![bb.path().into(), real.path().into()] } else { vec![real.path().into(), bb.path().into()] };
-            merge(&order, &dest).unwrap();
-            assert_eq!(fs::read_to_string(dest.join("sbin/blkid")).unwrap(), "REAL", "busybox_first={busybox_first}");
-            assert!(fs::symlink_metadata(dest.join("bin/ls")).unwrap().file_type().is_symlink(), "other applets stay");
-        }
-    }
-
-    #[test]
-    fn two_real_files_still_conflict_and_other_symlinks_are_not_applets() {
-        let a = pkg(&[("bin/x", "1")], &[]);
-        let b = pkg(&[], &[("bin/x", "elsewhere")]);
-        let out = tempfile::tempdir().unwrap();
-        assert!(matches!(merge(&[a.path().into(), b.path().into()], &out.path().join("r")), Err(IsoError::Conflict(_))));
+        let store_dir = t.path().join("store");
+        let store = Store::new(&store_dir);
+        let a = install(&store, t.path(), "a", &[("usr/bin/a", "A")]);
+        let dest = t.path().join("root");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(dest.join("stray"), "x").unwrap();
+        assert!(materialize_into(&store_dir, &[a], &dest).is_err());
     }
 }

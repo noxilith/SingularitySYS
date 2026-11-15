@@ -115,9 +115,25 @@ impl Profile {
         Ok(all)
     }
 
-    /// Make `packages` the visible set. Returns the new generation number, or
+    /// Make `packages` the visible set (a farm of links into the store). Returns the new generation number, or
     /// `None` if the active generation already holds exactly this set.
     pub fn switch(&self, store: &Store, packages: &BTreeSet<StoreId>, now: u64) -> Result<Option<u32>, StoreError> {
+        self.new_generation(packages, now, |tmp| self.build_tree(store, packages, tmp))
+    }
+
+    /// Record `packages` as the current set without building any links: the system is a real tree (see
+    /// [`crate::materialize`]), and the profile only remembers which packages each generation consisted of (for
+    /// `current_packages`, rollback and garbage collection).
+    pub fn record(&self, packages: &BTreeSet<StoreId>, now: u64) -> Result<Option<u32>, StoreError> {
+        self.new_generation(packages, now, |tmp| fs::create_dir_all(tmp).map_err(io_ctx(format!("creating {}", tmp.display()))))
+    }
+
+    fn new_generation(
+        &self,
+        packages: &BTreeSet<StoreId>,
+        now: u64,
+        build: impl FnOnce(&Path) -> Result<(), StoreError>,
+    ) -> Result<Option<u32>, StoreError> {
         if self.current()?.is_some() && &self.current_packages()? == packages {
             return Ok(None);
         }
@@ -126,7 +142,7 @@ impl Profile {
         let tmp = self.dir.join(format!("gen-{id}.tmp"));
         let _ = fs::remove_dir_all(&tmp);
 
-        let built = self.build_tree(store, packages, &tmp);
+        let built = build(&tmp);
         if let Err(e) = built {
             let _ = fs::remove_dir_all(&tmp);
             return Err(e);

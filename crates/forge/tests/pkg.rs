@@ -51,8 +51,7 @@ impl World {
         fs::read_to_string(self.p("root/etc/forge/system.toml")).unwrap()
     }
     fn installed(&self) -> bool {
-        let link = self.p("root/forge/profiles/system/current/usr/bin/tool");
-        link.exists() || fs::symlink_metadata(&link).is_ok()
+        fs::symlink_metadata(self.p("root/usr/bin/tool")).is_ok()
     }
 }
 

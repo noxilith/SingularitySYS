@@ -16,7 +16,7 @@
 //! old inode and nothing ever sees a half-written file.
 //!
 //! `etc/` is configuration, not content: a package's file there is created if missing and never overwritten
-//! or removed.
+//! or removed. The kernel (`boot/`, `usr/lib/modules`) is treated the same way: `forge kernel install` owns it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -87,8 +87,12 @@ pub struct MaterializeOptions {
     pub adopt: bool,
 }
 
+/// Paths forge puts in place when missing but never replaces or removes: configuration (`etc/`), and the kernel
+/// (`boot/` and `usr/lib/modules`), which `forge kernel install` manages. Upgrading or dropping the `linux`
+/// package must never delete the files of the kernel that is running.
 fn is_config(path: &str) -> bool {
-    path == "etc" || path.starts_with("etc/")
+    let under = |d: &str| path == d || path.starts_with(&format!("{d}/"));
+    under("etc") || under("boot") || under("usr/lib/modules")
 }
 
 fn exists(p: &Path) -> bool {
@@ -311,6 +315,20 @@ mod tests {
         let st = fx.run(&[&a2], &st1).unwrap();
         assert_eq!(fs::read_to_string(fx.root.join("etc/a.conf")).unwrap(), "edited");
         assert!(st.entries.iter().all(|e| !e.path.starts_with("etc")), "etc is not tracked, so never removed");
+    }
+
+    #[test]
+    fn the_kernel_is_put_in_place_but_never_replaced_or_removed() {
+        let fx = Fx::new();
+        let k1 = fx.add("linux", "1", &[("boot/vmlinuz", "K1"), ("usr/lib/modules/1/x.ko", "m1"), ("usr/bin/kt", "t")]);
+        let st1 = fx.run(&[&k1], &Materialized::default()).unwrap();
+        assert_eq!(fs::read_to_string(fx.root.join("boot/vmlinuz")).unwrap(), "K1");
+        let k2 = fx.add("linux", "2", &[("boot/vmlinuz", "K2"), ("usr/lib/modules/2/x.ko", "m2")]);
+        let st2 = fx.run(&[&k2], &st1).unwrap();
+        assert_eq!(fs::read_to_string(fx.root.join("boot/vmlinuz")).unwrap(), "K1", "the installed kernel is not replaced");
+        assert!(fx.root.join("usr/lib/modules/1/x.ko").exists(), "and the running kernel's modules are not removed");
+        assert!(!fx.root.join("usr/bin/kt").exists(), "ordinary files of the package are");
+        assert!(st2.entries.iter().all(|e| !e.path.starts_with("boot") && !e.path.starts_with("usr/lib/modules")));
     }
 
     #[test]

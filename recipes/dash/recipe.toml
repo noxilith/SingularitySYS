@@ -1,5 +1,5 @@
 name        = "dash"
-version     = "0.5.12"
+version     = "0.5.12_r1"
 description = "Small POSIX shell (a fast /bin/sh)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
@@ -24,5 +24,7 @@ for f in "$DESTDIR"/usr/bin/* "$DESTDIR"/usr/sbin/* "$DESTDIR"/usr/libexec/*; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     strip "$f" 2>/dev/null || true
 done
+# /bin/sh: the system shell. (BusyBox's applet link of the same name yields to this real file.)
+ln -sf dash "$DESTDIR/usr/bin/sh"
 test "$("$DESTDIR/usr/bin/dash" -c "echo ok")" = ok
 '''

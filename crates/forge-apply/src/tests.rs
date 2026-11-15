@@ -229,8 +229,9 @@ fn system_profile(r: &Path) -> Profile {
     Profile::new(r.join("forge/profiles/system"))
 }
 
+/// A path in the system tree (packages are copied into the real tree; the profile only records generations).
 fn view(r: &Path, rel: &str) -> std::path::PathBuf {
-    system_profile(r).current_link().join(rel)
+    r.join(rel)
 }
 
 #[test]
@@ -254,7 +255,8 @@ fn declared_packages_are_installed_and_linked_with_their_dependencies() {
     assert_eq!(fs::read_to_string(&real).unwrap(), "#!/bin/sh\n");
     assert!(!fs::symlink_metadata(&real).unwrap().file_type().is_symlink());
     assert!(forge_store::Materialized::load(r.path()).unwrap().entries.iter().any(|e| e.path == "usr/bin/hello"));
-    assert!(read(r.path(), "etc/profile.d/forge.sh").contains("forge/profiles/system/current/usr/bin"));
+    let env = read(r.path(), "etc/profile.d/forge.sh");
+    assert!(env.contains("/usr/bin") && !env.contains("forge/profiles"), "PATH has /usr, never the store links: {env}");
     assert!(plan(&pkg_decl(&["hello"]), r.path()).is_empty(), "converged");
 }
 
@@ -562,8 +564,8 @@ fn packages_from_a_remote_repository_are_downloaded_verified_and_linked() {
     let asked = served.log.lock().unwrap().clone();
     assert!(asked.last().unwrap().ends_with(".tar.zst"), "the archive was downloaded when applying: {asked:?}");
     assert!(!store_is_empty(r.path()));
-    let cur = system_profile(r.path()).current().unwrap().unwrap();
-    assert!(r.path().join(format!("forge/profiles/system/gen-{cur}/usr/bin/tool")).exists());
+    assert!(r.path().join("usr/bin/tool").exists(), "copied into the system tree");
+    assert!(system_profile(r.path()).current().unwrap().is_some(), "and recorded as a generation");
     assert!(!r.path().join("forge/store/.downloads").read_dir().map(|mut d| d.next().is_some()).unwrap_or(false), "no download debris");
 }
 
