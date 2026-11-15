@@ -582,7 +582,7 @@ impl Exec<'_> {
             }
             let groups = USER_GROUPS.join(",");
             self.cmd(
-                &Cmd::new("useradd", &["--root"]).arg(&mp).args(["-m", "-G", groups.as_str(), "-s", "/bin/sh"]).arg(&name),
+                &Cmd::new("useradd", &["--root"]).arg(&mp).args(["-m", "-G", groups.as_str(), "-s", "/bin/bash"]).arg(&name),
             )?;
             self.cmd(&Cmd::new("chpasswd", &["--root"]).arg(&mp).stdin(format!("{name}:{pw}\n")))?;
         }

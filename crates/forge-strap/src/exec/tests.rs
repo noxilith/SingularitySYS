@@ -325,7 +325,7 @@ fn accounts_are_created_with_passwords_on_stdin_only() {
     assert!(r.find("groupadd").iter().all(|c| c.args[..3] == ["--root", mp.as_str(), "-f"]));
     assert_eq!(
         r.find("useradd")[0].args,
-        ["--root", &mp, "-m", "-G", "wheel,forge,audio,video,input,users", "-s", "/bin/sh", "alice"],
+        ["--root", &mp, "-m", "-G", "wheel,forge,audio,video,input,users", "-s", "/bin/bash", "alice"],
         "the installer's user is an administrator"
     );
     let ch = r.find("chpasswd");

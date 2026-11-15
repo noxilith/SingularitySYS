@@ -56,7 +56,7 @@ pub struct UserAccount {
 }
 
 fn default_shell() -> String {
-    "/bin/sh".into()
+    "/bin/bash".into()
 }
 
 /// `/etc/forge/system.toml`: the single source of truth for the system.

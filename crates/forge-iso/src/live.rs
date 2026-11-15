@@ -137,7 +137,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     let _ = fs::remove_file(root.join("etc/mtab"));
     symlink("/proc/self/mounts", root.join("etc/mtab")).map_err(io_ctx("linking /etc/mtab"))?;
     put("etc/hostname", 0o644, format!("{hostname}\n"))?;
-    put("etc/passwd", 0o644, "root:x:0:0:root:/root:/bin/sh\n".into())?;
+    put("etc/passwd", 0o644, "root:x:0:0:root:/root:/bin/bash\n".into())?;
     put("etc/shadow", 0o600, format!("root:{password_hash}:20000:0:99999:7:::\n"))?;
     put("etc/group", 0o644, STANDARD_GROUPS.iter().map(|(n, g)| format!("{n}:x:{g}:\n")).collect())?;
     // Members of `wheel` may use sudo. Nothing in the base system lets any other group do anything yet.
