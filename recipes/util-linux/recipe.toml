@@ -21,7 +21,7 @@ configure = '''
 n=$(grep -n '^  enable_lsblk=\$ul_default_estate$' configure | cut -d: -f1)
 test -n "$n" || { echo "util-linux configure changed: cannot enable lsblk" >&2; exit 1; }
 sed -i "$((n-1))s/.*/  if false; then/" configure
-./configure --prefix=/usr --sbindir=/usr/sbin --disable-all-programs --enable-shared --enable-static \
+./configure --prefix=/usr --bindir=/usr/bin --sbindir=/usr/sbin --libdir=/usr/lib --enable-usrdir-path --disable-all-programs --enable-shared --enable-static \
     --enable-libuuid --enable-libblkid --enable-libmount --enable-libsmartcols --enable-libfdisk \
     --enable-fdisks --enable-blkid --enable-lsblk --enable-agetty --enable-wipefs \
     --with-ncursesw --without-python --without-systemd --without-udev --without-readline --without-tinfo \
@@ -40,9 +40,6 @@ for b in cfdisk fdisk sfdisk blkid wipefs lsblk agetty; do
     test -n "$f" || { echo "util-linux did not build $b" >&2; exit 1; }
     strip "$f"
 done
-# OpenRC's agetty service runs /sbin/agetty.
-mkdir -p "$DESTDIR/sbin"
-ln -sf ../usr/sbin/agetty "$DESTDIR/sbin/agetty"
 test -f "$DESTDIR/usr/lib/libblkid.a" && test -f "$DESTDIR/usr/lib/libuuid.a"
 test -f "$DESTDIR/usr/lib/libblkid.so.1" && test -f "$DESTDIR/usr/lib/libuuid.so.1"
 '''

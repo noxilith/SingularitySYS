@@ -1,0 +1,19 @@
+# The root directory layout that merged /usr needs: /bin and /sbin are symlinks into /usr. (glibc ships /lib and
+# /lib64 the same way.) Every package installs under /usr only; `forge build` rejects one that creates a real
+# /bin, /sbin, /lib or /lib64.
+name        = "filesystem"
+version     = "1"
+description = "Root directory layout for merged /usr (/bin and /sbin symlinks)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox"]
+
+[build]
+install = '''
+mkdir -p "$DESTDIR"
+ln -s usr/bin "$DESTDIR/bin"
+ln -s usr/sbin "$DESTDIR/sbin"
+test -L "$DESTDIR/bin" && test -L "$DESTDIR/sbin"
+'''

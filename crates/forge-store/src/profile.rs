@@ -152,6 +152,16 @@ impl Profile {
         Ok(Some(id))
     }
 
+    /// One file of a package in the merged tree. A symlink the package ships (`bin -> usr/bin`, `libz.so -> libz.so.1`)
+    /// is recreated as the same symlink, so it resolves in the merged tree; anything else links into the store.
+    fn link_entry(store: &Store, pkg: &StoreId, f: &crate::manifest::FileEntry, dest: &Path) -> Result<(), StoreError> {
+        let target = match (f.kind, f.target.as_deref()) {
+            (Kind::Symlink, Some(t)) => PathBuf::from(t),
+            _ => store.path(pkg).join(&f.path),
+        };
+        symlink(&target, dest).map_err(io_ctx(format!("linking {}", dest.display())))
+    }
+
     fn build_tree(&self, store: &Store, packages: &BTreeSet<StoreId>, tmp: &Path) -> Result<(), StoreError> {
         fs::create_dir_all(tmp).map_err(io_ctx(format!("creating {}", tmp.display())))?;
         // path -> (owner, kind, is a BusyBox applet link). An applet link is only a fallback: a real package's
@@ -169,8 +179,7 @@ impl Profile {
                     (Some(_), _) if applet => {}
                     (Some((_, _, true)), _) => {
                         fs::remove_file(&dest).map_err(io_ctx(format!("replacing {}", dest.display())))?;
-                        symlink(store.path(pkg).join(&f.path), &dest)
-                            .map_err(io_ctx(format!("linking {}", dest.display())))?;
+                        Self::link_entry(store, pkg, f, &dest)?;
                         owners.insert(f.path.clone(), (pkg.clone(), f.kind, false));
                     }
                     (Some((owner, _, _)), _) => {
@@ -185,8 +194,7 @@ impl Profile {
                         owners.insert(f.path.clone(), (pkg.clone(), Kind::Dir, false));
                     }
                     (None, _) => {
-                        symlink(store.path(pkg).join(&f.path), &dest)
-                            .map_err(io_ctx(format!("linking {}", dest.display())))?;
+                        Self::link_entry(store, pkg, f, &dest)?;
                         owners.insert(f.path.clone(), (pkg.clone(), f.kind, applet));
                     }
                 }
@@ -279,8 +287,19 @@ mod tests {
             fx.profile.switch(&fx.store, &ids, 1).unwrap();
             let cur = fx.profile.current_link();
             assert_eq!(fs::read_to_string(cur.join("usr/bin/bc")).unwrap(), "REAL", "the real bc wins");
-            assert_eq!(fs::read_link(cur.join("bin/ls")).unwrap(), Path::new(&format!("{}", fx.store.path(&bb).join("bin/ls").display())), "other applets stay");
+            assert_eq!(fs::read_link(cur.join("bin/ls")).unwrap(), Path::new("busybox"), "other applets stay, as the same relative link");
         }
+    }
+
+    #[test]
+    fn a_package_symlink_to_another_part_of_the_tree_resolves_in_the_merged_tree() {
+        // `bin -> usr/bin` ships in one package (the filesystem layout); usr/bin/tool comes from another.
+        let fx = Fx::new();
+        let layout = add_with_links(&fx, "layout", &[], &[("bin", "usr/bin")]);
+        let tool = fx.add("tool", &[("usr/bin/tool", "T")]);
+        fx.profile.switch(&fx.store, &Fx::set(&[&layout, &tool]), 1).unwrap();
+        let cur = fx.profile.current_link();
+        assert_eq!(fs::read_to_string(cur.join("bin/tool")).unwrap(), "T", "the symlink resolves through the merged tree");
     }
 
     #[test]

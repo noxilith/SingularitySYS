@@ -12,7 +12,7 @@ url    = "https://github.com/facebook/zstd/releases/download/v1.5.6/zstd-1.5.6.t
 sha256 = "8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1"
 
 [build]
-compile = "make -C lib -j$JOBS libzstd.a libzstd.so CFLAGS='-O2'"
+compile = "make -C lib -j$JOBS lib-release CFLAGS='-O2 -fPIC'"
 install = '''
 make -C lib install-static install-shared install-includes install-pc PREFIX=/usr DESTDIR=$DESTDIR
 test -f "$DESTDIR/usr/lib/libzstd.a"

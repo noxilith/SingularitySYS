@@ -409,6 +409,15 @@ fn run_build(
     if empty {
         return Err(BuildError::EmptyOutput);
     }
+    // Merged /usr: these four names are symlinks into /usr on the system (glibc ships them that way), so a
+    // package must not make any of them a real directory, or it could not be merged with glibc's.
+    for top in ["bin", "sbin", "lib", "lib64"] {
+        if let Ok(meta) = fs::symlink_metadata(dest.join(top))
+            && meta.is_dir()
+        {
+            return Err(BuildError::Layout(top.to_string()));
+        }
+    }
     fs::create_dir_all(&opts.out_dir).map_err(io_ctx(format!("creating {}", opts.out_dir.display())))?;
     let tmp_out = opts.out_dir.join(format!(".building-{}.tar.zst", std::process::id()));
     // Dynamically linked programs need the packages that provide their libraries (glibc first of all): find them

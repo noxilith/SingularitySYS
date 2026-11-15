@@ -44,6 +44,8 @@ pub enum BuildError {
     BuildFailed { status: String },
     #[error("the install step left $DESTDIR empty, so there is nothing to package")]
     EmptyOutput,
+    #[error("the package installs a real /{0} directory, but /bin, /sbin, /lib and /lib64 are symlinks into /usr on a Singularity system: install under /usr instead")]
+    Layout(String),
     #[error("dependencies: {0}")]
     Dependencies(String),
     #[error("{0}")]

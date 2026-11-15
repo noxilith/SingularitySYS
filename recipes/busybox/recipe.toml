@@ -2,13 +2,14 @@
 # one was built by the host's gcc, only to bootstrap.) One STATIC binary that provides a shell and core
 # utilities: the build sandbox's shell and the rescue shell, which must work with nothing else installed.
 name        = "busybox"
-version     = "1.36.1_r1"
+version     = "1.36.1_r2"
 description = "BusyBox: a static shell and core utilities"
 license     = "GPL-2.0-only"
 libc        = ["glibc"]
 
 [depends]
 build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+run   = ["filesystem"]
 
 [[source]]
 url    = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2"
@@ -26,8 +27,29 @@ sed -i -e 's/^# CONFIG_STATIC is not set/CONFIG_STATIC=y/' -e 's/^CONFIG_TC=y/# 
 compile = "make -j$JOBS"
 install = '''
 make CONFIG_PREFIX=$DESTDIR install
+# Merged /usr: the binary and every applet link live under /usr (/bin and /sbin are symlinks into it on the
+# system). BusyBox installs its links into bin, sbin, usr/bin and usr/sbin by applet; move them all into
+# usr/bin and usr/sbin and point each at the one binary.
+mkdir -p "$DESTDIR/usr/bin" "$DESTDIR/usr/sbin"
+mv "$DESTDIR/bin/busybox" "$DESTDIR/usr/bin/busybox"
+for d in bin usr/bin; do
+    for l in "$DESTDIR/$d"/*; do
+        [ -L "$l" ] || continue
+        n=$(basename "$l"); rm -f "$l"
+        [ -e "$DESTDIR/usr/bin/$n" ] || ln -s busybox "$DESTDIR/usr/bin/$n"
+    done
+done
+for d in sbin usr/sbin; do
+    for l in "$DESTDIR/$d"/*; do
+        [ -L "$l" ] || continue
+        n=$(basename "$l"); rm -f "$l"
+        [ -e "$DESTDIR/usr/sbin/$n" ] || ln -s ../bin/busybox "$DESTDIR/usr/sbin/$n"
+    done
+done
+rmdir "$DESTDIR/bin" "$DESTDIR/sbin" 2>/dev/null || true
+rm -f "$DESTDIR/linuxrc"
 # Self-check: static, so it works as a rescue shell with nothing else installed.
-interp=$(readelf -lW "$DESTDIR/bin/busybox" | grep -c INTERP || true)
+interp=$(readelf -lW "$DESTDIR/usr/bin/busybox" | grep -c INTERP || true)
 if [ "$interp" != 0 ]; then
     echo "busybox is dynamically linked, but must be static" >&2
     exit 1
