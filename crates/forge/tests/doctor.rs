@@ -128,3 +128,12 @@ fn a_microcode_image_that_is_not_in_boot_or_not_loaded_is_a_warning() {
     fs::write(r.join("boot/limine.conf"), conf).unwrap();
     assert!(text(&doctor(&r, "")).contains("loaded at boot"));
 }
+
+#[test]
+fn stale_forge_owned_files_are_a_warning() {
+    let (_t, r) = healthy();
+    fs::create_dir_all(r.join("usr/bin")).unwrap();
+    fs::write(r.join("usr/bin/wifi"), "an old version").unwrap();
+    let o = doctor(&r, "");
+    assert!(o.status.success() && text(&o).contains("out of date:") && text(&o).contains("/usr/bin/wifi"), "{}", text(&o));
+}

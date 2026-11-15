@@ -760,3 +760,38 @@ fn the_microcode_image_is_copied_to_boot_and_again_only_when_it_changes() {
     apply(&p).unwrap();
     assert_eq!(fs::read_to_string(r.path().join("boot/microcode.img")).unwrap(), "TWO");
 }
+
+// ---- files forge keeps right outside the packages ------------------------------------
+
+#[test]
+fn programs_and_services_forge_owns_are_kept_current_and_your_config_is_left_alone() {
+    let r = image_root();
+    let p = plan(&decl(""), r.path());
+    assert!(p.changes.iter().any(|c| c.section == "defaults" && c.summary == "/usr/bin/wifi"), "{:?}", p.changes);
+    apply(&p).unwrap();
+    assert!(read(r.path(), "usr/bin/wifi").starts_with("#!/bin/sh"));
+    assert!(read(r.path(), "etc/init.d/network").contains("openrc-run"));
+    assert_eq!(fs::read_link(r.path().join("etc/runlevels/default/network")).unwrap(), Path::new("/etc/init.d/network"));
+    assert!(plan(&decl(""), r.path()).is_empty(), "nothing to do the second time");
+
+    // An old copy of a program is replaced; a link someone removed comes back; your own config stays.
+    fs::write(r.path().join("usr/bin/wifi"), "an old version").unwrap();
+    fs::remove_file(r.path().join("etc/runlevels/default/chronyd")).unwrap();
+    fs::write(r.path().join("etc/conf.d/network"), "interfaces=\"wlan0\"\n").unwrap();
+    let p = plan(&decl(""), r.path());
+    assert!(p.changes.iter().any(|c| c.summary == "/usr/bin/wifi") && p.changes.iter().any(|c| c.summary.contains("chronyd")), "{:?}", p.changes);
+    assert!(p.changes.iter().all(|c| !c.summary.contains("conf.d/network")), "config is never touched once it exists");
+    apply(&p).unwrap();
+    assert!(read(r.path(), "usr/bin/wifi").starts_with("#!/bin/sh"));
+    assert_eq!(read(r.path(), "etc/conf.d/network"), "interfaces=\"wlan0\"\n");
+}
+
+#[test]
+fn systemd_machines_are_not_given_openrc_services() {
+    let r = image_root();
+    publish_all(r.path(), &["systemd", "dbus"]);
+    let p = plan(&init_decl("systemd", &[]), r.path());
+    let defaults: Vec<_> = p.changes.iter().filter(|c| c.section == "defaults").map(|c| c.summary.clone()).collect();
+    assert!(defaults.iter().any(|s| s == "/usr/bin/wifi"), "the shared defaults still apply: {defaults:?}");
+    assert!(defaults.iter().all(|s| !s.contains("init.d") && !s.contains("runlevels")), "no OpenRC services for systemd: {defaults:?}");
+}

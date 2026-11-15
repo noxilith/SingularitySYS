@@ -76,6 +76,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
     init_link(&mut r, root, &system);
     limine(&mut r, root);
     microcode(&mut r, root);
+    defaults(&mut r, root, &system);
     if root == Path::new("/") {
         running_kernel(&mut r);
     }
@@ -153,6 +154,34 @@ fn limine(r: &mut Report, root: &Path) {
         r.ok(G, format!("Limine lists {entries} entries and every kernel file they name is there"));
     } else {
         r.fail(G, format!("Limine names files that are not in /boot: {}", missing.into_iter().collect::<Vec<_>>().join(", ")), "sudo forge kernel install, or pick another entry at boot");
+    }
+}
+
+/// The files forge keeps current (services, the wifi command, shell defaults, runlevels) must match what this forge
+/// carries; a mismatch after an upgrade means `forge apply` has not run since.
+fn defaults(r: &mut Report, root: &Path, system: &str) {
+    const G: &str = "System files";
+    if !under(root, "/usr/sbin").is_dir() {
+        return;
+    }
+    let mut stale = Vec::new();
+    for m in forge_schema::managed(system).into_iter().filter(|m| m.own == forge_schema::Own::Always) {
+        let path = under(root, &m.path);
+        let ok = match &m.entry {
+            Entry::File { content, .. } => fs::read_to_string(&path).is_ok_and(|c| &c == content),
+            Entry::Link(t) => fs::read_link(&path).is_ok_and(|cur| cur == Path::new(t)),
+            Entry::Absent => !path.exists(),
+        };
+        if !ok {
+            stale.push(m.path);
+        }
+    }
+    if stale.is_empty() {
+        r.ok(G, "the services and defaults forge keeps current are up to date");
+    } else {
+        let shown: Vec<&str> = stale.iter().take(4).map(String::as_str).collect();
+        let more = if stale.len() > 4 { format!(" and {} more", stale.len() - 4) } else { String::new() };
+        r.warn(G, format!("out of date: {}{more}", shown.join(", ")), "sudo forge apply");
     }
 }
 

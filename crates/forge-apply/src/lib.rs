@@ -127,7 +127,7 @@ impl Change {
     /// Changes that must come after the packages are in the tree: the init links and units, and users (whose
     /// shells and tools come from packages).
     fn is_late(&self) -> bool {
-        self.section == "init" || self.section == "users" || self.section == "shell" || self.section == "boot"
+        self.section == "init" || self.section == "users" || self.section == "shell" || self.section == "boot" || self.section == "defaults"
     }
 
     /// True when applying this change downloads an archive.
@@ -248,10 +248,14 @@ impl Planner<'_> {
     /// A file forge owns outside the packages (the init links and power commands): make it match `entry`,
     /// replacing whatever is there, including a link where a script is wanted and the other way round.
     fn plumb(&mut self, abs: &str, entry: &forge_schema::Entry) {
+        self.plumb_in("init", abs, entry);
+    }
+
+    fn plumb_in(&mut self, section: &'static str, abs: &str, entry: &forge_schema::Entry) {
         use forge_schema::Entry;
         match entry {
-            Entry::Link(target) => self.link("init", abs, target),
-            Entry::Absent => self.unlink("init", abs),
+            Entry::Link(target) => self.link(section, abs, target),
+            Entry::Absent => self.unlink(section, abs),
             Entry::File { content, mode } => {
                 let path = under(self.root, abs);
                 let meta = path.symlink_metadata().ok();
@@ -260,9 +264,9 @@ impl Planner<'_> {
                     return;
                 }
                 self.changes.push(Change {
-                    section: "init",
+                    section,
                     kind: if meta.is_some() { Kind::Modify } else { Kind::Add },
-                    summary: format!("{abs} = {}", content.lines().find(|l| !l.starts_with('#') && !l.is_empty()).unwrap_or("")),
+                    summary: abs.to_string(),
                     op: Op::WriteFile { path, content: content.clone(), mode: *mode },
                 });
             }
@@ -433,6 +437,17 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.plumb(path, &entry);
         }
     }
+    // The files forge keeps right outside the packages (network and driver services, the wifi command, shell defaults,
+    // the OpenRC runlevels): rewritten when they differ, so a fix arrives with the forge package. Starting points you may
+    // edit (config) are only created when missing. (On a real system, which has /usr/sbin.)
+    if under(root, "/usr/sbin").is_dir() {
+        for m in forge_schema::managed(system) {
+            if m.own == forge_schema::Own::IfMissing && under(root, &m.path).symlink_metadata().is_ok() {
+                continue;
+            }
+            p.plumb_in("defaults", &m.path, &m.entry);
+        }
+    }
     if switching {
         let stub = "/run/systemd/resolve/stub-resolv.conf";
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
@@ -500,12 +515,7 @@ const SYSTEM_PROFILE_DIR: &str = "/forge/profiles/system";
 /// The standard directories on `PATH` for login shells. Packages are copied into /usr by `forge apply`, so there is
 /// no profile directory to add (and the store's links, which carry no setuid bit, must never come first).
 fn profile_env() -> String {
-    "# managed by forge: the system's programs are in /usr\n\
-     for d in /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin; do\n\
-     \x20   case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac\n\
-     done\n\
-     export PATH\n"
-        .to_string()
+    forge_schema::profile_script()
 }
 
 /// The packages to have installed: the declared ones, without the other init systems' packages, plus the chosen

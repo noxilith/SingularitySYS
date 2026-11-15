@@ -151,28 +151,6 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
             .into(),
     )?;
     put("etc/shells", 0o644, "/bin/sh\n/bin/bash\n".into())?;
-    // Hardware watchdog drivers are not wanted: nothing here feeds them, and some report "watchdog did not stop!" on
-    // every shutdown. (A machine that wants one removes this file.)
-    put(
-        "etc/modprobe.d/blacklist-watchdog.conf",
-        0o644,
-        "# SingularitySYS: no hardware watchdogs by default\nblacklist iTCO_wdt\nblacklist iTCO_vendor_support\nblacklist sp5100_tco\nblacklist wdat_wdt\nblacklist softdog\nblacklist intel_oc_wdt\nblacklist ie6xx_wdt\nblacklist w83627hf_wdt\nblacklist nct6775_wdt\n".into(),
-    )?;
-    // Line editing: arrow keys, history, Home/End/Delete on the Linux console and in terminal emulators, and no
-    // bracketed-paste escape codes (the console would show them as text).
-    put(
-        "etc/inputrc",
-        0o644,
-        "set enable-bracketed-paste off\nset bell-style none\n\
-         \"\\e[A\": previous-history\n\"\\e[B\": next-history\n\"\\e[C\": forward-char\n\"\\e[D\": backward-char\n\
-         \"\\eOA\": previous-history\n\"\\eOB\": next-history\n\"\\eOC\": forward-char\n\"\\eOD\": backward-char\n\
-         \"\\e[1~\": beginning-of-line\n\"\\e[4~\": end-of-line\n\"\\e[H\": beginning-of-line\n\"\\e[F\": end-of-line\n\
-         \"\\e[3~\": delete-char\n\"\\e[5~\": history-search-backward\n\"\\e[6~\": history-search-forward\n\
-         \"\\e[1;5C\": forward-word\n\"\\e[1;5D\": backward-word\n\
-         # Ctrl+H: edit the system declaration (forge edit checks it and applies it when the editor closes).\n\
-         \"\\C-h\": \"sudo forge edit\\C-m\"\n"
-            .into(),
-    )?;
     // glibc looks names up through this file: local files, then DNS for hosts.
     put(
         "etc/nsswitch.conf",
@@ -192,12 +170,13 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/profile",
         0o644,
-        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nexport INPUTRC=/etc/inputrc\nexport EDITOR=micro VISUAL=micro\nexport TERM=${TERM:-linux}\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
+        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
     )?;
     if root.join("sbin/openrc-init").exists() {
         write_openrc(root)?;
         return Ok(());
     }
+    write_managed(root, "common")?;
     // No OpenRC in the image: BusyBox init with a small rcS keeps it bootable.
     put(
         "etc/inittab",
@@ -233,39 +212,14 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     Ok(())
 }
 
-/// Runlevels of the live system (and, copied by `forge strap`, of an installed one). Services are
-/// symlinks `/etc/runlevels/<level>/<service>` -> `/etc/init.d/<service>`: what `forge apply` edits.
-const RUNLEVELS: &[(&str, &[&str])] = &[
-    ("sysinit", &["devfs", "dmesg", "sysfs"]),
-    ("boot", &["procfs", "coldplug", "root", "hostname", "localmount", "bootmisc", "loopback"]),
-    ("default", &["network", "chronyd", "agetty.tty1", "agetty.ttyS0", "local"]),
-    ("shutdown", &["killprocs", "mount-ro"]),
-];
-
 /// Make the tree boot with OpenRC: `/sbin/init` is `openrc-init`, the runlevels are the ones above
 /// (the package's defaults include fsck, hwclock and swap, which do not suit a live system), terminals
 /// are `agetty` services, and `reboot`/`poweroff`/`halt` go through `openrc-shutdown`
 /// (BusyBox's would signal PID 1 in a way openrc-init does not understand).
 fn write_openrc(root: &Path) -> Result<(), IsoError> {
-    let rl = root.join("etc/runlevels");
-    let _ = fs::remove_dir_all(&rl);
-    for (level, services) in RUNLEVELS {
-        let dir = rl.join(level);
-        fs::create_dir_all(&dir).map_err(io_ctx(format!("creating {}", dir.display())))?;
-        for s in *services {
-            symlink(format!("/etc/init.d/{s}"), dir.join(s)).map_err(io_ctx(format!("enabling {s}")))?;
-        }
-    }
-    // One agetty service per terminal, from the stock template.
-    for (port, baud, term, opts) in [("tty1", "38400", "linux", ""), ("ttyS0", "115200", "vt100", "-L")] {
-        let svc = root.join(format!("etc/init.d/agetty.{port}"));
-        let _ = fs::remove_file(&svc);
-        symlink("agetty", &svc).map_err(io_ctx(format!("linking agetty.{port}")))?;
-        let conf = root.join(format!("etc/conf.d/agetty.{port}"));
-        fs::create_dir_all(conf.parent().expect("has parent")).map_err(io_ctx("creating /etc/conf.d"))?;
-        fs::write(&conf, format!("baud=\"{baud}\"\nterm_type=\"{term}\"\nagetty_options=\"{opts}\"\n")).map_err(io_ctx("writing agetty settings"))?;
-    }
-    write_networking(root)?;
+    // The package's own runlevels include services that do not suit this system; forge's list replaces them.
+    let _ = fs::remove_dir_all(root.join("etc/runlevels"));
+    write_managed(root, "openrc")?;
     let _ = fs::remove_file(root.join("etc/inittab"));
     let init = root.join("sbin/init");
     let _ = fs::remove_file(&init);
@@ -420,190 +374,6 @@ mod openrc_tests {
 }
 
 
-/// Networking: one OpenRC service (`network`) whose watcher configures every interface as it appears
-/// (wired or Wi-Fi), kernel-module autoloading, and the
-/// `wifi` helper. Wi-Fi interfaces appear a second or two after their driver loads (firmware loading is
-/// asynchronous), which is why this is a watcher and not a one-shot start.
-fn write_networking(root: &Path) -> Result<(), IsoError> {
-    let put = |path: &str, mode: u32, text: &str| -> Result<(), IsoError> {
-        let p = root.join(path);
-        fs::create_dir_all(p.parent().expect("has parent")).map_err(io_ctx(format!("creating the directory of /{path}")))?;
-        let _ = fs::remove_file(&p);
-        fs::write(&p, text).map_err(io_ctx(format!("writing /{path}")))?;
-        fs::set_permissions(&p, fs::Permissions::from_mode(mode)).map_err(io_ctx("setting permissions"))
-    };
-    put("etc/init.d/network", 0o755, NETWORK_SERVICE)?;
-    put("etc/conf.d/network", 0o644, NETWORK_CONF)?;
-    put("usr/libexec/singularity/netwatch", 0o755, NETWATCH)?;
-    put("etc/init.d/coldplug", 0o755, COLDPLUG_SERVICE)?;
-    put("usr/bin/wifi", 0o755, WIFI_COMMAND)?;
-    put("etc/wpa_supplicant/wpa_supplicant.conf", 0o600, WPA_CONF)
-}
-
-const NETWORK_CONF: &str = "# Interfaces to manage, separated by spaces. Empty: every physical interface (wired and wireless).\n\
-interfaces=\"\"\n";
-
-const NETWORK_SERVICE: &str = r#"#!/sbin/openrc-run
-description="Network: DHCP on wired interfaces, wpa_supplicant and DHCP on Wi-Fi"
-command=/usr/libexec/singularity/netwatch
-command_background=true
-pidfile=/run/netwatch.pid
-
-depend() {
-	need localmount
-	after bootmisc loopback modules-load
-	provide net
-}
-
-start_pre() {
-	# A radio that is soft-blocked stays off until something unblocks it.
-	for f in /sys/class/rfkill/rfkill*/soft; do
-		[ -w "$f" ] && echo 0 > "$f"
-	done
-	mkdir -p /run/netwatch
-}
-
-stop_post() {
-	dhcpcd -x >/dev/null 2>&1
-	for p in /run/netwatch/*; do
-		[ -f "$p" ] || continue
-		kill "$(cat "$p")" 2>/dev/null
-		rm -f "$p"
-	done
-}
-"#;
-
-const NETWATCH: &str = r#"#!/bin/sh
-# Keeps every network interface configured as it appears, until it is stopped: brings the link up,
-# starts wpa_supplicant on wireless ones (when a configuration exists), and runs DHCP on all of them.
-[ -r /etc/conf.d/network ] && . /etc/conf.d/network
-RUN=/run/netwatch
-mkdir -p "$RUN"
-
-alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
-
-while :; do
-	for dir in /sys/class/net/*; do
-		name=${dir##*/}
-		[ "$name" = lo ] && continue
-		if [ -n "$interfaces" ]; then
-			case " $interfaces " in *" $name "*) ;; *) continue ;; esac
-		else
-			[ -e "$dir/device" ] || continue   # virtual: bridges, tunnels...
-		fi
-		ip link set "$name" up 2>/dev/null
-		if [ -d "$dir/wireless" ] || [ -d "$dir/phy80211" ]; then
-			if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] && ! alive "$RUN/wpa.$name"; then
-				wpa_supplicant -B -i "$name" -D nl80211 -c /etc/wpa_supplicant/wpa_supplicant.conf \
-					-P "$RUN/wpa.$name" >/dev/null 2>&1
-			fi
-		fi
-	done
-	# One DHCP client (dhcpcd) looks after every interface, including ones that appear later (a Wi-Fi card whose
-	# firmware loads after boot), and waits for a carrier on its own. Started once; restarted if it ever dies.
-	pgrep -x dhcpcd >/dev/null 2>&1 || dhcpcd -b -q >/dev/null 2>&1
-	sleep 3
-done
-"#;
-
-const COLDPLUG_SERVICE: &str = r#"#!/sbin/openrc-run
-description="Loads drivers for the hardware found, and the modules listed in /etc/modules-load.d"
-
-depend() {
-	need procfs
-	before localmount hostname
-	provide modules-load
-}
-
-start() {
-	ebegin "Loading drivers for detected hardware"
-	# Every device offers a modalias; modprobe resolves it to the module that drives it.
-	find /sys/devices -name modalias -type f -exec cat {} + 2>/dev/null | sort -u |
-		while read -r alias; do
-			modprobe -q "$alias" 2>/dev/null
-		done
-	for file in /usr/lib/modules-load.d/*.conf /etc/modules-load.d/*.conf; do
-		[ -f "$file" ] || continue
-		while read -r module _; do
-			case "$module" in ''|\#*|\;*) continue ;; esac
-			modprobe -q "$module" 2>/dev/null
-		done < "$file"
-	done
-	eend 0
-}
-"#;
-
-const WPA_CONF: &str = "ctrl_interface=/run/wpa_supplicant\n\
-ctrl_interface_group=0\n\
-update_config=1\n";
-
-const WIFI_COMMAND: &str = r#"#!/bin/sh
-# wifi scan | connect SSID [passphrase] | status | disconnect
-conf=/etc/wpa_supplicant/wpa_supplicant.conf
-
-find_interface() {
-	for d in /sys/class/net/*; do
-		if [ -d "$d/wireless" ] || [ -d "$d/phy80211" ]; then echo "${d##*/}"; return; fi
-	done
-}
-
-iface=$(find_interface)
-if [ -z "$iface" ]; then
-	echo "wifi: no wireless interface found." >&2
-	echo "      Give the drivers a few seconds after boot, then check: dmesg | grep -i -E 'firmware|wlan|iwl|rtw|ath|mt7|brcm'" >&2
-	exit 1
-fi
-
-case "$1" in
-	scan)
-		wpa_cli -i "$iface" scan >/dev/null
-		sleep 4
-		printf 'signal   security            network\n'
-		wpa_cli -i "$iface" scan_results | tail -n +2 | sort -t "$(printf '\t')" -k3 -nr |
-			awk -F '\t' '{ printf "%4s dBm %-19s %s\n", $3, substr($4, 1, 19), $5 }'
-		;;
-	connect)
-		ssid=$2
-		[ -n "$ssid" ] || { echo "usage: wifi connect SSID [passphrase]" >&2; exit 1; }
-		pass=$3
-		if [ -z "$pass" ]; then
-			printf 'Passphrase for %s (empty for an open network): ' "$ssid" >&2
-			stty -echo 2>/dev/null; read -r pass; stty echo 2>/dev/null; echo >&2
-		fi
-		if [ -z "$pass" ]; then
-			printf 'network={\n\tssid="%s"\n\tkey_mgmt=NONE\n}\n' "$ssid" >> "$conf"
-		else
-			wpa_passphrase "$ssid" "$pass" | grep -v '#psk' >> "$conf" || exit 1
-		fi
-		wpa_cli -i "$iface" reconfigure >/dev/null
-		printf 'Connecting to %s ' "$ssid"
-		n=0
-		while [ "$n" -lt 25 ]; do
-			if wpa_cli -i "$iface" status | grep -q 'wpa_state=COMPLETED'; then
-				echo "associated."
-				sleep 3
-				ip -4 addr show "$iface" | grep inet || echo "(no IP address yet: DHCP is still trying)"
-				exit 0
-			fi
-			printf '.'; sleep 1; n=$((n + 1))
-		done
-		echo " not connected. Check the passphrase, and that the network is in range (wifi scan)."
-		exit 1
-		;;
-	status)
-		wpa_cli -i "$iface" status
-		ip -4 addr show "$iface" | grep inet
-		;;
-	disconnect)
-		wpa_cli -i "$iface" disconnect
-		;;
-	*)
-		echo "usage: wifi scan | connect SSID [passphrase] | status | disconnect" >&2
-		exit 1
-		;;
-esac
-"#;
-
 /// Groups every system gets, with fixed ids (so a file's group means the same on every install). `wheel`
 /// is the administrators; the rest exist so that users can be put in them: devices only honour them once
 /// something (udev, mdev rules) assigns them, which the base system does not do yet.
@@ -621,3 +391,25 @@ pub const STANDARD_GROUPS: &[(&str, u32)] = &[
     ("nogroup", 65534),
 ];
 
+
+/// Write what forge keeps right (`forge_schema::managed`) into a new image: the same files `forge apply` keeps current
+/// on an installed system, plus the login shells' environment.
+fn write_managed(root: &Path, init: &str) -> Result<(), IsoError> {
+    let put = |abs: &str, entry: &forge_schema::Entry| -> Result<(), IsoError> {
+        let p = root.join(abs.trim_start_matches('/'));
+        fs::create_dir_all(p.parent().expect("has parent")).map_err(io_ctx(format!("creating the directory of {abs}")))?;
+        let _ = fs::remove_file(&p);
+        match entry {
+            forge_schema::Entry::File { content, mode } => {
+                fs::write(&p, content).map_err(io_ctx(format!("writing {abs}")))?;
+                fs::set_permissions(&p, fs::Permissions::from_mode(*mode)).map_err(io_ctx("setting permissions"))
+            }
+            forge_schema::Entry::Link(target) => symlink(target, &p).map_err(io_ctx(format!("linking {abs}"))),
+            forge_schema::Entry::Absent => Ok(()),
+        }
+    };
+    for m in forge_schema::managed(init) {
+        put(&m.path, &m.entry)?;
+    }
+    put("/etc/profile.d/forge.sh", &forge_schema::Entry::File { content: forge_schema::profile_script(), mode: 0o644 })
+}
