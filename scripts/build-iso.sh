@@ -10,7 +10,7 @@
 # and published, signed, into its own repository. Needs on the host: xorriso,
 # mksquashfs, openssl and limine (the `limine` tool and /usr/share/limine files).
 #
-# Writes novara-live.iso (override with ISO=...). Try it with scripts/test-iso-qemu.sh.
+# Writes singularity-live.iso (override with ISO=...). Try it with scripts/test-iso-qemu.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,7 +23,7 @@ TOOLS_REPO=${TOOLS_REPO:-repo/tools}
 CACHE=${CACHE:-sources/cache}
 WORK=${WORK:-$HOME/.cache/forge/build}
 OUT=${OUT:-packages/iso}
-ISO=${ISO:-novara-live.iso}
+ISO=${ISO:-singularity-live.iso}
 JOBS=${JOBS:-$(nproc)}
 
 [ -x "$FORGE" ] || fail "build forge first (cargo build), or set FORGE=/path/to/forge"

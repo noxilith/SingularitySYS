@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage 1: build binutils and gcc (C and C++) for musl, then prove that Novara
+# Stage 1: build binutils and gcc (C and C++) for musl, then prove that Singularity
 # can compile with them using store packages only.
 #
 #   BASE_REPO=repo/stage0-<stamp> scripts/bootstrap-toolchain.sh

@@ -1,4 +1,4 @@
-# NovaraSYS design
+# SingularitySYS design
 
 Independent Linux distribution. Declarative, generation-based, OpenRC by default with swappable init. Modeled on the install flow and ideas of HaliadeSYS, but built around one Rust tool, `forge`.
 
@@ -153,7 +153,7 @@ Everything we write ourselves is Rust by default (fast, lightweight, and the pro
 - **Cargo workspace:** `forge` (CLI) plus library crates for the declaration/recipe schemas, store and profiles, sandbox, generations, genkernel, the installer (`strap`) and the store daemon. A shared schema crate keeps the daemon, CLI and installer from drifting apart.
 - **Live ISO tooling** (image builder, live-environment setup) is Rust too, instead of shell scripts.
 - **Not rewritten (stay C):** Linux kernel, glibc/musl, OpenRC, Limine, btrfs-progs, rsync, cfdisk, the compiler toolchain. A Rust coreutils (`uutils`) can replace the basic commands later.
-- **Bootstrap:** the first `forge` is cross-compiled with a Rust toolchain from the build host. Building `rustc` from source in Novara needs a prebuilt Rust to start from, so a `rust` recipe comes after Novara can build itself.
+- **Bootstrap:** the first `forge` is cross-compiled with a Rust toolchain from the build host. Building `rustc` from source in Singularity needs a prebuilt Rust to start from, so a `rust` recipe comes after Singularity can build itself.
 - **Static builds:** `forge`, the installer and the daemon build statically (musl target for the musl ISO; glibc carefully) so they work in the minimal live environment.
 
 ## Bootstrap order
@@ -271,7 +271,7 @@ Not done yet (deliberately):
 
 ## Stage 1: bootstrap binutils and gcc (implemented: `recipes/binutils-stage1`, `recipes/gcc-stage1`, `scripts/bootstrap-toolchain.sh`)
 
-`BASE_REPO=repo/stage0-<stamp> scripts/bootstrap-toolchain.sh` builds **binutils-stage1** (2.43.1) and **gcc-stage1** (14.2.0, C and C++, with a static libstdc++) for the target `x86_64-linux-musl`, then proves Novara can compile with them. About 11 minutes on 8 cores (binutils 1 minute, gcc about 10, `JOBS=6`); `KEEP_WORK=1` keeps the multi-GB build directories for debugging.
+`BASE_REPO=repo/stage0-<stamp> scripts/bootstrap-toolchain.sh` builds **binutils-stage1** (2.43.1) and **gcc-stage1** (14.2.0, C and C++, with a static libstdc++) for the target `x86_64-linux-musl`, then proves Singularity can compile with them. About 11 minutes on 8 cores (binutils 1 minute, gcc about 10, `JOBS=6`); `KEEP_WORK=1` keeps the multi-GB build directories for debugging.
 
 **What it proves.** A fixture (`scripts/fixtures/toolchain-check`) is built with `--tools store` using *only* store packages (BusyBox, make, binutils, gcc, musl, linux-headers). In that sandbox the store's gcc compiled and ran C and C++ programs, dynamic and static, including STL containers and a thrown-and-caught exception: musl's strerror text confirms the libc, the dynamic loader is `/lib/ld-musl-x86_64.so.1`, static binaries have no interpreter, and the host's libc and gcc are absent. The script also checks that every compiler binary and tool is fully static.
 
@@ -313,7 +313,7 @@ Not done yet (deliberately):
 
 Distinct names are required, not cosmetic: dependencies are resolved by name, a build's tool profile includes its tools' run-time dependencies, and two packages providing the same file cannot be merged. A stage-2 `gcc` must use the stage-1 compiler as a tool while depending on stage-2 packages at run time; with one name for both that cannot be expressed.
 
-**Why three generations.** A static binary contains libc code. Stage2 links the stage-0 musl, which the *host's* gcc compiled; stage3 links the musl that Novara's own compiler built. So stage3 is the first generation with no host-compiler output in it, and the fixed point appears one generation later: stage3 and the real packages must be identical.
+**Why three generations.** A static binary contains libc code. Stage2 links the stage-0 musl, which the *host's* gcc compiled; stage3 links the musl that Singularity's own compiler built. So stage3 is the first generation with no host-compiler output in it, and the fixed point appears one generation later: stage3 and the real packages must be identical.
 
 **Results** (all six packages, file by file, nothing different or missing): linux-headers 2001 files, musl 234, binutils 172, busybox 401, make 1, gcc 1012. The real packages also compile and run C and C++ (dynamic and static, with exceptions) in a store that holds *only* those six: the repository passed to that build contains nothing else, and the script fails if a `-stage` package is in the store.
 
@@ -373,7 +373,7 @@ Limits, stated plainly:
 
 ## The live ISO (implemented: `forge-iso`, `forge iso`, `recipes/linux`, `scripts/build-iso.sh`, `scripts/test-iso-qemu.sh`)
 
-`BASE_REPO=repo/selfhost-r2 scripts/build-iso.sh` builds `novara-live.iso` (35 MiB with the default packages).
+`BASE_REPO=repo/selfhost-r2 scripts/build-iso.sh` builds `singularity-live.iso` (35 MiB with the default packages).
 
 - **Contents.** `forge iso --repo R... [--package NAME...]` resolves the packages (default
   `linux busybox musl`) and their dependencies in signed repositories (same trust rules as
@@ -410,7 +410,7 @@ Not done yet (the live system cannot install a system until these exist):
   on the ISO (see signing).
 - **Never booted.** There is no QEMU on the author's machine, so the image was checked structurally
   only (boot records, partition table, squashfs and initramfs contents, 15 unit tests). Run
-  `scripts/test-iso-qemu.sh novara-live.iso` (BIOS; set `OVMF=` for UEFI) on a machine with QEMU: it
+  `scripts/test-iso-qemu.sh singularity-live.iso` (BIOS; set `OVMF=` for UEFI) on a machine with QEMU: it
   boots the ISO on the serial console, waits for the login prompt, logs in as root/root and runs a command.
 
 ## Strap tools on the live system (implemented: `recipes/{zlib,zstd,lzo,ncurses,pkgconf,util-linux,rsync,btrfs-progs,shadow,limine,efivar,efibootmgr}`, `scripts/build-tools.sh`, `scripts/package-forge.sh`)
@@ -457,14 +457,14 @@ Still missing: OpenRC, a trusted-key keyring on the ISO, the Rust toolchain as a
 
 ## Installing the live system for real (`scripts/test-strap-live.sh`)
 
-`sudo scripts/test-strap-live.sh [novara-live.iso]` extracts the live root from the ISO, makes a 2 GB loopback
+`sudo scripts/test-strap-live.sh [singularity-live.iso]` extracts the live root from the ISO, makes a 2 GB loopback
 disk, and runs the packaged `forge strap --uefi` inside a chroot of that root (private mount namespace),
 so rsync, mkfs.btrfs, limine and the rest are the packaged ones. It then checks subvolumes, fstab,
 `limine.conf`, kernel, EFI loader, init and forge on the result and, if QEMU and `OVMF=` are available,
 boots the installed disk to a login prompt. **Passed on the author's machine on 2026-11-09 up to the boot step** (the real strap, with the packaged tools, produced the expected subvolumes, fstab, `limine.conf` and EFI System Partition); the QEMU boot was skipped (no QEMU), so the installed system has still never been booted.
 
 Writing it showed what an installed system needs that the live one did not, now fixed:
-- **No initramfs.** The Novara kernel has its root drivers built in, but a kernel cannot resolve
+- **No initramfs.** The Singularity kernel has its root drivers built in, but a kernel cannot resolve
   `root=UUID=` without an initramfs. The initramfs is now optional end to end (`BootInfo.initramfs`
   empty = none: no `module_path` line, in strap and in generations), and then strap writes
   `root=PARTUUID=<root partition>` (read with `blkid`). An initramfs named with `--initramfs` must exist.
@@ -497,7 +497,7 @@ sysvinit mode), replacing BusyBox init. **Written and checked by running OpenRC 
 - **Build chain.** Current OpenRC builds only with meson, so the store gained `python` 3.12.16 (trimmed; no
   ssl/sqlite/ctypes), `ninja` 1.13.2 (static), `meson` 1.12.1 (pure Python, a wrapper in `/usr/bin/meson`) and
   `libcap` 2.78 (library only, static and PIC: the programs need bash). `zlib` is now PIC so Python can
-  link it. OpenRC is configured without PAM/SELinux/audit, `-Dsysvinit=false`, branding "NovaraSYS". It
+  link it. OpenRC is configured without PAM/SELinux/audit, `-Dsysvinit=false`, branding "SingularitySYS". It
   installs its programs in `/sbin` and `/bin`, configuration in `/etc`, helpers in `/usr/libexec/rc`.
 - **Runlevels** (written by the ISO builder, replacing the package's defaults, which include fsck, hwclock
   and swap): sysinit `devfs dmesg sysfs`; boot `procfs root hostname localmount bootmisc loopback`; default
@@ -511,7 +511,7 @@ sysvinit mode), replacing BusyBox init. **Written and checked by running OpenRC 
   BusyBox's would signal PID 1 the BusyBox way.
 - **Fallback.** Without the `openrc` package in the image the builder falls back to BusyBox init and the
   old `rcS`.
-- **Rescue.** The live Limine menu has a second entry, "NovaraSYS live (rescue shell, no init system)", which
+- **Rescue.** The live Limine menu has a second entry, "SingularitySYS live (rescue shell, no init system)", which
   adds `init=/bin/sh`; `/init` in the initramfs now honours `init=` from the kernel command line. On an
   installed system (no initramfs) press `e` at the Limine menu and add `init=/bin/sh`.
 - **Known gaps.** `localmount` runs BusyBox's `mount -at`, which may not understand every option OpenRC passes
@@ -611,7 +611,7 @@ board.** A stable kernel is not a long-term one: the design question of 6.18 LTS
 
 ## `forge kernel` (implemented: `crates/forge-kernel`, `forge kernel list|build|install`)
 
-The genkernel of the design, minus `initramfs` (the Novara kernels carry the drivers needed to reach the root).
+The genkernel of the design, minus `initramfs` (the Singularity kernels carry the drivers needed to reach the root).
 
 - **`forge kernel list`**: kernel.org's current releases (mainline, stable, long-term).
 - **`forge kernel build`** picks a kernel (`--version 7.3.3`, or `--series stable|longterm`; release candidates are
@@ -621,7 +621,7 @@ The genkernel of the design, minus `initramfs` (the Novara kernels carry the dri
   (`<work>/stage-<version>`: `boot/vmlinuz-REL`, `boot/config-REL`, `usr/lib/modules/REL`). Configuration modes:
   - `--auto` (default): start from the running kernel's configuration and drop every module that is not loaded now
     (`make localmodconfig` on `/proc/modules`, or on a copy saved on the target machine with `--loaded-modules FILE`),
-    then re-assert what a Novara system needs built in. Plug in the
+    then re-assert what a Singularity system needs built in. Plug in the
     devices you use first, or name modules with `--also-keep`. Checked on the author's machine: 5,484 → 202 modules, 52 MB
     against 316 MB.
   - `--full`: every driver as a module: the live ISO's kernel. `recipes/linux/full-config.sh` is the one script behind
@@ -633,22 +633,22 @@ The genkernel of the design, minus `initramfs` (the Novara kernels carry the dri
   rewrites `limine.conf` to boot the new kernel with no initramfs. Older kernels are never removed: each generation
   pins its own. `--no-generation`, `--no-limine`, `--force` and path options exist. `build --install` does both.
 - **Needs on the machine (only with `--host-tools`)**: make, gcc, ld, bc, flex, bison, perl, xz, tar and libelf headers (it checks first). The default no longer needs any of it: see "forge kernel needs only itself" below.
-  **bc, perl and libelf are not Novara packages yet**, so a freshly installed Novara system cannot build kernels
+  **bc, perl and libelf are not Singularity packages yet**, so a freshly installed Singularity system cannot build kernels
   until they are. (The toolchain, flex, bison and m4 are.)
 - **Tested**: 14 unit tests (release choice, URLs, checksum parsing, command order per mode, staging, install,
   refusal cases), 5 CLI tests, and a real `build --auto` here. **Not tested**: `install` end to end (needs root and a
-  Novara btrfs system), `--menuconfig`, and `--series longterm` on a real download.
+  Singularity btrfs system), `--menuconfig`, and `--series longterm` on a real download.
 
 ## Package repositories on GitHub; `forge pkg add` works (implemented, published and tested against GitHub)
 
 Packages are not installed on the system at install time: the system fetches them from the project's
-repository, `https://github.com/noxilith/NovaraSYS`.
+repository, `https://github.com/noxilith/SingularitySYS`.
 
 - **Layout.** Git holds the project: recipes, scripts, `crates/`, `DESIGN.md` and the release **public** key in
   `distro/keys/`. The binary packages live in a **GitHub Release** called `repo` (git refuses files over 100 MB;
   the firmware archive is 402 MB, the kernel 145 MB; a release asset may be 2 GB). That release is a flat directory:
   `index.toml`, `index.toml.sig` and every archive. Systems use it as
-  `https://github.com/noxilith/NovaraSYS/releases/download/repo` (`forge_schema::DEFAULT_REPO_URL`), which a
+  `https://github.com/noxilith/SingularitySYS/releases/download/repo` (`forge_schema::DEFAULT_REPO_URL`), which a
   starter `system.toml` from `forge strap` already lists under `repos`.
 - **Trust.** Everything is checked after download, so the transport needs no authentication: the index against the
   keys in `/etc/forge/keys` (the ISO ships the release key there), each archive against the hash in that index, and
@@ -656,9 +656,9 @@ repository, `https://github.com/noxilith/NovaraSYS`.
   `wget`, which does not verify certificates, is an acceptable fallback where there is no `curl` (the live system
   has none; checked: it reaches GitHub over HTTPS and follows the redirect to the asset store). A man in the middle
   can only withhold packages.
-- **Release key.** `keys/release/novara-release.key` (git-ignored, mode 0600; key id
-  `a0178076c79b3c16…`), public half `distro/keys/novara-release.pub`. **Back the secret key up, and never commit
-  it:** whoever holds it can publish packages every Novara system trusts, and losing it means shipping a new key
+- **Release key.** `keys/release/singularity-release.key` (git-ignored, mode 0600; key id
+  `a0178076c79b3c16…`), public half `distro/keys/singularity-release.pub`. **Back the secret key up, and never commit
+  it:** whoever holds it can publish packages every Singularity system trusts, and losing it means shipping a new key
   with a new ISO. There is no revocation or expiry yet.
 - **Publishing.** `forge repo assemble DEST --from REPO... --key KEY` builds one clean repository from the build
   outputs (newest version of each real package, no `-stage` bootstrap packages, every run-time dependency present),
@@ -677,7 +677,7 @@ repository, `https://github.com/noxilith/NovaraSYS`.
   repository (index and signature only at plan time; the archive only when applying; tampered index refused;
   wrong archive installs nothing; serial remembered under the URL), 6 CLI tests of `pkg add/remove`, and by hand
   an end-to-end `pkg add rsync` and `pkg add python` over HTTP (BusyBox `httpd`) into a scratch root, trusting only
-  the public key. **Published 2026-11-09** (34 files, 661 MB, serial 32, release `repo` of noxilith/NovaraSYS), and
+  the public key. **Published 2026-11-09** (34 files, 661 MB, serial 32, release `repo` of noxilith/SingularitySYS), and
   installed from GitHub into a scratch root both with `curl` (rsync) and with only BusyBox `wget` (util-linux): it
   connects, follows the redirect to the asset store, verifies and installs. **Not tested**: on a booted installed
   system, and the live system's TLS handshake on other networks.
@@ -709,7 +709,7 @@ A user created by `forge strap` had only the `forge` group, and the system had n
 - **On a system installed before this**: no sudo exists. Log in as root, then `usermod -aG wheel,audio,video,input,users NAME`;
   for sudo reinstall from the new ISO.
 
-## `forge kernel` needs only itself (implemented; tested against GitHub on a build machine, not on an installed Novara system)
+## `forge kernel` needs only itself (implemented; tested against GitHub on a build machine, not on an installed Singularity system)
 
 `forge kernel build` used to need a compiler, `bc`, `perl` and `libelf` already installed. It now builds in the same sandbox
 every package build uses, from packages it fetches itself:
@@ -742,4 +742,4 @@ every package build uses, from packages it fetches itself:
 - **Gotchas recorded**: a kernel work directory needs ~15 GB and must not be on a RAM-backed `/tmp`; `libc`-named
   environment variables leak into configure scripts (CPython took `LIBC=musl` for a library).
 - **Not done**: `--menuconfig` in the sandbox; glibc (no glibc toolchain package exists); testing `forge kernel install`
-  and the rebuilt kernel on a real Novara machine.
+  and the rebuilt kernel on a real Singularity machine.

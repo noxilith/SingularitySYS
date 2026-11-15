@@ -93,7 +93,7 @@ impl Fixture {
             mount_point: self.mp(),
             top_mount: self.dir.path().join("top"),
             limine_dir: self.limine(),
-            hostname: "novara".into(),
+            hostname: "singularity".into(),
             libc: None,
             kernel: None,
             initramfs: None,
@@ -129,8 +129,8 @@ fn uefi_install_runs_the_expected_commands_in_order() {
     assert_eq!(*p.last().unwrap(), "umount");
 
     let c = r.find("mkfs.btrfs");
-    assert_eq!(c[0].to_string(), "mkfs.btrfs -f -L novara /dev/sda2");
-    assert_eq!(r.find("mkfs.vfat")[0].to_string(), "mkfs.vfat -F 32 -n NOVARA /dev/sda1");
+    assert_eq!(c[0].to_string(), "mkfs.btrfs -f -L singularity /dev/sda2");
+    assert_eq!(r.find("mkfs.vfat")[0].to_string(), "mkfs.vfat -F 32 -n SINGULARITY /dev/sda1");
     assert_eq!(r.find("sfdisk")[0].args, ["--part-type", "/dev/sda", "1", ESP_TYPE_GUID]);
     assert_eq!(r.find("btrfs").len(), 4, "one create per subvolume");
 }
@@ -214,7 +214,7 @@ fn writes_a_starter_declaration_that_parses_and_never_overwrites_one() {
     run(&req).0.unwrap();
     let text = fs::read_to_string(f.mp().join("etc/forge/system.toml")).unwrap();
     let decl = SystemDecl::parse(&text).unwrap();
-    assert_eq!(decl.hostname, "novara");
+    assert_eq!(decl.hostname, "singularity");
     assert_eq!(decl.libc, Libc::Musl, "detected from ld-musl");
     assert_eq!(decl.users[0].name, "alice");
     assert_eq!(decl.users[0].groups, ["wheel", "forge", "audio", "video", "input", "users"]);
@@ -246,7 +246,7 @@ fn uefi_gets_the_fallback_loader_and_a_firmware_entry() {
     res.unwrap();
     assert_eq!(fs::read_to_string(f.mp().join("boot/EFI/BOOT/BOOTX64.EFI")).unwrap(), "efi");
     let e = r.find("efibootmgr")[0];
-    assert_eq!(e.args, ["--create", "--label", "Novara", "--disk", "/dev/sda", "--part", "1", "--loader", "\\EFI\\BOOT\\BOOTX64.EFI"]);
+    assert_eq!(e.args, ["--create", "--label", "Singularity", "--disk", "/dev/sda", "--part", "1", "--loader", "\\EFI\\BOOT\\BOOTX64.EFI"]);
 }
 
 #[test]
@@ -424,7 +424,7 @@ fn the_installed_system_gets_its_own_hostname_not_the_live_systems() {
     let f = Fixture::new();
     // What rsync copied from the live system.
     fs::create_dir_all(f.mp().join("etc")).unwrap();
-    fs::write(f.mp().join("etc/hostname"), "novara-live\n").unwrap();
+    fs::write(f.mp().join("etc/hostname"), "singularity-live\n").unwrap();
     let mut req = f.request(Firmware::Uefi);
     req.hostname = "mybox".into();
     run(&req).0.unwrap();

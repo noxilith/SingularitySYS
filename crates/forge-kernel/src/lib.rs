@@ -41,7 +41,7 @@ pub enum KernelError {
     Io { context: String, source: io::Error },
     #[error("{0} exists already; remove it or choose another --work-dir")]
     Exists(PathBuf),
-    #[error("missing build tools: {}", .0.join(", "))]
+    #[error("missing build tools: {} (not needed in the default mode, which fetches its own build packages: leave out --host-tools)", .0.join(", "))]
     MissingTools(Vec<String>),
     #[error("{0}")]
     Invalid(String),

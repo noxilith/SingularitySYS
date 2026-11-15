@@ -382,12 +382,12 @@ fn run_build(
         files: vec![
             ("/etc/passwd".into(), "root:x:0:0:root:/build/home:/bin/sh\nnobody:x:65534:65534:nobody:/:/bin/false\n".into()),
             ("/etc/group".into(), "root:x:0:\nnobody:x:65534:\n".into()),
-            ("/etc/hostname".into(), "novara-build\n".into()),
+            ("/etc/hostname".into(), "singularity-build\n".into()),
         ],
         env,
         cwd: "/build".into(),
         script: script(),
-        hostname: "novara-build".into(),
+        hostname: "singularity-build".into(),
     };
     let status = sandbox::run(&opts.helper, &config, &work.join("sandbox.toml"))?;
     match status.code() {

@@ -1,4 +1,4 @@
-# NovaraSYS
+# SingularitySYS
 
 An independent Linux distribution, written in Rust where the project writes anything: not derived from Arch or Debian,
 OpenRC by default, glibc and musl, declarative, with generations you can roll back to.

@@ -50,7 +50,7 @@ fn header_present(name: &str) -> bool {
     ["/usr/include", "/usr/local/include"].iter().any(|d| Path::new(d).join(name).is_file())
 }
 
-/// What a kernel build needs from the machine. These are the tools the Novara repositories do not
+/// What a kernel build needs from the machine. These are the tools the Singularity repositories do not
 /// carry yet (bc, perl, libelf), so on a fresh install a build may have to wait for them.
 pub fn preflight() -> Result<(), KernelError> {
     let mut missing: Vec<String> = ["make", "gcc", "ld", "bc", "flex", "bison", "perl", "xz", "tar", "sh", "awk", "sed"]

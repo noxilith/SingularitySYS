@@ -191,7 +191,7 @@ compile = '''
 [ "$HOME" = /build/home ] || { echo "HOME leaked: $HOME"; exit 1; }
 [ "$PATH" = /usr/bin:/usr/sbin:/bin:/sbin ] || { echo "PATH leaked: $PATH"; exit 1; }
 [ -z "${FORGE_TEST_SECRET:-}" ] || { echo "the host environment leaked in"; exit 1; }
-[ "$(cat /etc/hostname)" = novara-build ] || { echo "wrong hostname"; exit 1; }
+[ "$(cat /etc/hostname)" = singularity-build ] || { echo "wrong hostname"; exit 1; }
 if touch /usr/oops 2>/dev/null; then echo "/usr is writable"; exit 1; fi
 if touch /etc/oops 2>/dev/null; then echo "/etc is writable"; exit 1; fi
 if touch /bin/oops 2>/dev/null; then echo "/bin is writable"; exit 1; fi

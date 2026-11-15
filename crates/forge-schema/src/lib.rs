@@ -1,4 +1,4 @@
-//! Shared schemas for Novara: the system/user declaration and package recipes.
+//! Shared schemas for Singularity: the system/user declaration and package recipes.
 //!
 //! Every other crate (CLI, installer, store daemon) depends on these types so
 //! they cannot drift apart.

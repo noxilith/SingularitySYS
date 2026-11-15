@@ -133,7 +133,7 @@ impl UserDecl {
 /// Where the project's packages are published: a GitHub Release holding `index.toml`, `index.toml.sig`
 /// and every archive as flat files. A new system's declaration starts with this repository, and the
 /// keys that sign it ship in `/etc/forge/keys`.
-pub const DEFAULT_REPO_URL: &str = "https://github.com/noxilith/NovaraSYS/releases/download/repo";
+pub const DEFAULT_REPO_URL: &str = "https://github.com/noxilith/SingularitySYS/releases/download/repo";
 
 #[cfg(test)]
 mod tests {
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn parses_minimal_system() {
-        let d = SystemDecl::parse("hostname = \"novara\"\nlibc = \"musl\"\n").unwrap();
+        let d = SystemDecl::parse("hostname = \"singularity\"\nlibc = \"musl\"\n").unwrap();
         assert_eq!(d.libc, Libc::Musl);
         assert_eq!(d.init.system, "openrc");
         assert_eq!(d.timezone, "UTC");

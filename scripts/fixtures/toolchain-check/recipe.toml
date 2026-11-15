@@ -1,5 +1,5 @@
 # Compiles and runs C and C++ programs with the compiler from the store and
-# nothing from the host. Used to prove that stage 1 gave Novara a working
+# nothing from the host. Used to prove that stage 1 gave Singularity a working
 # toolchain: `forge build --tools store` with gcc, binutils, make and BusyBox.
 name        = "toolchain-check"
 version     = "1"

@@ -38,7 +38,7 @@ has() { grep -qF -- "$2" "$1" || fail "$1 does not contain: $2"; }
 # --- a tiny fake system to install -----------------------------------------
 src=$work/src
 mkdir -p "$src"/{etc,boot,lib,usr/bin,root,proc,dev,tmp,.snapshots}
-echo 'NAME=FakeNovara' > "$src/etc/os-release"
+echo 'NAME=FakeSingularity' > "$src/etc/os-release"
 echo hello > "$src/usr/bin/hello"
 touch "$src/boot/vmlinuz-6.1.0" "$src/boot/initramfs-6.1.0.img" "$src/lib/ld-musl-x86_64.so.1"
 touch "$src/proc/must-not-copy" "$src/dev/must-not-copy" "$src/.snapshots/must-not-copy" "$src/fastboot"
@@ -90,7 +90,7 @@ subvols=$(btrfs subvolume list "$work/top" | awk '{print $NF}' | sort | tr '\n' 
 [ "$subvols" = "@ @home @snapshots @store " ] || fail "subvolumes are: $subvols"
 root=$work/top/@
 [ "$(cat "$root/usr/bin/hello")" = hello ] || fail "files were not copied"
-has "$root/etc/os-release" FakeNovara
+has "$root/etc/os-release" FakeSingularity
 for p in proc/must-not-copy dev/must-not-copy .snapshots/must-not-copy fastboot; do
     [ ! -e "$root/$p" ] || fail "$p was copied but must be excluded"
 done

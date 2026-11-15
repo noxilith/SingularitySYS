@@ -19,16 +19,16 @@ pub const INITRAMFS_APPLETS: &[&str] =
 pub fn init_script(label: &str) -> String {
     format!(
         r#"#!/bin/sh
-# NovaraSYS live initramfs: find the medium, mount the system, switch to it.
+# SingularitySYS live initramfs: find the medium, mount the system, switch to it.
 export PATH=/bin
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
-echo "novara: looking for the live medium ({label})"
+echo "singularity: looking for the live medium ({label})"
 
 rescue() {{
-    echo "novara: $1"
-    echo "novara: dropping to a shell; exit to retry"
+    echo "singularity: $1"
+    echo "singularity: dropping to a shell; exit to retry"
     sh
 }}
 
@@ -37,7 +37,7 @@ find_medium() {{
         [ -b "$dev" ] || continue
         mount -t iso9660 -o ro "$dev" /medium 2>/dev/null || continue
         if [ -f "/medium/{squashfs}" ]; then
-            echo "novara: found it on $dev"
+            echo "singularity: found it on $dev"
             return 0
         fi
         umount /medium
@@ -128,12 +128,12 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/os-release",
         0o644,
-        "NAME=\"NovaraSYS\"\nID=novara\nPRETTY_NAME=\"NovaraSYS (live)\"\nVARIANT=\"live\"\n".into(),
+        "NAME=\"SingularitySYS\"\nID=singularity\nPRETTY_NAME=\"SingularitySYS (live)\"\nVARIANT=\"live\"\n".into(),
     )?;
     put(
         "etc/issue",
         0o644,
-        "\nNovaraSYS live system\nLog in as root (password: root), partition the disk with cfdisk,\nthen run: forge strap <root-partition> <boot-partition>\n\n".into(),
+        "\nSingularitySYS live system\nLog in as root (password: root), partition the disk with cfdisk,\nthen run: forge strap <root-partition> <boot-partition>\n\n".into(),
     )?;
     put(
         "etc/profile",
@@ -242,8 +242,8 @@ pub fn limine_conf(cmdline: &str) -> String {
     // if OpenRC does not come up.
     format!(
         "timeout: 5\n\n{}\n{}",
-        entry("NovaraSYS live", ""),
-        entry("NovaraSYS live (rescue shell, no init system)", " init=/bin/sh")
+        entry("SingularitySYS live", ""),
+        entry("SingularitySYS live (rescue shell, no init system)", " init=/bin/sh")
     )
 }
 
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn init_looks_for_the_squashfs_and_hands_over() {
-        let s = init_script("NOVARA_LIVE");
+        let s = init_script("SINGULARITY_LIVE");
         assert!(s.starts_with("#!/bin/sh"));
         assert!(s.contains("/medium/live/rootfs.squashfs"));
         assert!(s.contains("mount -t overlay"));
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn live_root_has_root_login_and_a_tmp_that_everyone_can_use() {
         let t = tempfile::tempdir().unwrap();
-        write_live_root(t.path(), "novara-live", "$6$salt$hash").unwrap();
+        write_live_root(t.path(), "singularity-live", "$6$salt$hash").unwrap();
         assert!(fs::read_to_string(t.path().join("etc/shadow")).unwrap().starts_with("root:$6$salt$hash:"));
         assert_eq!(fs::metadata(t.path().join("etc/shadow")).unwrap().permissions().mode() & 0o777, 0o600);
         assert_eq!(fs::metadata(t.path().join("tmp")).unwrap().permissions().mode() & 0o7777, 0o1777);
@@ -317,7 +317,7 @@ mod openrc_tests {
         symlink("../bin/busybox", t.path().join("sbin/poweroff")).unwrap();
         fs::create_dir_all(t.path().join("etc/runlevels/boot")).unwrap();
         symlink("/etc/init.d/fsck", t.path().join("etc/runlevels/boot/fsck")).unwrap();
-        write_live_root(t.path(), "novara-live", "$6$s$h").unwrap();
+        write_live_root(t.path(), "singularity-live", "$6$s$h").unwrap();
 
         assert_eq!(fs::read_link(t.path().join("sbin/init")).unwrap(), Path::new("openrc-init"));
         assert!(!t.path().join("etc/inittab").exists());
@@ -333,7 +333,7 @@ mod openrc_tests {
         assert!(fs::symlink_metadata(t.path().join("etc/runlevels/boot/coldplug")).is_ok(), "drivers are loaded for the hardware found");
         let svc = fs::read_to_string(t.path().join("etc/init.d/network")).unwrap();
         assert!(svc.starts_with("#!/sbin/openrc-run") && svc.contains("netwatch"), "{svc}");
-        let watch = fs::read_to_string(t.path().join("usr/libexec/novara/netwatch")).unwrap();
+        let watch = fs::read_to_string(t.path().join("usr/libexec/singularity/netwatch")).unwrap();
         assert!(watch.contains("wpa_supplicant -B") && watch.contains("udhcpc -b -i"), "{watch}");
         assert!(fs::metadata(t.path().join("usr/bin/wifi")).unwrap().permissions().mode() & 0o111 != 0);
         assert!(fs::read_to_string(t.path().join("etc/wpa_supplicant/wpa_supplicant.conf")).unwrap().contains("update_config=1"));
@@ -392,7 +392,7 @@ fn write_networking(root: &Path) -> Result<(), IsoError> {
     };
     put("etc/init.d/network", 0o755, NETWORK_SERVICE)?;
     put("etc/conf.d/network", 0o644, NETWORK_CONF)?;
-    put("usr/libexec/novara/netwatch", 0o755, NETWATCH)?;
+    put("usr/libexec/singularity/netwatch", 0o755, NETWATCH)?;
     put("etc/init.d/coldplug", 0o755, COLDPLUG_SERVICE)?;
     put("usr/share/udhcpc/default.script", 0o755, UDHCPC_SCRIPT)?;
     put("usr/bin/wifi", 0o755, WIFI_COMMAND)?;
@@ -404,7 +404,7 @@ interfaces=\"\"\n";
 
 const NETWORK_SERVICE: &str = r#"#!/sbin/openrc-run
 description="Network: DHCP on wired interfaces, wpa_supplicant and DHCP on Wi-Fi"
-command=/usr/libexec/novara/netwatch
+command=/usr/libexec/singularity/netwatch
 command_background=true
 pidfile=/run/netwatch.pid
 

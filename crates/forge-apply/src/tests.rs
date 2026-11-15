@@ -7,7 +7,7 @@ use tempfile::TempDir;
 use super::*;
 
 fn decl(extra: &str) -> SystemDecl {
-    SystemDecl::parse(&format!("hostname = \"novara\"\nlibc = \"musl\"\n{extra}")).unwrap()
+    SystemDecl::parse(&format!("hostname = \"singularity\"\nlibc = \"musl\"\n{extra}")).unwrap()
 }
 
 /// A root with the OpenRC scripts the tests may enable.
@@ -56,7 +56,7 @@ fn fresh_root_gets_basic_settings() {
     }
     assert!(p.changes.iter().all(|c| c.kind == Kind::Add));
     apply(&p).unwrap();
-    assert_eq!(read(r.path(), "etc/hostname"), "novara\n");
+    assert_eq!(read(r.path(), "etc/hostname"), "singularity\n");
     assert_eq!(read(r.path(), "etc/locale.conf"), "LANG=en_US.UTF-8\n");
     assert_eq!(read(r.path(), "etc/conf.d/keymaps"), "keymap=\"us\"\n");
     assert_eq!(

@@ -1,10 +1,10 @@
 #!/bin/sh
-# NovaraSYS kernel configuration, run inside a kernel source tree. One script for both users:
+# SingularitySYS kernel configuration, run inside a kernel source tree. One script for both users:
 # the `linux` recipe (the live ISO's kernel) and `forge kernel` (which embeds this file).
 #
 #   sh full-config.sh full        defconfig base + every driver as a module
-#   sh full-config.sh check       only verify that an existing .config has what a Novara system needs
-#   sh full-config.sh essential   re-assert what a Novara system needs on an existing .config
+#   sh full-config.sh check       only verify that an existing .config has what a Singularity system needs
+#   sh full-config.sh essential   re-assert what a Singularity system needs on an existing .config
 #                                 (what `forge kernel --auto` runs after trimming with localmodconfig)
 #
 # KCFG_TMP is a scratch directory (default /build); KCFG_CC the compiler (default "gcc -std=gnu11":
@@ -14,7 +14,7 @@ mode=${1:?usage: full-config.sh full|essential|check}
 tmp=${KCFG_TMP:-/build}
 cc=${KCFG_CC:-gcc -std=gnu11}
 export KBUILD_BUILD_TIMESTAMP='1980-01-01'
-export KBUILD_BUILD_USER=forge KBUILD_BUILD_HOST=novara
+export KBUILD_BUILD_USER=forge KBUILD_BUILD_HOST=singularity
 kmake() { make ARCH=x86_64 CC="$cc" "$@"; }
 c=./scripts/config
 

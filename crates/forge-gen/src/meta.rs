@@ -24,7 +24,7 @@ impl BootInfo {
         if !file_ok(&self.kernel) {
             return Err(GenError::InvalidBoot(format!("kernel file name `{}`", self.kernel)));
         }
-        // An empty name means "no initramfs": the kernel mounts its root itself (the Novara
+        // An empty name means "no initramfs": the kernel mounts its root itself (the Singularity
         // kernel has the root drivers built in), which needs `root=PARTUUID=` rather than UUID.
         if !self.initramfs.is_empty() && !file_ok(&self.initramfs) {
             return Err(GenError::InvalidBoot(format!("initramfs file name `{}`", self.initramfs)));

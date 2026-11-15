@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Self-hosting: Novara rebuilds its whole base and toolchain with its own
+# Self-hosting: Singularity rebuilds its whole base and toolchain with its own
 # compiler, in sandboxes with no host tools, until the result stops changing.
 #
 #   BASE_REPO=repo/stage0-<stamp> STAGE1_REPO=repo/stage1-<stamp> \
@@ -20,7 +20,7 @@
 #
 # Why not stop at stage2: a static binary contains libc code. Stage2 links the
 # stage-0 musl, which the HOST's gcc compiled; stage3 links the musl that
-# Novara's own compiler built, so it is the first generation with no host
+# Singularity's own compiler built, so it is the first generation with no host
 # compiler output in it. The fixed point therefore appears one generation later:
 # stage3 and the plain generation must be identical, file by file.
 #

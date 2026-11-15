@@ -374,7 +374,7 @@ impl Exec<'_> {
         let (root_dev, boot_dev) = (plan.root_dev.clone(), plan.boot_dev.clone());
         match step {
             Step::FormatBoot { dev, .. } => {
-                self.cmd(&Cmd::new("mkfs.vfat", &["-F", "32", "-n", "NOVARA"]).arg(dev))?;
+                self.cmd(&Cmd::new("mkfs.vfat", &["-F", "32", "-n", "SINGULARITY"]).arg(dev))?;
                 if plan.firmware == Firmware::Uefi
                     && let Some((disk, part)) = split_partition(dev) {
                         let c = Cmd::new("sfdisk", &["--part-type"]).arg(&disk).arg(part.to_string()).arg(ESP_TYPE_GUID);
@@ -384,7 +384,7 @@ impl Exec<'_> {
                     }
             }
             Step::FormatRoot { dev, .. } => {
-                self.cmd(&Cmd::new("mkfs.btrfs", &["-f", "-L", "novara"]).arg(dev))?;
+                self.cmd(&Cmd::new("mkfs.btrfs", &["-f", "-L", "singularity"]).arg(dev))?;
             }
             Step::CreateSubvolumes(subvols) => {
                 let top = self.req.top_mount.clone();
@@ -514,7 +514,7 @@ impl Exec<'_> {
                 fs::copy(&efi, &dst).map_err(io_ctx(format!("copying {}", efi.display())))?;
                 if self.req.efi_entry
                     && let Some((disk, part)) = split_partition(&self.req.plan.boot_dev) {
-                        let c = Cmd::new("efibootmgr", &["--create", "--label", "Novara", "--disk"])
+                        let c = Cmd::new("efibootmgr", &["--create", "--label", "Singularity", "--disk"])
                             .arg(&disk)
                             .arg("--part")
                             .arg(part.to_string())

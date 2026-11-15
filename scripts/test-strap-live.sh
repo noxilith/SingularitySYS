@@ -2,7 +2,7 @@
 # Run the packaged `forge strap`, with the packaged tools, on the real live root from the ISO,
 # onto a loopback disk image, and check what it installed.
 #
-#   sudo scripts/test-strap-live.sh [novara-live.iso]
+#   sudo scripts/test-strap-live.sh [singularity-live.iso]
 #
 # What it does:
 #   1. extracts the live system (live/rootfs.squashfs) from the ISO into a scratch directory;
@@ -21,14 +21,14 @@
 # KEEP_IMAGE=/path/disk.img keeps the installed image.
 set -euo pipefail
 
-ISO=$(realpath "${1:-novara-live.iso}")
+ISO=$(realpath "${1:-singularity-live.iso}")
 [ -f "$ISO" ] || { echo "no ISO at $ISO: run scripts/build-iso.sh first" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || { echo "run as root: sudo $0" >&2; exit 1; }
 for t in xorriso unsquashfs sfdisk losetup btrfs blkid unshare chroot; do
     command -v "$t" >/dev/null || { echo "missing host tool: $t" >&2; exit 1; }
 done
 
-work=$(mktemp -d /var/tmp/novara-strap-XXXXXX)
+work=$(mktemp -d /var/tmp/singularity-strap-XXXXXX)
 loop=
 qpid=
 cleanup() {
@@ -124,7 +124,7 @@ if command -v qemu-system-x86_64 >/dev/null && [ -n "${OVMF:-}" ]; then
         -display none -serial "file:$log" -no-reboot </dev/null >/dev/null 2>&1 &
     qpid=$!
     for _ in $(seq 1 ${TIMEOUT:-120}); do grep -q "login:" "$log" 2>/dev/null && break; sleep 1; done
-    grep -q "login:" "$log" || { cp "$log" /var/tmp/novara-strap-boot.log 2>/dev/null; tail -n 30 "$log" 2>/dev/null; fail "the installed system did not reach a login prompt (log kept at /var/tmp/novara-strap-boot.log)"; }
+    grep -q "login:" "$log" || { cp "$log" /var/tmp/singularity-strap-boot.log 2>/dev/null; tail -n 30 "$log" 2>/dev/null; fail "the installed system did not reach a login prompt (log kept at /var/tmp/singularity-strap-boot.log)"; }
     ok "the installed system booted to a login prompt"
 else
     echo "skipped: needs qemu-system-x86_64 and OVMF=/path/to/OVMF_CODE.fd (the install itself passed)"

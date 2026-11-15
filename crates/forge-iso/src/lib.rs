@@ -139,7 +139,7 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
     }
 
     // The live system.
-    let hash = runner.run("openssl", &args(&["passwd", "-6", "-salt", "novaralive", "-stdin"]), Some(&format!("{}\n", spec.root_password)))?;
+    let hash = runner.run("openssl", &args(&["passwd", "-6", "-salt", "singularitylive", "-stdin"]), Some(&format!("{}\n", spec.root_password)))?;
     live::write_live_root(&spec.rootfs, &spec.hostname, hash.trim())?;
     live::set_setuid(&spec.rootfs)?;
     let keys_dir = spec.rootfs.join("etc/forge/keys");
@@ -214,7 +214,7 @@ mod tests {
     impl Runner for Fake {
         fn run(&mut self, program: &str, args: &[String], stdin: Option<&str>) -> Result<String, IsoError> {
             self.calls.push((program.into(), args.to_vec(), stdin.map(String::from)));
-            Ok("$6$novaralive$HASH\n".into())
+            Ok("$6$singularitylive$HASH\n".into())
         }
     }
 
@@ -234,8 +234,8 @@ mod tests {
             limine_dir: lim,
             work: t.join("work"),
             out: t.join("out.iso"),
-            label: "NOVARA_LIVE".into(),
-            hostname: "novara-live".into(),
+            label: "SINGULARITY_LIVE".into(),
+            hostname: "singularity-live".into(),
             cmdline: "console=ttyS0".into(),
             root_password: "root".into(),
             trusted_keys: vec![],
@@ -261,7 +261,7 @@ mod tests {
         assert!(conf.contains("console=ttyS0"));
         // The system got its live /etc, with the hash openssl produced.
         let shadow = fs::read_to_string(spec.rootfs.join("etc/shadow")).unwrap();
-        assert!(shadow.starts_with("root:$6$novaralive$HASH:"));
+        assert!(shadow.starts_with("root:$6$singularitylive$HASH:"));
         // Limine is installed into the finished image.
         assert_eq!(r.calls[3].1, [spec.out.display().to_string()].iter().fold(vec!["bios-install".to_string()], |mut v, s| { v.push(s.clone()); v }));
     }
@@ -336,7 +336,7 @@ mod key_tests {
             limine_dir: lim,
             work: t.path().join("work"),
             out: t.path().join("o.iso"),
-            label: "NOVARA_LIVE".into(),
+            label: "SINGULARITY_LIVE".into(),
             hostname: "h".into(),
             cmdline: "c".into(),
             root_password: "root".into(),

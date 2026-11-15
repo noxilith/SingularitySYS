@@ -1,5 +1,5 @@
 #!/bin/sh
-# NovaraSYS kernel build steps, run inside a configured kernel source tree. Shared by the `linux` recipe
+# SingularitySYS kernel build steps, run inside a configured kernel source tree. Shared by the `linux` recipe
 # and `forge kernel` (which embeds this file), like full-config.sh.
 #
 #   sh kernel-build.sh compile     bzImage and every module (a module that fails does not lose the rest)
@@ -9,7 +9,7 @@
 set -e
 cc=${KCFG_CC:-gcc -std=gnu11}
 export KBUILD_BUILD_TIMESTAMP='1980-01-01'
-export KBUILD_BUILD_USER=forge KBUILD_BUILD_HOST=novara
+export KBUILD_BUILD_USER=forge KBUILD_BUILD_HOST=singularity
 kmake() { make ARCH=x86_64 CC="$cc" "$@"; }
 
 case "${1:?usage: kernel-build.sh compile|install}" in

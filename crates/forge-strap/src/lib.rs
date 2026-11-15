@@ -1,4 +1,4 @@
-//! `forge strap`: install Novara from the live system onto a disk.
+//! `forge strap`: install Singularity from the live system onto a disk.
 //!
 //! [`plan`] validates the request and produces the ordered list of steps
 //! (pure, no side effects). [`execute`] carries the plan out through a

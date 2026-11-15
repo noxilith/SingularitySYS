@@ -7,29 +7,29 @@
 # What it does:
 #   1. assembles ONE clean repository, repo/release, from the build outputs (the newest version of every
 #      real package, no -stage bootstrap packages), signed with the release key;
-#   2. uploads every archive to the GitHub Release `repo` of $GH_REPO (default noxilith/NovaraSYS), and the
+#   2. uploads every archive to the GitHub Release `repo` of $GH_REPO (default noxilith/SingularitySYS), and the
 #      index and its signature LAST, so a client never sees an index that names a file not there yet;
 #   3. with PRUNE=1, deletes release assets the new index no longer lists.
 #
-# Systems read it as  https://github.com/noxilith/NovaraSYS/releases/download/repo  (DEFAULT_REPO_URL).
-# Needs the GitHub CLI (`gh auth login` first). The release key is keys/release/novara-release.key:
-# BACK IT UP and never commit it. Whoever holds it can publish packages every Novara system will trust.
+# Systems read it as  https://github.com/noxilith/SingularitySYS/releases/download/repo  (DEFAULT_REPO_URL).
+# Needs the GitHub CLI (`gh auth login` first). The release key is keys/release/singularity-release.key:
+# BACK IT UP and never commit it. Whoever holds it can publish packages every Singularity system will trust.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 FORGE=${FORGE:-target/debug/forge}
-GH_REPO=${GH_REPO:-noxilith/NovaraSYS}
+GH_REPO=${GH_REPO:-noxilith/SingularitySYS}
 TAG=${TAG:-repo}
-RELEASE_KEY=${RELEASE_KEY:-keys/release/novara-release.key}
+RELEASE_KEY=${RELEASE_KEY:-keys/release/singularity-release.key}
 DEST=${DEST:-repo/release}
 SOURCES=${SOURCES:-"repo/selfhost-r2 repo/tools repo/kernel-6.12"}
 YES=
 [ "${1:-}" = "-y" ] && YES=1
 
 [ -x "$FORGE" ] || fail "build forge first (cargo build), or set FORGE=/path/to/forge"
-[ -f "$RELEASE_KEY" ] || fail "no release key at $RELEASE_KEY (forge key generate novara-release --dir keys/release)"
+[ -f "$RELEASE_KEY" ] || fail "no release key at $RELEASE_KEY (forge key generate singularity-release --dir keys/release)"
 command -v gh >/dev/null || fail "the GitHub CLI (gh) is needed to upload; install it and run: gh auth login"
 
 echo "==== assembling $DEST"
@@ -61,7 +61,7 @@ fi
 
 if ! gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
     gh release create "$TAG" --repo "$GH_REPO" --title "Package repository" \
-        --notes "The signed NovaraSYS package repository. Not a release of the distro: forge reads index.toml and the archives from here." \
+        --notes "The signed SingularitySYS package repository. Not a release of the distro: forge reads index.toml and the archives from here." \
         --prerelease
 fi
 # Archives first, then the index and its signature.

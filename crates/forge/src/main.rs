@@ -8,7 +8,7 @@ use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
 #[derive(Parser)]
-#[command(name = "forge", version, about = "Novara's declarative system and package tool")]
+#[command(name = "forge", version, about = "Singularity's declarative system and package tool")]
 struct Cli {
     #[command(subcommand)]
     command: Cmd,
@@ -35,7 +35,7 @@ enum Cmd {
         kind: CheckKind,
         file: PathBuf,
     },
-    /// Install Novara from the live system onto partitions you made (ERASES them)
+    /// Install Singularity from the live system onto partitions you made (ERASES them)
     Strap(StrapArgs),
     /// Converge the machine to the system declaration
     Apply(ApplyArgs),
@@ -213,7 +213,7 @@ struct GenArgs {
     paths: GenPaths,
 }
 
-/// Where generations live. The defaults are for a real Novara system.
+/// Where generations live. The defaults are for a real Singularity system.
 #[derive(Args, Clone)]
 struct GenPaths {
     /// The running root subvolume to snapshot
@@ -309,7 +309,7 @@ struct StrapArgs {
     #[arg(long, default_value = "/usr/share/limine")]
     limine_dir: PathBuf,
     /// Hostname for the starter /etc/forge/system.toml
-    #[arg(long, default_value = "novara")]
+    #[arg(long, default_value = "singularity")]
     hostname: String,
     /// glibc or musl (default: detected from the copied system)
     #[arg(long)]
@@ -1298,7 +1298,7 @@ struct IsoArgs {
     #[arg(long, default_value = "musl")]
     libc: String,
     /// The ISO file to write
-    #[arg(long, default_value = "novara-live.iso")]
+    #[arg(long, default_value = "singularity-live.iso")]
     out: PathBuf,
     /// Scratch directory (must not exist; kept afterwards for inspection)
     #[arg(long)]
@@ -1310,9 +1310,9 @@ struct IsoArgs {
     #[arg(long, default_value = "/usr/share/limine")]
     limine_dir: PathBuf,
     /// Volume label (capital letters, digits and underscores)
-    #[arg(long, default_value = "NOVARA_LIVE")]
+    #[arg(long, default_value = "SINGULARITY_LIVE")]
     label: String,
-    #[arg(long, default_value = "novara-live")]
+    #[arg(long, default_value = "singularity-live")]
     hostname: String,
     /// Kernel command line
     #[arg(long, default_value = "console=ttyS0,115200 console=tty0")]
@@ -1479,6 +1479,9 @@ struct KernelBuildArgs {
     /// The package store the build tools are installed into (default: /forge/store as root, else ~/.cache/forge/store)
     #[arg(long)]
     store: Option<PathBuf>,
+    /// Keep the build tools this build downloaded (a cache for the next build); by default they are removed again
+    #[arg(long)]
+    keep_tools: bool,
     /// Keep the build directory after a failed build, for inspection
     #[arg(long)]
     keep_work: bool,
@@ -1623,6 +1626,7 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             store: match &b.store { Some(s) => s.clone(), None => if is_root() { PathBuf::from("/forge/store") } else { cache_home("store")? } },
             helper: std::env::current_exe().context("finding the forge executable")?,
             keep_work: b.keep_work,
+            keep_tools: b.keep_tools,
         };
         eprintln!("building with the packages {} (fetched into {})", forge_kernel::BUILD_PACKAGES.join(" "), spec.store.display());
         forge_kernel::build_in_store(&spec)?
@@ -1665,7 +1669,7 @@ fn kernel_install(i: KernelInstallArgs) -> Result<()> {
             println!("created generation {} to roll back to", g.id);
             Ok(())
         })
-        .context("could not snapshot a generation first (not a Novara btrfs system? use --no-generation to go on without one)")?;
+        .context("could not snapshot a generation first (not a Singularity btrfs system? use --no-generation to go on without one)")?;
     }
 
     let installed = forge_kernel::install_files(&i.staged, &i.boot_dir, &i.root, i.force)?;

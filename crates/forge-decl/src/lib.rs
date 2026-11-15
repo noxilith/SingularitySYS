@@ -89,12 +89,12 @@ mod tests {
 
     #[test]
     fn preserves_comments_and_other_keys() {
-        let src = "# my machine\nhostname = \"novara\" # name\n\npackages = [\"a\"] # apps\n";
+        let src = "# my machine\nhostname = \"singularity\" # name\n\npackages = [\"a\"] # apps\n";
         let e = add_package(src, "b").unwrap();
         assert!(e.text.contains("# my machine"));
         assert!(e.text.contains("# name"));
         assert!(e.text.contains("# apps"));
-        assert!(e.text.contains("hostname = \"novara\""));
+        assert!(e.text.contains("hostname = \"singularity\""));
         assert!(e.text.contains("\"b\""));
     }
 

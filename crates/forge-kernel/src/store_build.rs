@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use forge_build::{BuildOptions, Tools};
 use forge_schema::Libc;
-use forge_store::{FetchHandle, Store, Trust};
+use std::collections::BTreeSet;
+
+use forge_store::{FetchHandle, Store, StoreId, Trust};
 
 use crate::build::{Mode, Staged, lsmod_file};
 use crate::install::staged_release;
@@ -38,6 +40,8 @@ pub struct StoreBuildSpec {
     /// The `forge` executable (re-run as the sandbox helper).
     pub helper: PathBuf,
     pub keep_work: bool,
+    /// Keep the build tools this run installed (a cache for the next build). By default they are removed again.
+    pub keep_tools: bool,
 }
 
 fn configure_step(mode: &Mode) -> Result<String, KernelError> {
@@ -116,7 +120,17 @@ pub fn build_in_store(spec: &StoreBuildSpec) -> Result<Staged, KernelError> {
         helper: spec.helper.clone(),
         keep_work: spec.keep_work,
     };
-    let built = forge_build::build(&opts).map_err(|e| KernelError::Fetch(format!("the kernel build failed: {e}")))?;
+    // Remember what the store held, so that only what this run installs is removed afterwards.
+    let tools = Store::new(&spec.store);
+    let before: BTreeSet<StoreId> = tools.list().map_err(|e| KernelError::Invalid(e.to_string()))?.into_iter().collect();
+    let result = forge_build::build(&opts).map_err(|e| KernelError::Fetch(format!("the kernel build failed: {e}")));
+    if !spec.keep_tools {
+        let n = remove_new(&tools, &before);
+        if n > 0 {
+            eprintln!("removed the {n} build tool package(s) this build had installed (use --keep-tools to keep them for next time)");
+        }
+    }
+    let built = result?;
 
     // The package is a verified tree of boot/ and usr/lib/modules/: unpack it into a store of its own.
     let kstore = Store::new(spec.work.join("kernel-store"));
@@ -146,6 +160,7 @@ mod tests {
             store: t.join("store"),
             helper: "/usr/bin/forge".into(),
             keep_work: false,
+            keep_tools: false,
         }
     }
 
@@ -198,5 +213,48 @@ mod tests {
         s.libc = Libc::Musl;
         fs::create_dir_all(t.path().join("work/recipe-7.3.3")).unwrap();
         assert!(matches!(build_in_store(&s), Err(KernelError::Exists(_))));
+    }
+}
+
+/// Remove every package that is in `store` now but was not in `before`; returns how many. A package that was
+/// already there (installed for the system, or by an earlier build) is never touched.
+pub fn remove_new(store: &Store, before: &BTreeSet<StoreId>) -> usize {
+    let mut removed = 0;
+    for id in store.list().unwrap_or_default() {
+        if !before.contains(&id) && store.remove(&id).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use forge_store::{PackOptions, pack_dir};
+
+    /// Pack a one-file package named `name` and install it into `store`.
+    fn add(scratch: &Path, store: &Store, name: &str) -> StoreId {
+        let src = scratch.join(format!("src-{name}"));
+        fs::create_dir_all(src.join("usr/bin")).unwrap();
+        fs::write(src.join("usr/bin").join(name), name).unwrap();
+        let out = scratch.join(format!("{name}.tar.zst"));
+        let opts = PackOptions { name: name.into(), version: "1".into(), libc: Libc::Musl, hash: None, deps: vec![] };
+        pack_dir(&src, &opts, &out).unwrap();
+        store.install(fs::File::open(&out).unwrap(), None).unwrap()
+    }
+
+    #[test]
+    fn only_packages_added_since_the_snapshot_are_removed() {
+        let t = tempfile::tempdir().unwrap();
+        let store = Store::new(t.path().join("store"));
+        let old = add(t.path(), &store, "old");
+        let before: BTreeSet<StoreId> = store.list().unwrap().into_iter().collect();
+        let a = add(t.path(), &store, "tool-a");
+        let b = add(t.path(), &store, "tool-b");
+        assert_eq!(remove_new(&store, &before), 2);
+        assert!(store.has(&old), "what was there before stays");
+        assert!(!store.has(&a) && !store.has(&b), "what the build installed goes");
+        assert_eq!(remove_new(&store, &before), 0, "nothing left to remove");
     }
 }

@@ -1,4 +1,4 @@
-//! The Novara package store.
+//! The Singularity package store.
 //!
 //! Packages live once, immutably, in a shared store (`<store>/<name>-<version>-<hash>`).
 //! A [`Profile`] is a set of symlinks into the store, with generations, so
