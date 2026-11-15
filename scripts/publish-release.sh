@@ -40,7 +40,7 @@ if [ -e "$DEST" ]; then
 fi
 # The serial must never go down: clients refuse an index older than one they have seen. Read the one that is
 # published now and go above it (nothing published yet: start at 1).
-live=$(curl -fsSL "https://github.com/$GH_REPO/releases/download/$TAG/index.toml" 2>/dev/null | sed -n 's/^serial = //p' | head -1)
+live=$(curl -fsSL "https://github.com/$GH_REPO/releases/download/$TAG/index.toml" 2>/dev/null | sed -n 's/^serial = //p' | head -1 || true)
 min_serial=$(( ${live:-0} + 1 ))
 echo "published serial is ${live:-none}; the new one will be at least $min_serial"
 from=()

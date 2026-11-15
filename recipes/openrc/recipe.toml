@@ -3,7 +3,7 @@
 # `openrc-init` itself and the services are plain symlinks in /etc/runlevels/<level>/ (which
 # is exactly what `forge apply` manages).
 name        = "openrc"
-version     = "0.64.1"
+version     = "0.64.1_r1"
 description = "OpenRC init and service manager"
 license     = "BSD-2-Clause"
 libc        = ["glibc"]

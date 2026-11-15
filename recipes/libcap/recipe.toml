@@ -1,7 +1,7 @@
 # libcap, static and position-independent (OpenRC's shared libraries link it). Library only: the
 # programs need bash (a helper script), which is not a package yet.
 name        = "libcap"
-version     = "2.78"
+version     = "2.78_r1"
 description = "POSIX capabilities library (static)"
 license     = "BSD-3-Clause OR GPL-2.0-only"
 libc        = ["glibc"]
