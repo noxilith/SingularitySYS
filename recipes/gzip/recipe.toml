@@ -1,0 +1,29 @@
+name        = "gzip"
+version     = "1.13"
+description = "GNU gzip"
+license     = "GPL-3.0-or-later"
+libc        = ["musl"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+
+[[source]]
+url    = "https://ftp.gnu.org/gnu/gzip/gzip-1.13.tar.xz"
+sha256 = "7454eb6935db17c6655576c2e1b0fabefd38b4d0936e0f87f48cd062ce91a057"
+
+[build]
+configure = '''
+export FORCE_UNSAFE_CONFIGURE=1
+./configure --prefix=/usr --disable-dependency-tracking CFLAGS='-O2 -std=gnu17' LDFLAGS=--static
+'''
+compile   = "make -j$JOBS"
+install   = '''
+make DESTDIR=$DESTDIR install
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/locale" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/lib/charset.alias"
+for f in "$DESTDIR"/usr/bin/* "$DESTDIR"/usr/sbin/* "$DESTDIR"/usr/libexec/*; do
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    strip "$f" 2>/dev/null || true
+    if readelf -lW "$f" 2>/dev/null | grep -q INTERP; then echo "$f is dynamic" >&2; exit 1; fi
+done
+test -x "$DESTDIR/usr/bin/gzip"
+'''

@@ -1,0 +1,26 @@
+name        = "iproute2"
+version     = "6.11.0"
+description = "ip, ss, tc and friends (the Linux network tools)"
+license     = "GPL-2.0-only"
+libc        = ["musl"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "flex", "bison", "pkgconf"]
+
+[[source]]
+url    = "https://cdn.kernel.org/pub/linux/utils/net/iproute2/iproute2-6.11.0.tar.xz"
+sha256 = "1f795398a04aeaacd06a8f6ace2cfd913c33fa5953ca99daae83bb5c534611c3"
+
+[build]
+configure = "./configure"
+compile   = "make -j$JOBS CC=gcc 'CCOPTS=-O2 -std=gnu17' LDFLAGS=-static HAVE_MNL=n HAVE_ELF=n HAVE_SELINUX=n HAVE_CAP=n HAVE_BERKELEY_DB=n SHARED_LIBS=n"
+install   = '''
+make DESTDIR=$DESTDIR SBINDIR=/usr/sbin PREFIX=/usr install
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib" "$DESTDIR/etc" "$DESTDIR/var" "$DESTDIR/usr/include"
+for f in "$DESTDIR"/usr/sbin/*; do
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    strip "$f" 2>/dev/null || true
+    if readelf -lW "$f" 2>/dev/null | grep -q INTERP; then echo "$f is dynamic" >&2; exit 1; fi
+done
+test -x "$DESTDIR/usr/sbin/ip"
+'''
