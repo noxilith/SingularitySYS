@@ -34,9 +34,7 @@ install)
     test -s "$DESTDIR/usr/lib/modules/$rel/modules.dep"
     # /usr/lib/modules is the real directory; the build and source links point into the build tree.
     rm -f "$DESTDIR"/usr/lib/modules/*/build "$DESTDIR"/usr/lib/modules/*/source
-    mkdir -p "$DESTDIR/lib"
-    # modprobe looks in /lib/modules/<release>; the modules live under /usr/lib/modules.
-    ln -s ../usr/lib/modules "$DESTDIR/lib/modules"
+    # modprobe looks in /lib/modules/<release>: /lib is a symlink to /usr/lib on the system, so it finds them.
     test -f "$DESTDIR/boot/vmlinuz-$rel"
     ;;
 *) echo "unknown step $1" >&2; exit 2 ;;
