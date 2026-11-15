@@ -607,7 +607,7 @@ fn pkg(action: PkgAction) -> Result<()> {
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && !system => String::new(),
-        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+        Err(_) => read_system_decl(&path)?,
     };
 
     // All the names are edited into the declaration first, then it is applied once (one generation).
@@ -822,6 +822,18 @@ fn collect_accounts() -> Result<forge_strap::Accounts> {
     Ok(acc)
 }
 
+/// Read the system declaration; a missing one means this is not an installed system (the live ISO has none).
+fn read_system_decl(path: &Path) -> Result<String> {
+    match std::fs::read_to_string(path) {
+        Ok(t) => Ok(t),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
+            "there is no system declaration at {}: this is probably the live system, which has none. Install first with `forge strap ROOT BOOT`; `forge install` and `forge upgrade` manage an installed system",
+            path.display()
+        ),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
 fn is_root() -> bool {
     std::fs::read_to_string("/proc/self/status")
         .ok()
@@ -844,7 +856,7 @@ fn confirm(question: &str) -> Result<bool> {
 /// Bring every declared package to the newest version the repositories offer (what `apply` resolves anyway).
 fn upgrade(a: UpgradeArgs) -> Result<()> {
     let path = a.root.join("etc/forge/system.toml");
-    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let text = read_system_decl(&path)?;
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
     if decl.packages.is_empty() {
         println!("no packages are installed through forge yet (see: forge install NAME); nothing to upgrade");
@@ -866,7 +878,7 @@ fn upgrade(a: UpgradeArgs) -> Result<()> {
 
 fn list_cmd(a: ListArgs) -> Result<()> {
     let path = a.root.join("etc/forge/system.toml");
-    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let text = read_system_decl(&path)?;
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
     let profile = forge_store::Profile::new(a.root.join("forge/profiles/system"));
     let installed = profile.current_packages().unwrap_or_default();
@@ -932,8 +944,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
         bail!("applying to / needs root (use --dry-run to preview, or --root DIR to test)");
     }
     let path = a.file.unwrap_or_else(|| a.root.join("etc/forge/system.toml"));
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading {}", path.display()))?;
+    let text = read_system_decl(&path)?;
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
 
     let opts = forge_apply::Options {
@@ -1451,7 +1462,7 @@ struct IsoArgs {
     #[arg(long, required = true)]
     repo: Vec<PathBuf>,
     /// Packages in the live system; their dependencies come along
-    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales"].map(String::from))]
+    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales", "curl", "ca-certificates"].map(String::from))]
     packages: Vec<String>,
     #[arg(long, default_value = "glibc")]
     libc: String,

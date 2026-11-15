@@ -1,0 +1,30 @@
+# curl 8.23 on OpenSSL: HTTP(S) and FTP downloads for people and for forge (forge uses curl when it is installed,
+# BusyBox wget otherwise). Certificates are checked against /etc/ssl/certs/ca-certificates.crt.
+name        = "curl"
+version     = "8.23.0"
+description = "curl command-line tool and libcurl"
+license     = "curl"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "openssl", "zlib"]
+run   = ["ca-certificates"]
+
+[[source]]
+url    = "https://curl.se/download/curl-8.23.0.tar.gz"
+sha256 = "e3de77cfa6367083c776a26647fc9f633b538c06c3baa73d931a252ac8f72b49"
+
+[build]
+configure = '''
+./configure --prefix=/usr --with-openssl --with-zlib --with-ca-bundle=/etc/ssl/certs/ca-certificates.crt \
+    --without-libpsl --without-brotli --without-zstd --without-nghttp2 --without-libidn2 --without-libssh2 \
+    --disable-ldap --disable-docs --disable-manual --disable-static --disable-dependency-tracking CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/pkgconfig" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/libcurl.la"
+strip "$DESTDIR/usr/bin/curl"
+test -f "$DESTDIR/usr/lib/libcurl.so.4"
+LD_LIBRARY_PATH="$DESTDIR/usr/lib" "$DESTDIR/usr/bin/curl" --version | grep -q '^curl 8.23.0'
+'''
