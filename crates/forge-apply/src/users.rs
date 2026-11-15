@@ -114,9 +114,9 @@ pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl) -> Result<(), crate
         }
     };
 
+    // Root follows the system shell too.
     if let Some(r) = passwd.get("root").filter(|r| decl.shell != "bash" && !same_path(&r.shell, &system_shell)) {
         p.run("users", Kind::Modify, format!("user root: shell {} -> {}", r.shell, system_shell), "usermod", vec!["-s".into(), system_shell.clone(), "root".into()]);
-    }
     }
 
     for u in &decl.users {
