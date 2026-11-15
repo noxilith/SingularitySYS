@@ -745,3 +745,34 @@ every package build uses, from packages it fetches itself:
   environment variables leak into configure scripts (CPython took `LIBC=musl` for a library).
 - **Not done**: `--menuconfig` in the sandbox; glibc (no glibc toolchain package exists); testing `forge kernel install`
   and the rebuilt kernel on a real Singularity machine.
+
+## Proposed (not implemented): the glibc base system, and how `forge upgrade` updates it
+
+Status 2026-11-15: every recipe builds for glibc, dynamically linked, in `repo/glibc-world2` (see
+`scripts/build-glibc-world.sh`). Nothing is published and nothing has been booted. This section is the decision
+that is needed before the ISO and `forge strap` change.
+
+**Merged /usr.** `/bin`, `/sbin`, `/lib` and `/lib64` are symlinks into `/usr` (the `filesystem` and `glibc`
+packages ship them). `forge build` rejects a package that creates any of them as a real directory.
+
+**The question: how do package files reach `/usr` on an installed system?**
+
+- **A. Materialize (recommended).** `forge apply` writes the merged package tree into the real `/usr` using btrfs
+  reflinks from the store (a reflink copy works across the `@` and `@store` subvolumes and costs no space), after
+  taking a generation snapshot. Setuid is simple: the apply step sets the mode on an allowlist (`sudo`, `passwd`)
+  on the materialized copies. The system is an ordinary FHS tree, so prebuilt third-party software, installers and
+  `init=/sbin/openrc-init` behave as everywhere else. Rollback is the btrfs generation machinery that exists.
+  The cost: `apply` does real file operations instead of flipping one symlink, and must track which files each
+  package put there (the profile manifest already lists them) so an upgrade removes what the new version drops.
+- **B. Symlink `/usr` into the profile** (NixOS-style). One atomic symlink switch, exact rollback. But the store
+  strips setuid, so `sudo` and `passwd` need a separate wrapper directory populated at every boot; and a boot
+  path that goes through a chain of symlinks into the store is more fragile (kernel -> /sbin/init -> usr ->
+  /forge/profiles/... -> store).
+
+**Either way:**
+- BusyBox becomes static and rescue-only (initramfs `/init` and a rescue shell); the base uses coreutils, dash
+  (`/bin/sh`), bash, findutils, grep, sed, gawk, tar, gzip, xz, diffutils, util-linux, shadow, iproute2, dhcpcd.
+- `/etc` is written by the image builder and `forge apply` (new: `nsswitch.conf`), never shipped by packages.
+- New packages: `tzdata`, `glibc-locales` (en_US.UTF-8; C.UTF-8 is built in), `libxcrypt` (done).
+- `forge` itself stays a static binary, packaged for glibc.
+- `strap` declares the whole base in `system.toml`, so `forge upgrade` updates everything.
