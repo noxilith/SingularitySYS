@@ -24,7 +24,7 @@ GH_REPO=${GH_REPO:-noxilith/SingularitySYS}
 TAG=${TAG:-repo}
 RELEASE_KEY=${RELEASE_KEY:-keys/release/singularity-release.key}
 DEST=${DEST:-repo/release}
-SOURCES=${SOURCES:-"repo/selfhost-r2 repo/tools repo/kernel-6.12"}
+SOURCES=${SOURCES:-"repo/selfhost-r2 repo/tools repo/kernel-6.12 repo/kernel-ns"}
 YES=
 [ "${1:-}" = "-y" ] && YES=1
 
