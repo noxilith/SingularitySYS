@@ -161,7 +161,9 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
          \"\\eOA\": previous-history\n\"\\eOB\": next-history\n\"\\eOC\": forward-char\n\"\\eOD\": backward-char\n\
          \"\\e[1~\": beginning-of-line\n\"\\e[4~\": end-of-line\n\"\\e[H\": beginning-of-line\n\"\\e[F\": end-of-line\n\
          \"\\e[3~\": delete-char\n\"\\e[5~\": history-search-backward\n\"\\e[6~\": history-search-forward\n\
-         \"\\e[1;5C\": forward-word\n\"\\e[1;5D\": backward-word\n"
+         \"\\e[1;5C\": forward-word\n\"\\e[1;5D\": backward-word\n\
+         # Ctrl+H: edit the system declaration (forge edit checks it and applies it when the editor closes).\n\
+         \"\\C-h\": \"sudo forge edit\\C-m\"\n"
             .into(),
     )?;
     // glibc looks names up through this file: local files, then DNS for hosts.
@@ -324,6 +326,9 @@ mod tests {
         assert!(!profile.contains("forge/profiles"), "the store links (no setuid) must never shadow the real programs");
         assert!(fs::read_to_string(t.path().join("etc/nsswitch.conf")).unwrap().contains("hosts: files dns"));
         assert!(profile.contains("/etc/profile.d/*.sh"), "forge apply writes its environment there");
+        let inputrc = fs::read_to_string(t.path().join("etc/inputrc")).unwrap();
+        assert!(inputrc.contains("\"\\C-h\": \"sudo forge edit\\C-m\""), "Ctrl+H edits the declaration: {inputrc}");
+        assert!(inputrc.contains("previous-history"), "the arrow keys still work");
         let rcs = fs::read_to_string(t.path().join("etc/init.d/rcS")).unwrap();
         assert!(rcs.contains("mountpoint -q /proc || mount -t proc proc /proc"), "installed systems need /proc too");
         assert!(rcs.contains("mount -a"));
