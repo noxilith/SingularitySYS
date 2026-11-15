@@ -159,10 +159,9 @@ fn limine(r: &mut Report, root: &Path) {
 /// The CPU microcode update must be where the boot loader hands it to the kernel.
 fn microcode(r: &mut Report, root: &Path) {
     const G: &str = "Boot";
-    let src = forge_gen::microcode_image_path(root);
-    if !src.is_file() {
-        return; // the package is not installed (or not an installed system)
-    }
+    let Some(src) = forge_gen::microcode_image_path(root).filter(|s| s.is_file()) else {
+        return; // the package is not installed (or not an installed system, or a CPU with no update to load)
+    };
     let dest = under(root, "/boot/microcode.img");
     let same = matches!((fs::read(&src), fs::read(&dest)), (Ok(a), Ok(b)) if a == b);
     if !same {

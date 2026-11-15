@@ -1,4 +1,4 @@
-//! `forge apply`: converge the machine to the system declaration.
+//! `forge apply`: co    if let Some(src) = forge_gen::microcode_image_path(root).filter(|_| package_names.iter().any(|n| n == "microcode") && under(root, "/boot").is_dir()) {verge the machine to the system declaration.
 //!
 //! Applying is two phases. [`plan_system`] reads the declaration and the
 //! current state of the machine (under a root directory) and returns a
@@ -461,8 +461,8 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     // CPU microcode: the package's early image for this machine's CPU is kept in /boot as microcode.img, which every
     // Limine entry loads first. Copied after the package (it may have just been installed or updated); the next
     // generation rewrites limine.conf, which is when the entries start naming it.
-    if package_names.iter().any(|n| n == "microcode") && under(root, "/boot").is_dir() {
-        let src = forge_gen::microcode_image_path(root);
+    let microcode_src = forge_gen::microcode_image_path(root);
+    if let (Some(src), true) = (microcode_src, package_names.iter().any(|n| n == "microcode") && under(root, "/boot").is_dir()) {
         let dest = under(root, "/boot/microcode.img");
         let same = matches!((fs::read(&src), fs::read(&dest)), (Ok(a), Ok(b)) if a == b);
         if (src.is_file() && !same) || profile_switch.is_some() {

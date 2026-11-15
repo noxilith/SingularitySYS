@@ -1,10 +1,10 @@
 # CPU microcode: the vendors' updates for AMD (from linux-firmware) and Intel (the Intel-Linux-Processor-Microcode-Data-
 # Files release), for the CPU bugs that are fixed that way (the RDSEED fault of early Zen 5 chips, security fixes).
 # The kernel loads microcode before anything else, so besides the files in /usr/lib/firmware this package builds an
-# "early" image, /usr/lib/microcode/early.cpio, which forge puts in /boot/microcode.img and Limine hands to the kernel
+# "early" image, /usr/lib/microcode/early-<vendor>.cpio, which forge puts in /boot/microcode.img and Limine hands to the kernel
 # as an extra initrd. It is updated with `forge upgrade` like any package; the new microcode is used from the next boot.
 name        = "microcode"
-version     = "20261110_r1"
+version     = "20261110_r2"
 description = "AMD and Intel CPU microcode, with an early-loading image for the boot loader"
 license     = "Redistributable firmware (see /usr/share/licenses/microcode)"
 libc        = ["glibc"]
@@ -34,19 +34,20 @@ cp Intel-Linux-Processor-Microcode-Data-Files-microcode-20261110/intel-ucode/* "
 cp Intel-Linux-Processor-Microcode-Data-Files-microcode-20261110/license "$DESTDIR/usr/share/licenses/microcode/LICENSE.intel-ucode" 2>/dev/null || true
 
 # The early images: a plain (uncompressed) cpio with the microcode where the kernel looks for it before it mounts
-# anything. AMD wants every family file in one container, Intel every file in one. One image per vendor (what forge
-# uses on a machine whose CPU it can read, so the boot loader hands over 3 MB instead of 19) and one with both.
+# anything. AMD wants every family file in one container, Intel every file in one. One image per vendor: forge uses
+# the one for the machine's CPU, so the boot loader hands over 0.3 MB on AMD and 19 MB on Intel.
 mkdir -p /build/early/kernel/x86/microcode && cd /build/early
 cat "$fw"/amd-ucode/microcode_amd*.bin > kernel/x86/microcode/AuthenticAMD.bin
 cat "$fw"/intel-ucode/* > kernel/x86/microcode/GenuineIntel.bin
 out="$DESTDIR/usr/lib/microcode"
-find kernel | cpio -o -H newc > "$out/early.cpio"
 mkdir -p /build/early-amd/kernel/x86/microcode /build/early-intel/kernel/x86/microcode
 cp kernel/x86/microcode/AuthenticAMD.bin /build/early-amd/kernel/x86/microcode/
 cp kernel/x86/microcode/GenuineIntel.bin /build/early-intel/kernel/x86/microcode/
 (cd /build/early-amd && find kernel | cpio -o -H newc > "$out/early-amd.cpio")
 (cd /build/early-intel && find kernel | cpio -o -H newc > "$out/early-intel.cpio")
-test -s "$out/early.cpio" && test -s "$out/early-amd.cpio" && test -s "$out/early-intel.cpio"
+test -s "$out/early-amd.cpio" && test -s "$out/early-intel.cpio"
+# Intel's loose files would only repeat what the early image holds (16 MB).
+rm -rf "$fw/intel-ucode"
 test -s "$fw/amd-ucode/microcode_amd_fam19h.bin"
-ls "$fw/intel-ucode" | head -1 | grep -q .
+
 '''
