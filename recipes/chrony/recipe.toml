@@ -1,0 +1,58 @@
+# chrony: keeps the clock right over the network (NTP) under OpenRC; systemd has its own (systemd-timesyncd).
+# Built without NTS (no TLS library) and without privilege dropping, so it needs no extra user: it runs as root, which
+# is how most small distributions ship it. The OpenRC service and a default configuration come with the package.
+name        = "chrony"
+version     = "4.9"
+description = "NTP client and server (chronyd, chronyc) with an OpenRC service"
+license     = "GPL-2.0-only"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "bison"]
+
+[[source]]
+url    = "https://chrony-project.org/releases/chrony-4.9.tar.gz"
+sha256 = "4924c6f530105bcd5b9e9e33c48a2ae1bfd889222c8480bc41601110efc864d0"
+
+[build]
+configure = '''
+CC=gcc ./configure --prefix=/usr --sysconfdir=/etc/chrony --localstatedir=/var --disable-readline --disable-privdrop \
+    --disable-scfilter --disable-ntp-signd --without-nettle --without-gnutls --without-tomcrypt --without-editline \
+    --without-libcap --disable-sechash --disable-nts
+'''
+compile = "make -j$JOBS CFLAGS='-O2'"
+install = '''
+mkdir -p "$DESTDIR/usr/sbin" "$DESTDIR/usr/bin" "$DESTDIR/etc/chrony" "$DESTDIR/etc/init.d"
+install -m 755 chronyd "$DESTDIR/usr/sbin/chronyd"
+install -m 755 chronyc "$DESTDIR/usr/bin/chronyc"
+strip "$DESTDIR/usr/sbin/chronyd" "$DESTDIR/usr/bin/chronyc"
+cat > "$DESTDIR/etc/chrony/chrony.conf" <<'CONF'
+# SingularitySYS: chrony. Edit as you like; this file is never overwritten by upgrades.
+pool pool.ntp.org iburst
+# Step the clock when it is far off at start-up, then slew it.
+makestep 1.0 3
+# Keep the hardware clock in step with the system clock.
+rtcsync
+driftfile /var/lib/chrony/drift
+CONF
+cat > "$DESTDIR/etc/init.d/chronyd" <<'RC'
+#!/sbin/openrc-run
+description="Keeps the clock in sync over the network (chrony)"
+command=/usr/sbin/chronyd
+command_args="-n -f /etc/chrony/chrony.conf"
+command_background=true
+pidfile=/run/chronyd.pid
+
+depend() {
+	use net
+	after net
+	provide ntp-client
+}
+
+start_pre() {
+	checkpath -d -m 0755 /var/lib/chrony /run/chrony
+}
+RC
+chmod 755 "$DESTDIR/etc/init.d/chronyd"
+test -x "$DESTDIR/usr/sbin/chronyd"
+'''

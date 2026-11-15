@@ -238,7 +238,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
 const RUNLEVELS: &[(&str, &[&str])] = &[
     ("sysinit", &["devfs", "dmesg", "sysfs"]),
     ("boot", &["procfs", "coldplug", "root", "hostname", "localmount", "bootmisc", "loopback"]),
-    ("default", &["network", "agetty.tty1", "agetty.ttyS0", "local"]),
+    ("default", &["network", "chronyd", "agetty.tty1", "agetty.ttyS0", "local"]),
     ("shutdown", &["killprocs", "mount-ro"]),
 ];
 

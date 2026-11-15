@@ -416,6 +416,11 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         }
     }
 
+    // Under OpenRC the clock is kept by chrony (systemd has its own timesyncd), started in the default runlevel. The
+    // service belongs to the init system's package set, so it is only enabled where that set is installed.
+    if openrc && (!p.opts.base.is_empty() || old_state.init.is_some()) {
+        p.link("init", "/etc/runlevels/default/chronyd", "/etc/init.d/chronyd");
+    }
     users::plan_users(&mut p, decl)?;
     // The init link and the power commands are kept right on every apply (on a real system, which has /usr/sbin), not
     // only when the init system changes: whatever put something else there (an older forge, a package) is corrected.

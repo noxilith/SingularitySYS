@@ -89,7 +89,7 @@ fn an_enabled_service_that_is_not_installed_is_a_warning() {
 #[test]
 fn missing_base_packages_are_named() {
     let (_t, r) = healthy();
-    let ids: BTreeSet<_> = ["glibc", "openrc"].iter().map(|n| forge_store::StoreId::new(n, "1", &"ab".repeat(32)).unwrap()).collect();
+    let ids: BTreeSet<_> = ["glibc", "openrc", "chrony"].iter().map(|n| forge_store::StoreId::new(n, "1", &"ab".repeat(32)).unwrap()).collect();
     forge_store::Profile::new(r.join("forge/profiles/system")).record(&ids, 1).unwrap();
     let o = doctor(&r, "glibc,coreutils");
     assert!(!o.status.success() && text(&o).contains("base packages are missing: coreutils"), "{}", text(&o));

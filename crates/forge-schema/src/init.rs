@@ -8,7 +8,7 @@ pub const INIT_SYSTEMS: &[&str] = &["openrc", "systemd"];
 /// The packages an init system is made of (their dependencies come along).
 pub fn init_packages(system: &str) -> &'static [&'static str] {
     match system {
-        "openrc" => &["openrc"],
+        "openrc" => &["openrc", "chrony"],
         "systemd" => &["systemd", "dbus"],
         _ => &[],
     }
@@ -17,7 +17,7 @@ pub fn init_packages(system: &str) -> &'static [&'static str] {
 /// The packages only that init system uses (dbus is pulled in by systemd but is useful on its own, so it is not here).
 fn exclusive_packages(system: &str) -> &'static [&'static str] {
     match system {
-        "openrc" => &["openrc"],
+        "openrc" => &["openrc", "chrony"],
         "systemd" => &["systemd"],
         _ => &[],
     }
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn each_init_owns_its_packages_and_removes_the_others() {
         assert_eq!(init_packages("systemd"), ["systemd", "dbus"]);
-        assert_eq!(foreign_init_packages("systemd"), ["openrc"]);
+        assert_eq!(foreign_init_packages("systemd"), ["openrc", "chrony"]);
         assert_eq!(foreign_init_packages("openrc"), ["systemd"]);
     }
 
