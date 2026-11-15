@@ -67,13 +67,13 @@ impl Ui {
     fn rule(&self, n: usize) -> String {
         self.dim(&(if self.unicode { "─" } else { "-" }).repeat(n))
     }
-    fn ok_mark(&self) -> String {
+    pub fn ok_mark(&self) -> String {
         self.green(if self.unicode { "✓" } else { "ok" })
     }
-    fn fail_mark(&self) -> String {
+    pub fn fail_mark(&self) -> String {
         self.red(if self.unicode { "✗" } else { "!!" })
     }
-    fn warn_mark(&self) -> String {
+    pub fn warn_mark(&self) -> String {
         self.yellow("!")
     }
     fn info_mark(&self) -> String {

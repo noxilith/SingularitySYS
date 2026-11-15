@@ -7,6 +7,7 @@ use forge_kernel::Http as _;
 use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
+mod doctor;
 mod ui;
 
 #[derive(Parser)]
@@ -22,6 +23,8 @@ enum Cmd {
     Install(PkgArgs),
     /// Remove packages from the system declaration and apply it
     Remove(PkgArgs),
+    /// Check the system over (init link, boot entries, base packages, users, services, clock) and say what to run about any problem
+    Doctor(DoctorArgs),
     /// Edit the system declaration (with micro, by default), check it, and apply it when you close the editor
     Edit(EditArgs),
     /// Upgrade every declared package to the newest version in the repositories
@@ -664,6 +667,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Cmd::Install(a) => pkg(PkgAction::Add(a)),
         Cmd::Remove(a) => pkg(PkgAction::Remove(a)),
+        Cmd::Doctor(a) => doctor_cmd(a),
         Cmd::Edit(a) => edit_cmd(a),
         Cmd::Upgrade(a) => upgrade(a),
         Cmd::List(a) => list_cmd(a),
@@ -2091,4 +2095,16 @@ fn default_iso_packages() -> Vec<String> {
     v.extend(forge_schema::BASE_PACKAGES.iter().map(|s| s.to_string()));
     v.extend(forge_schema::init_packages("openrc").iter().map(|s| s.to_string()));
     v
+}
+
+#[derive(Args)]
+struct DoctorArgs {
+    /// Examine this directory instead of / (for testing)
+    #[arg(long, default_value = "/")]
+    root: PathBuf,
+}
+
+/// Exit with a failure when something that can stop the system is wrong.
+fn doctor_cmd(a: DoctorArgs) -> Result<()> {
+    if doctor::run(&a.root, &base_packages())? { Ok(()) } else { bail!("forge doctor found problems that can stop the system") }
 }
