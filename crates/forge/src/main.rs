@@ -7,6 +7,8 @@ use forge_kernel::Http as _;
 use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
+mod ui;
+
 #[derive(Parser)]
 #[command(name = "forge", version, about = "Singularity's declarative system and package tool")]
 struct Cli {
@@ -618,7 +620,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         if e.changed {
             edited = e;
         } else {
-            println!("{name} is {verb} {}", path.display());
+            ui::info(&format!("{name} is {verb} {}", path.display()));
         }
     }
     if !edited.changed {
@@ -647,7 +649,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
     std::fs::write(&path, edited.text).with_context(|| format!("writing {}", path.display()))?;
-    println!("{} {} {}", if adding { "added" } else { "removed" }, label, path.display());
+    ui::ok(&format!("{} {} {} {}", if adding { "added" } else { "removed" }, label, if adding { "to" } else { "from" }, path.display()));
 
     if !system {
         println!("note: per-user installs are not implemented yet, so nothing was installed;");
@@ -655,7 +657,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         return Ok(());
     }
     if opts.is_none() {
-        println!("not applied (--no-apply): run `forge apply` when you are ready");
+        ui::info("not applied (--no-apply): run `forge apply` when you are ready");
         return Ok(());
     }
     apply(ApplyArgs {
@@ -844,22 +846,13 @@ fn is_root() -> bool {
         .unwrap_or(false)
 }
 
-fn confirm(question: &str) -> Result<bool> {
-    use std::io::{BufRead, Write};
-    print!("{question} [y/N] ");
-    std::io::stdout().flush()?;
-    let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line)?;
-    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "Yes"))
-}
-
 /// Bring every declared package to the newest version the repositories offer (what `apply` resolves anyway).
 fn upgrade(a: UpgradeArgs) -> Result<()> {
     let path = a.root.join("etc/forge/system.toml");
     let text = read_system_decl(&path)?;
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
     if decl.packages.is_empty() {
-        println!("no packages are installed through forge yet (see: forge install NAME); nothing to upgrade");
+        ui::info("no packages are installed through forge yet (see: forge install NAME); nothing to upgrade");
         return Ok(());
     }
     apply(ApplyArgs {
@@ -882,22 +875,23 @@ fn list_cmd(a: ListArgs) -> Result<()> {
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
     let profile = forge_store::Profile::new(a.root.join("forge/profiles/system"));
     let installed = profile.current_packages().unwrap_or_default();
+    let width = installed.iter().map(|id| id.name().len()).chain(decl.packages.iter().map(|n| n.len())).max().unwrap_or(0);
+    let u = ui::ui();
+    ui::heading("Installed with forge");
     if decl.packages.is_empty() {
-        println!("installed with forge: (none; try: forge install NAME)");
-    } else {
-        println!("installed with forge:");
-        for name in &decl.packages {
-            match installed.iter().find(|id| id.name() == name) {
-                Some(id) => println!("  {name}  ({id})"),
-                None => println!("  {name}  (declared, not applied yet: run forge upgrade)"),
-            }
+        println!("  (none; try: forge install NAME)");
+    }
+    for name in &decl.packages {
+        match installed.iter().find(|id| id.name() == name) {
+            Some(id) => println!("  {} {name:<width$}  {}", u.on(), id.version()),
+            None => println!("  {} {name:<width$}  {}", u.off(), u.dim("declared, not applied yet: run forge upgrade")),
         }
     }
     let others: Vec<_> = installed.iter().filter(|id| !decl.packages.iter().any(|n| n == id.name())).collect();
     if !others.is_empty() {
-        println!("pulled in as dependencies:");
+        ui::heading(&format!("Pulled in as dependencies ({})", others.len()));
         for id in others {
-            println!("  {id}");
+            println!("  {} {:<width$}  {}", u.dot(), id.name(), u.dim(id.version()));
         }
     }
     Ok(())
@@ -929,10 +923,22 @@ fn search_cmd(a: SearchArgs) -> Result<()> {
     }
     if newest.is_empty() {
         println!("no package matches `{}`", a.term.unwrap_or_default());
+        return Ok(());
     }
+    let installed = forge_store::Profile::new(a.root.join("forge/profiles/system")).current_packages().unwrap_or_default();
+    let u = ui::ui();
+    let w = newest.keys().map(|n| n.len()).max().unwrap_or(0).max(4);
+    println!("{}", u.dim(&format!("  {:<w$}  VERSION", "NAME")));
+    let total = newest.len();
     for (name, version) in newest {
-        println!("{name:<24} {version}");
+        let mark = match installed.iter().find(|id| id.name() == name) {
+            Some(id) if id.version() == version => format!("{} {}", u.on(), u.dim("installed")),
+            Some(id) => format!("{} {}", u.off(), u.dim(&format!("installed {}", id.version()))),
+            None => String::new(),
+        };
+        println!("  {}", format!("{name:<w$}  {version:<16} {mark}").trim_end());
     }
+    println!("{}", u.dim(&format!("{total} package{}", if total == 1 { "" } else { "s" })));
     Ok(())
 }
 
@@ -955,42 +961,48 @@ fn apply(a: ApplyArgs) -> Result<()> {
     };
     let plan = forge_apply::plan_system(&decl, &a.root, opts)?;
 
-    for c in &plan.changes {
-        println!("{c}");
-    }
     if !plan.pending.is_empty() {
-        println!("not applied by this version of forge:");
+        ui::warn("not applied by this version of forge:");
         for p in &plan.pending {
             println!("  [ ] {}: {}", p.section, p.summary);
         }
     }
     if plan.is_empty() {
-        println!("nothing to do: the system already matches {}", path.display());
+        ui::ok(&format!("nothing to do: the system already matches {}", path.display()));
         return Ok(());
     }
+    let mut requested = decl.packages.clone();
+    requested.extend(forge_schema::init_packages(&decl.init.system).iter().map(|s| s.to_string()));
+    ui::print_plan(&plan, &requested);
     if a.dry_run {
-        println!("dry run: nothing was changed");
+        println!();
+        ui::info("dry run: nothing was changed");
         return Ok(());
     }
-    if !a.yes && !confirm("apply these changes?")? {
+    println!();
+    if !a.yes && !ui::confirm("apply these changes?")? {
         println!("aborted: nothing was changed");
         return Ok(());
     }
-    forge_apply::apply(&plan)?;
-    println!("applied {} change(s)", plan.changes.len());
-    if plan.changes_init() {
-        println!("the init system changed to `{}`: reboot to start it. The previous generation still boots the old one (Limine menu).", decl.init.system);
-    }
+    let started = std::time::Instant::now();
+    ui::apply_plan(&plan)?;
+    println!();
+    ui::ok(&format!("applied {} change(s) in {}", plan.changes.len(), ui::duration(started.elapsed())));
     if a.no_generation {
-        println!("note: no generation was created (--no-generation)");
+        ui::info("no generation was created (--no-generation)");
     } else if a.root != Path::new("/") {
-        println!("note: no generation was created (--root is not the real system)");
+        ui::info("no generation was created (--root is not the real system)");
     } else {
         let g = with_gen_ctx(&GenPaths::defaults(), true, |ctx| {
             Ok(forge_gen::create(ctx, "forge apply system")?)
         })
         .context("the changes were applied, but creating the generation failed")?;
-        println!("created generation {}", g.id);
+        ui::ok(&format!("created generation {} (boot it from the Limine menu to roll back to this state)", g.id));
+    }
+    if plan.changes_init() {
+        println!();
+        ui::next(&format!("the init system is now `{}`: reboot to start it", decl.init.system));
+        ui::dim("the previous generation still boots the old one (Limine menu)");
     }
     Ok(())
 }
@@ -1069,15 +1081,16 @@ fn gen_cmd(a: GenArgs) -> Result<()> {
             if gens.is_empty() {
                 println!("no generations");
             }
+            let u = ui::ui();
+            if !gens.is_empty() {
+                println!("{}", u.dim("    ID  CREATED              DESCRIPTION  [KERNEL]"));
+            }
             for g in gens {
-                let mark = if cur == Some(g.id) { '*' } else { ' ' };
-                println!(
-                    "{mark} {:>3}  {}  {}  [{}]",
-                    g.id,
-                    forge_gen::format_utc(g.created),
-                    g.description,
-                    g.kernel
-                );
+                let (mark, id) = if cur == Some(g.id) { (u.on(), u.bold(&format!("{:>3}", g.id))) } else { (" ".to_string(), format!("{:>3}", g.id)) };
+                println!("{mark} {id}  {}  {}  {}", forge_gen::format_utc(g.created), g.description, u.dim(&format!("[{}]", g.kernel)));
+            }
+            if cur.is_some() {
+                println!("{}", u.dim(&format!("{} = the generation you booted", u.on())));
             }
             Ok(())
         }
@@ -1747,9 +1760,18 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
         (None, Series::Stable) => forge_kernel::Selector::Stable,
         (None, Series::Longterm) => forge_kernel::Selector::Longterm,
     };
-    eprintln!("finding the kernel...");
-    let (version, tarball, tarball_sha256) = forge_kernel::fetch(&forge_kernel::Curl, &cache, &selector)?;
-    eprintln!("kernel {version}: {} (checked against kernel.org's checksum list)", tarball.display());
+    ui::heading("Kernel build");
+    let finding = ui::Spinner::start("finding the kernel on kernel.org");
+    let (version, tarball, tarball_sha256) = match forge_kernel::fetch(&forge_kernel::Curl, &cache, &selector) {
+        Ok(v) => v,
+        Err(e) => {
+            finding.fail();
+            return Err(e.into());
+        }
+    };
+    finding.finish();
+    ui::ok(&format!("kernel {version} downloaded and checked against kernel.org's checksum list"));
+    ui::dim(&format!("  {}", tarball.display()));
 
     let mode = if b.full {
         forge_kernel::Mode::Full
@@ -1771,7 +1793,7 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
                 None => match running_config(&work) {
                     Ok(c) => Some(c),
                     Err(_) => {
-                        eprintln!("the running kernel does not expose its configuration: starting from Singularity's standard kernel configuration");
+                        ui::info("the running kernel does not expose its configuration: starting from Singularity's standard kernel configuration");
                         None
                     }
                 },
@@ -1810,10 +1832,12 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             keep_work: b.keep_work,
             keep_tools: b.keep_tools,
         };
-        eprintln!("building with the packages {} (fetched into {})", forge_kernel::BUILD_PACKAGES.join(" "), spec.store.display());
+        ui::info(&format!("build tools: {} (fetched into {}, removed again afterwards)", forge_kernel::BUILD_PACKAGES.join(" "), spec.store.display()));
+        ui::info("building the kernel: this takes a while (a trimmed kernel is much faster than --full)");
         forge_kernel::build_in_store(&spec)?
     };
-    println!("built kernel {} in {}", staged.release, staged.dir.display());
+    println!();
+    ui::ok(&format!("built kernel {} in {}", staged.release, staged.dir.display()));
     // A short way back to it: `forge kernel install` with no path takes the kernel built last.
     let _ = std::fs::remove_file(&latest);
     let _ = std::os::unix::fs::symlink(&staged.dir, &latest);
@@ -1829,7 +1853,8 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             force: false,
         });
     }
-    println!("install it with:  sudo forge kernel install");
+    println!();
+    ui::next("install it with:  sudo forge kernel install");
     Ok(())
 }
 
@@ -1857,6 +1882,7 @@ fn kernel_install(i: KernelInstallArgs) -> Result<()> {
         None => latest_staged()?,
     };
     let release = forge_kernel::staged_release(&staged)?;
+    ui::heading(&format!("Kernel install {release}"));
     let paths = |kernel: Option<String>, initramfs: Option<String>| GenPaths {
         snapshots: i.snapshots.clone(),
         limine_conf: i.limine_conf.clone(),
@@ -1870,17 +1896,17 @@ fn kernel_install(i: KernelInstallArgs) -> Result<()> {
     if !i.no_generation && !i.no_limine {
         with_gen_ctx(&paths(None, None), true, |ctx| {
             let g = forge_gen::create(ctx, &format!("before kernel {release}"))?;
-            println!("created generation {} to roll back to", g.id);
+            ui::ok(&format!("created generation {} to roll back to (pick it in the Limine menu if this kernel misbehaves)", g.id));
             Ok(())
         })
         .context("could not snapshot a generation first (not a Singularity btrfs system? use --no-generation to go on without one)")?;
     }
 
     let installed = forge_kernel::install_files(&staged,&i.boot_dir, &i.root, i.force)?;
-    println!("installed {} and its modules", installed.kernel_file);
+    ui::ok(&format!("installed {} and its modules", installed.kernel_file));
 
     if i.no_limine {
-        println!("limine.conf was left alone: the new kernel is not offered at boot yet");
+        ui::info("limine.conf was left alone: the new kernel is not offered at boot yet");
         return Ok(());
     }
     // No initramfs: these kernels carry the drivers needed to reach the root.
@@ -1888,8 +1914,9 @@ fn kernel_install(i: KernelInstallArgs) -> Result<()> {
         forge_gen::rewrite_limine(ctx)?;
         Ok(())
     })?;
-    println!("limine.conf now boots {}; older kernels stay available under Generations", installed.kernel_file);
-    println!("reboot to use kernel {}", installed.release);
+    ui::ok(&format!("limine.conf now boots {}; older kernels stay available under Generations", installed.kernel_file));
+    println!();
+    ui::next(&format!("reboot to use kernel {}", installed.release));
     Ok(())
 }
 

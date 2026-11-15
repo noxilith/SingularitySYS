@@ -33,7 +33,7 @@ rescue() {{
 }}
 
 find_medium() {{
-    for dev in /dev/sr* /dev/vd* /dev/sd* /dev/nvme*n* /dev/mmcblk* /dev/loop*; do
+    for dev in /dev/sr* /dev/vd* /dev/sd* /dev/nvme*n* /dev/mmcblk*; do
         [ -b "$dev" ] || continue
         mount -t iso9660 -o ro "$dev" /medium 2>/dev/null || continue
         if [ -f "/medium/{squashfs}" ]; then

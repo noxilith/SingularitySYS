@@ -108,6 +108,21 @@ pub struct Change {
     op: Op,
 }
 
+impl Change {
+    /// The package this change installs or removes (changes in the `packages` section), if any.
+    pub fn package_id(&self) -> Option<StoreId> {
+        if self.section != "packages" {
+            return None;
+        }
+        StoreId::parse(self.summary.split_whitespace().next()?)
+    }
+
+    /// True when applying this change downloads an archive.
+    pub fn downloads(&self) -> bool {
+        matches!(&self.op, Op::Install { url: Some(_), .. })
+    }
+}
+
 impl fmt::Display for Change {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}: {}", self.kind.mark(), self.section, self.summary)
@@ -200,11 +215,16 @@ impl Planner<'_> {
             Some(_) if self.opts.rebuild => (Kind::Modify, " (re-apply)"),
             Some(_) => return Ok(()),
         };
-        let first = content.lines().find(|l| !l.starts_with('#')).unwrap_or("").to_string();
+        // A one-line file shows its value; a longer one just its path.
+        let body: Vec<&str> = content.lines().filter(|l| !l.starts_with('#') && !l.is_empty()).collect();
+        let summary = match body.as_slice() {
+            [one] => format!("{abs} = {one}{note}"),
+            _ => format!("{abs}{note}"),
+        };
         self.changes.push(Change {
             section,
             kind,
-            summary: format!("{abs} = {first}{note}"),
+            summary,
             op: Op::WriteFile { path, content, mode },
         });
         Ok(())
@@ -625,13 +645,39 @@ fn run(op: &Op) -> io::Result<()> {
 /// Carry out a plan, stopping at the first failure. Changes are applied in plan
 /// order, and the bookkeeping state is written last, only if everything worked.
 pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
+    apply_with(plan, &mut |_| {})
+}
+
+/// What [`apply_with`] reports while it works, so a front end can show progress.
+#[derive(Debug)]
+pub enum Progress<'a> {
+    /// A change is starting (`index` of `total`, counting only changes that do work).
+    Start { index: usize, total: usize, change: &'a Change },
+    Done { index: usize, total: usize, change: &'a Change },
+    /// The packages' files are being copied into the system tree.
+    Copying,
+    /// The new package set is being recorded.
+    Recording,
+}
+
+/// Carry out a plan like [`apply`], telling `on` what is happening.
+pub fn apply_with(plan: &Plan, on: &mut dyn FnMut(Progress<'_>)) -> Result<(), ApplyError> {
+    let total = plan.changes.iter().filter(|c| !matches!(c.op, Op::Note(_))).count();
+    let mut index = 0;
     // The init links and units come last: they point into packages, and until those are in the tree a half-done switch
     // must leave the machine booting the way it did.
-    let step = |c: &Change| -> Result<(), ApplyError> {
-        run(&c.op).map_err(|source| ApplyError { summary: c.summary.clone(), path: c.op.path().to_path_buf(), source })
+    let mut step = |c: &Change, on: &mut dyn FnMut(Progress<'_>)| -> Result<(), ApplyError> {
+        if matches!(c.op, Op::Note(_)) {
+            return Ok(());
+        }
+        index += 1;
+        on(Progress::Start { index, total, change: c });
+        run(&c.op).map_err(|source| ApplyError { summary: c.summary.clone(), path: c.op.path().to_path_buf(), source })?;
+        on(Progress::Done { index, total, change: c });
+        Ok(())
     };
     for c in plan.changes.iter().filter(|c| c.section != "init") {
-        step(c)?;
+        step(c, on)?;
     }
     if let Some(sw) = &plan.profile_switch {
         let now = std::time::SystemTime::now()
@@ -645,10 +691,12 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
             path: sw.root.clone(),
             source: io::Error::other(e.to_string()),
         };
+        on(Progress::Copying);
         let old = forge_store::Materialized::load(&sw.root).map_err(|e| fail("read the state of", e))?;
         let state = forge_store::materialize(&store, &sw.ids, &sw.root, &old, &forge_store::MaterializeOptions { adopt: sw.adopt })
             .map_err(|e| fail("update", e))?;
         state.save(&sw.root).map_err(|e| fail("record the state of", e))?;
+        on(Progress::Recording);
         // Only now, with the tree updated, is the new set recorded as a generation (so a failed update, a conflict
         // for instance, leaves the record saying what is really installed).
         Profile::new(&sw.profile_dir).record(&sw.ids, now).map_err(|e| ApplyError {
@@ -658,7 +706,7 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
         })?;
     }
     for c in plan.changes.iter().filter(|c| c.section == "init") {
-        step(c)?;
+        step(c, on)?;
     }
     if let Some((path, content)) = &plan.state_write {
         write_atomic(path, content, 0o644).map_err(|source| ApplyError {
