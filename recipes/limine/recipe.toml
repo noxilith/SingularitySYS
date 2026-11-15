@@ -6,17 +6,17 @@ name        = "limine"
 version     = "12.6.1"
 description = "Limine bootloader: the limine tool and the BIOS/UEFI boot files"
 license     = "BSD-2-Clause"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://github.com/Limine-Bootloader/Limine/releases/download/v12.6.1/limine-binary.tar.xz"
 sha256 = "1d7f71df1614110892eadb35bad7b7f4277ca0d2dbf8575512da333a546009a7"
 
 [build]
-compile = "gcc -O2 -std=gnu11 -static -o limine limine.c"
+compile = "gcc -O2 -std=gnu11 -o limine limine.c"
 install = '''
 mkdir -p "$DESTDIR/usr/bin" "$DESTDIR/usr/share/limine"
 install -m 755 limine "$DESTDIR/usr/bin/limine"

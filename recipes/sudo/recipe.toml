@@ -8,10 +8,10 @@ name        = "sudo"
 version     = "1.9.17p2"
 description = "Run commands as another user (static, no PAM)"
 license     = "ISC"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://www.sudo.ws/dist/sudo-1.9.17p2.tar.gz"
@@ -23,7 +23,7 @@ configure = '''
 ./configure --prefix=/usr --sysconfdir=/etc --disable-shared --enable-static-sudoers \
     --without-pam --without-selinux --without-linux-audit --without-ldap --without-sendmail \
     --disable-nls --disable-root-mailer --with-rundir=/run/sudo --with-vardir=/var/db/sudo \
-    CFLAGS='-O2' LDFLAGS=--static
+    CFLAGS='-O2'
 '''
 compile = "make -j$JOBS"
 install = '''
@@ -31,5 +31,4 @@ make DESTDIR=$DESTDIR install INSTALL_OWNER=
 rm -rf "$DESTDIR/etc" "$DESTDIR/usr/share" "$DESTDIR/var" "$DESTDIR/run"
 strip "$DESTDIR/usr/bin/sudo" "$DESTDIR/usr/sbin/visudo" 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/sudo"
-if readelf -lW "$DESTDIR/usr/bin/sudo" | grep -q INTERP; then echo "sudo is dynamic" >&2; exit 1; fi
 '''

@@ -7,10 +7,10 @@ name        = "shadow"
 version     = "4.16.0_r1"
 description = "User and group account tools (useradd, groupadd, chpasswd, passwd)"
 license     = "BSD-3-Clause"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://github.com/shadow-maint/shadow/releases/download/4.16.0/shadow-4.16.0.tar.xz"
@@ -21,7 +21,7 @@ configure = '''
 ./configure --prefix=/usr --sysconfdir=/etc --disable-shared --enable-static --without-libpam \
     --without-selinux --without-acl --without-attr --without-audit --without-libbsd --without-tcb \
     --without-sssd --without-su --disable-nls --disable-man --disable-account-tools-setuid \
-    --disable-dependency-tracking CFLAGS='-O2' LDFLAGS=--static
+    --disable-dependency-tracking CFLAGS='-O2'
 '''
 compile   = "make -j$JOBS"
 install   = '''
@@ -51,6 +51,5 @@ for b in useradd groupadd chpasswd passwd usermod; do
     f=$(ls "$DESTDIR"/usr/sbin/$b "$DESTDIR"/usr/bin/$b 2>/dev/null | head -1)
     test -n "$f" || { echo "shadow did not build $b" >&2; exit 1; }
     strip "$f"
-    if readelf -lW "$f" | grep -q INTERP; then echo "$b is dynamic" >&2; exit 1; fi
 done
 '''

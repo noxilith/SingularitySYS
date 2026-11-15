@@ -11,10 +11,10 @@ name        = "perl"
 version     = "5.42.3_r1"
 description = "Perl (static extensions, relocatable)"
 license     = "Artistic-1.0-Perl OR GPL-1.0-or-later"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://www.cpan.org/src/5.0/perl-5.42.3.tar.xz"

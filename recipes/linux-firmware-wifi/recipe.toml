@@ -6,10 +6,10 @@ name        = "linux-firmware-wifi"
 version     = "20261019"
 description = "Wi-Fi and Ethernet firmware from linux-firmware"
 license     = "Redistributable firmware (see /usr/share/licenses/linux-firmware)"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20261019.tar.xz"

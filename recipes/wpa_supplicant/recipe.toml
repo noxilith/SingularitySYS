@@ -1,15 +1,13 @@
-# wpa_supplicant 2.12 with its own TLS and crypto (no OpenSSL): WPA2 personal (PSK, which also
-# joins WPA3 transition-mode networks) and the common WPA-Enterprise methods (PEAP, TTLS, MSCHAPv2,
-# GTC, TLS). NO WPA3-only (SAE) or OWE: the built-in crypto lacks what they need; that takes OpenSSL
-# or wolfSSL. Static, nl80211 only.
+# wpa_supplicant 2.12 on OpenSSL: WPA2 personal, WPA3 (SAE, including WPA3-only networks), OWE, and the
+# common WPA-Enterprise methods (PEAP, TTLS, MSCHAPv2, GTC, TLS). nl80211 only.
 name        = "wpa_supplicant"
 version     = "2.12"
 description = "Wi-Fi supplicant (wpa_supplicant, wpa_cli, wpa_passphrase)"
 license     = "BSD-3-Clause"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "pkgconf", "libnl"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libnl", "openssl"]
 
 [[source]]
 url    = "https://w1.fi/releases/wpa_supplicant-2.12.tar.gz"
@@ -23,9 +21,9 @@ CONFIG_DRIVER_NL80211=y
 CONFIG_LIBNL32=y
 CONFIG_CTRL_IFACE=y
 CONFIG_BACKEND=file
-CONFIG_TLS=internal
-CONFIG_INTERNAL_LIBTOMMATH=y
-CONFIG_INTERNAL_LIBTOMMATH_FAST=y
+CONFIG_TLS=openssl
+CONFIG_SAE=y
+CONFIG_OWE=y
 CONFIG_IEEE80211W=y
 CONFIG_IEEE80211N=y
 CONFIG_IEEE80211AC=y
@@ -40,13 +38,10 @@ CONFIG_PKCS12=y
 CONFIG_SMARTCARD=n
 CONF
 '''
-compile = "make -C wpa_supplicant -j$JOBS CC=gcc LDFLAGS=-static"
+compile = "make -C wpa_supplicant -j$JOBS CC=gcc"
 install = '''
 mkdir -p "$DESTDIR/usr/sbin" "$DESTDIR/usr/bin"
 install -m 755 wpa_supplicant/wpa_supplicant wpa_supplicant/wpa_cli "$DESTDIR/usr/sbin/"
 install -m 755 wpa_supplicant/wpa_passphrase "$DESTDIR/usr/bin/"
 strip "$DESTDIR"/usr/sbin/wpa_supplicant "$DESTDIR"/usr/sbin/wpa_cli "$DESTDIR"/usr/bin/wpa_passphrase
-for f in usr/sbin/wpa_supplicant usr/sbin/wpa_cli usr/bin/wpa_passphrase; do
-    if readelf -lW "$DESTDIR/$f" | grep -q INTERP; then echo "$f is dynamic" >&2; exit 1; fi
-done
 '''

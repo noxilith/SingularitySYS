@@ -411,6 +411,23 @@ fn run_build(
     }
     fs::create_dir_all(&opts.out_dir).map_err(io_ctx(format!("creating {}", opts.out_dir.display())))?;
     let tmp_out = opts.out_dir.join(format!(".building-{}.tar.zst", std::process::id()));
+    // Dynamically linked programs need the packages that provide their libraries (glibc first of all): find them
+    // from the ELF headers and record them as run dependencies. The package id does not depend on them.
+    let mut deps = run_deps.to_vec();
+    if let Some(s) = store {
+        let (found, missing) = crate::needs::auto_run_deps(&dest, build_deps, s);
+        if !found.is_empty() {
+            println!("run dependencies found from the programs' library needs: {}", found.join(" "));
+        }
+        for d in found {
+            if !deps.contains(&d) {
+                deps.push(d);
+            }
+        }
+        if !missing.is_empty() {
+            println!("warning: libraries needed but provided by no build dependency: {}", missing.join(" "));
+        }
+    }
     let packed = pack_dir(
         &dest,
         &PackOptions {
@@ -418,7 +435,7 @@ fn run_build(
             version: recipe.version.clone(),
             libc: opts.libc,
             hash: Some(input_hash.to_string()),
-            deps: run_deps.to_vec(),
+            deps,
         },
         &tmp_out,
     )

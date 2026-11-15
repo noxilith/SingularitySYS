@@ -9,6 +9,7 @@ mod build;
 mod extract;
 mod fetch;
 mod hash;
+mod needs;
 pub mod sandbox;
 
 use std::io;

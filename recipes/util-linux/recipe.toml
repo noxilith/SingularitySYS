@@ -5,10 +5,10 @@ name        = "util-linux"
 version     = "2.40.2_r2"
 description = "Disk partitioning and block device tools (cfdisk, fdisk, sfdisk, blkid, lsblk, agetty, wipefs)"
 license     = "GPL-2.0-or-later"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "ncurses", "zlib"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "zlib"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.2.tar.xz"
@@ -21,14 +21,14 @@ configure = '''
 n=$(grep -n '^  enable_lsblk=\$ul_default_estate$' configure | cut -d: -f1)
 test -n "$n" || { echo "util-linux configure changed: cannot enable lsblk" >&2; exit 1; }
 sed -i "$((n-1))s/.*/  if false; then/" configure
-./configure --prefix=/usr --sbindir=/usr/sbin --disable-all-programs --disable-shared --enable-static \
+./configure --prefix=/usr --sbindir=/usr/sbin --disable-all-programs --enable-shared --enable-static \
     --enable-libuuid --enable-libblkid --enable-libmount --enable-libsmartcols --enable-libfdisk \
     --enable-fdisks --enable-blkid --enable-lsblk --enable-agetty --enable-wipefs \
     --with-ncursesw --without-python --without-systemd --without-udev --without-readline --without-tinfo \
     --disable-nls --disable-bash-completion --disable-asciidoc --disable-poman \
     --disable-makeinstall-chown --disable-makeinstall-setuid --disable-dependency-tracking \
     NCURSESW_CFLAGS='-I/usr/include' NCURSESW_LIBS='-lncursesw -ltinfow' \
-    CFLAGS='-O2' LDFLAGS=--static
+    CFLAGS='-O2'
 '''
 compile   = "make -j$JOBS"
 install   = '''
@@ -39,10 +39,10 @@ for b in cfdisk fdisk sfdisk blkid wipefs lsblk agetty; do
     f=$(ls "$DESTDIR"/usr/sbin/$b "$DESTDIR"/usr/bin/$b "$DESTDIR"/bin/$b "$DESTDIR"/sbin/$b 2>/dev/null | head -1)
     test -n "$f" || { echo "util-linux did not build $b" >&2; exit 1; }
     strip "$f"
-    if readelf -lW "$f" | grep -q INTERP; then echo "$b is dynamic" >&2; exit 1; fi
 done
 # OpenRC's agetty service runs /sbin/agetty.
 mkdir -p "$DESTDIR/sbin"
 ln -sf ../usr/sbin/agetty "$DESTDIR/sbin/agetty"
 test -f "$DESTDIR/usr/lib/libblkid.a" && test -f "$DESTDIR/usr/lib/libuuid.a"
+test -f "$DESTDIR/usr/lib/libblkid.so.1" && test -f "$DESTDIR/usr/lib/libuuid.so.1"
 '''

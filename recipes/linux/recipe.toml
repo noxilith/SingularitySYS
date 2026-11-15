@@ -14,10 +14,10 @@ name        = "linux"
 version     = "7.3.3_r2"
 description = "Linux kernel 7.3 (defconfig base, boot drivers built in, every other driver as a module)"
 license     = "GPL-2.0 WITH Linux-syscall-note"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4", "zlib", "pkgconf", "bash", "openssl", "kmod"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4", "zlib", "pkgconf", "bash", "openssl", "kmod"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.3.tar.xz"

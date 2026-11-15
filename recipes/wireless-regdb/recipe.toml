@@ -4,10 +4,10 @@ name        = "wireless-regdb"
 version     = "2026.09.03"
 description = "Wireless regulatory database (regulatory.db and its signature)"
 license     = "ISC"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://www.kernel.org/pub/software/network/wireless-regdb/wireless-regdb-2026.09.03.tar.xz"

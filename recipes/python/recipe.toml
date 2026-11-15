@@ -5,10 +5,10 @@ name        = "python"
 version     = "3.12.16_r1"
 description = "Python interpreter"
 license     = "PSF-2.0"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "zlib"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib"]
 
 [[source]]
 url    = "https://www.python.org/ftp/python/3.12.16/Python-3.12.16.tar.xz"

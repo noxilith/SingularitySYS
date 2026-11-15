@@ -2,10 +2,10 @@ name        = "diffutils"
 version     = "3.10"
 description = "GNU diff, cmp"
 license     = "GPL-3.0-or-later"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz"
@@ -14,7 +14,7 @@ sha256 = "90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e"
 [build]
 configure = '''
 export FORCE_UNSAFE_CONFIGURE=1
-./configure --prefix=/usr --disable-nls --disable-dependency-tracking CFLAGS='-O2 -std=gnu17' LDFLAGS=--static
+./configure --prefix=/usr --disable-nls --disable-dependency-tracking CFLAGS='-O2 -std=gnu17'
 '''
 compile   = "make -j$JOBS"
 install   = '''
@@ -23,7 +23,6 @@ rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/lo
 for f in "$DESTDIR"/usr/bin/* "$DESTDIR"/usr/sbin/* "$DESTDIR"/usr/libexec/*; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     strip "$f" 2>/dev/null || true
-    if readelf -lW "$f" 2>/dev/null | grep -q INTERP; then echo "$f is dynamic" >&2; exit 1; fi
 done
 test -x "$DESTDIR/usr/bin/diff"
 '''

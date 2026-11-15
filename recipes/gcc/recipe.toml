@@ -1,30 +1,24 @@
-# Stage 2 GCC: C and C++ compilers (static libstdc++), built natively on musl
-# by the stage-1 toolchain, in a sandbox with NO host tools. This is the final
-# `gcc` package; `gcc-stage1` only exists to bootstrap it.
+# GCC for glibc: C and C++ compilers with SHARED libgcc_s and libstdc++, built natively by the store's compiler in
+# a sandbox with NO host tools (the stage-1 toolchain at first, itself later). This is the final `gcc` package;
+# `gcc-glibc-stage1` only exists to bootstrap it.
 #
-# Compared with stage 1 this recipe is simple, because the store now supplies
-# everything stage 1 had to build inline: the assembler and linker
-# (binutils-stage1), the C library and kernel headers (musl, linux-headers),
-# and the compiler itself (gcc-stage1). Only gmp, mpfr and mpc still come in as
-# sources and are built inside the gcc tree.
-#
-# build = host = target, spelled identically, so configure treats this as a
-# native build: unprefixed tool names (`gcc`, `g++`) and system paths taken from
-# the machine (`/usr/include`, `/usr/lib`), with no sysroot.
+# build = host = target, spelled identically, so configure treats this as a native build: unprefixed tool names
+# (`gcc`, `g++`) and system paths taken from the machine (`/usr/include`, `/usr/lib`), with no sysroot. PIE and
+# stack protector are the defaults for programs it compiles, as on any current distribution.
 name        = "gcc"
-version     = "14.2.0"
-description = "GNU Compiler Collection (C, C++) for x86_64-linux-musl (native, static)"
+version     = "14.2.0_r1"
+description = "GNU Compiler Collection (C, C++) for x86_64-unknown-linux-gnu"
 license     = "GPL-3.0-or-later WITH GCC-exception-3.1"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
-run   = ["binutils", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib"]
+run   = ["binutils", "glibc", "linux-headers"]
 
 # $SRC is the first source: gcc itself.
 [[source]]
 url    = "https://ftp.gnu.org/gnu/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz"
-# Pinned from the first download (trust on first use); see gcc-stage1.
+# Pinned from the first download (trust on first use); see gcc-glibc-stage1.
 sha256 = "a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9"
 
 [[source]]
@@ -48,8 +42,7 @@ tar -o -xf /sources/gmp-6.3.0.tar.xz && mv gmp-6.3.0 gmp
 tar -o -xf /sources/mpfr-4.2.1.tar.xz && mv mpfr-4.2.1 mpfr
 tar -o -xf /sources/mpc-1.3.1.tar.gz && mv mpc-1.3.1 mpc
 
-# musl keeps its libraries in /lib and /usr/lib; gcc defaults 64-bit libraries
-# to lib64. Same change as in gcc-stage1, with the same guard.
+# Merged /usr: libraries go in /usr/lib, not lib64, for gcc's driver and for what it installs.
 sed -i 's|m64=\.\./lib64|m64=../lib|' "$SRC/gcc/config/i386/t-linux64"
 remaining=$(grep -c 'm64=\.\./lib64' "$SRC/gcc/config/i386/t-linux64" || true)
 if [ "$remaining" != 0 ]; then
@@ -58,28 +51,24 @@ if [ "$remaining" != 0 ]; then
 fi
 '''
 
-# CFLAGS/CXXFLAGS are -O2 with NO -g, on purpose: debug info records the
-# compiler's own location, which in a store contains its package id (different
-# at every stage), and cc1's embedded executable_checksum (an MD5 over its
-# object files) then differs from stage to stage even though the code is
-# identical. Without -g the stage-N and stage-N+1 compilers produce
-# byte-identical objects. The packages are stripped anyway.
+# CFLAGS are -O2 with NO -g, on purpose: debug info records the compiler's own location, which in a store
+# contains its package id, so binaries would differ between stages even when the code is identical.
 configure = '''
 mkdir -p /build/gcc-build
 cd /build/gcc-build
 "$SRC/configure" \
     --prefix=/usr \
-    --build=x86_64-linux-musl --host=x86_64-linux-musl --target=x86_64-linux-musl \
+    --build=x86_64-unknown-linux-gnu --host=x86_64-unknown-linux-gnu --target=x86_64-unknown-linux-gnu \
     --with-native-system-header-dir=/usr/include \
     --enable-languages=c,c++ \
     --disable-multilib --disable-nls --disable-bootstrap --disable-werror \
-    --disable-shared --disable-plugin --disable-lto \
-    --disable-libsanitizer --disable-libquadmath --disable-libgomp \
-    --disable-libitm --disable-libvtv --disable-libssp --disable-libstdcxx-pch \
-    --enable-threads=posix --enable-tls --enable-__cxa_atexit \
+    --enable-shared --enable-default-pie --enable-default-ssp --enable-plugin --disable-lto \
+    --with-system-zlib \
+    --disable-libsanitizer --disable-libquadmath --disable-libcc1 \
+    --disable-libitm --disable-libvtv --disable-libstdcxx-pch \
+    --enable-threads=posix --enable-tls --enable-__cxa_atexit --enable-clocale=gnu \
     --with-arch=x86-64 --with-tune=generic \
-    CFLAGS='-O2' CXXFLAGS='-O2' CFLAGS_FOR_TARGET='-O2' CXXFLAGS_FOR_TARGET='-O2' \
-    LDFLAGS=--static MAKEINFO=true
+    CFLAGS='-O2' CXXFLAGS='-O2' CFLAGS_FOR_TARGET='-O2' CXXFLAGS_FOR_TARGET='-O2' MAKEINFO=true
 '''
 
 compile = '''
@@ -92,24 +81,16 @@ cd /build/gcc-build
 make DESTDIR=$DESTDIR MAKEINFO=true install-strip
 
 cd "$DESTDIR/usr/bin"
-# The install makes hard links (gcc, x86_64-linux-musl-gcc, ...); use symlinks
-# so the package does not carry a compiler several times.
-for alias in x86_64-linux-musl-gcc x86_64-linux-musl-gcc-14.2.0 cc; do ln -sf gcc "$alias"; done
-for alias in c++ x86_64-linux-musl-g++ x86_64-linux-musl-c++; do ln -sf g++ "$alias"; done
-rm -rf "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man"
+# The install makes hard links (gcc, x86_64-unknown-linux-gnu-gcc, ...); use symlinks so the package does not
+# carry a compiler several times.
+for alias in x86_64-unknown-linux-gnu-gcc x86_64-unknown-linux-gnu-gcc-14.2.0 cc; do ln -sf gcc "$alias"; done
+for alias in c++ x86_64-unknown-linux-gnu-g++ x86_64-unknown-linux-gnu-c++; do ln -sf g++ "$alias"; done
+rm -rf "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/gdb"
 
-# Self-checks: the compilers must be fully static, and the target libraries
-# must exist where the driver looks for them.
-for f in "$DESTDIR/usr/bin/gcc" "$DESTDIR/usr/bin/g++" "$DESTDIR/usr/bin/cpp" \
-         "$DESTDIR"/usr/libexec/gcc/x86_64-linux-musl/14.2.0/cc1 \
-         "$DESTDIR"/usr/libexec/gcc/x86_64-linux-musl/14.2.0/cc1plus \
-         "$DESTDIR"/usr/libexec/gcc/x86_64-linux-musl/14.2.0/collect2; do
-    interp=$(readelf -lW "$f" | grep -c INTERP || true)
-    if [ "$interp" != 0 ]; then
-        echo "$f is dynamically linked, but this package must be static" >&2
-        exit 1
-    fi
-done
-test -f "$DESTDIR/usr/lib/gcc/x86_64-linux-musl/14.2.0/libgcc.a"
+# Self-checks: the driver and the target libraries must be where the driver looks for them.
+test -f "$DESTDIR/usr/lib/gcc/x86_64-unknown-linux-gnu/14.2.0/libgcc.a"
 test -f "$DESTDIR/usr/lib/libstdc++.a"
+test -f "$DESTDIR/usr/lib/libstdc++.so.6"
+test -f "$DESTDIR/usr/lib/libgcc_s.so.1"
+test -x "$DESTDIR/usr/libexec/gcc/x86_64-unknown-linux-gnu/14.2.0/cc1plus"
 '''

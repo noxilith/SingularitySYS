@@ -2,10 +2,10 @@ name        = "findutils"
 version     = "4.10.0"
 description = "GNU find, xargs"
 license     = "GPL-3.0-or-later"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://ftp.gnu.org/gnu/findutils/findutils-4.10.0.tar.xz"
@@ -14,7 +14,7 @@ sha256 = "1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5"
 [build]
 configure = '''
 export FORCE_UNSAFE_CONFIGURE=1
-./configure --prefix=/usr --disable-nls --disable-dependency-tracking --without-selinux CFLAGS='-O2 -std=gnu17' LDFLAGS=--static
+./configure --prefix=/usr --disable-nls --disable-dependency-tracking --without-selinux CFLAGS='-O2 -std=gnu17'
 '''
 compile   = "make -j$JOBS"
 install   = '''
@@ -23,7 +23,6 @@ rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/lo
 for f in "$DESTDIR"/usr/bin/* "$DESTDIR"/usr/sbin/* "$DESTDIR"/usr/libexec/*; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     strip "$f" 2>/dev/null || true
-    if readelf -lW "$f" 2>/dev/null | grep -q INTERP; then echo "$f is dynamic" >&2; exit 1; fi
 done
 test -x "$DESTDIR/usr/bin/find"
 '''

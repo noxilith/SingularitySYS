@@ -3,17 +3,17 @@ name        = "pkgconf"
 version     = "2.3.0"
 description = "pkg-config compatible tool for finding libraries' flags"
 license     = "ISC"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://distfiles.ariadne.space/pkgconf/pkgconf-2.3.0.tar.xz"
 sha256 = "3a9080ac51d03615e7c1910a0a2a8df08424892b5f13b0628a204d3fcce0ea8b"
 
 [build]
-configure = "./configure --prefix=/usr --disable-shared --enable-static --disable-dependency-tracking CFLAGS='-O2' LDFLAGS=--static"
+configure = "./configure --prefix=/usr --disable-shared --enable-static --disable-dependency-tracking CFLAGS='-O2'"
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install

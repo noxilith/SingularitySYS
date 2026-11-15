@@ -3,25 +3,24 @@ name        = "xz"
 version     = "5.8.1"
 description = "xz and LZMA compression"
 license     = "0BSD"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://github.com/tukaani-project/xz/releases/download/v5.8.1/xz-5.8.1.tar.gz"
 sha256 = "507825b599356c10dca1cd720c9d0d0c9d5400b9de300af00e4d1ea150795543"
 
 [build]
-configure = "./configure --prefix=/usr --disable-shared --enable-static --disable-nls --disable-doc --disable-dependency-tracking CFLAGS='-O2 -std=gnu17' LDFLAGS=--static"
+configure = "./configure --prefix=/usr --enable-shared --enable-static --disable-nls --disable-doc --disable-dependency-tracking CFLAGS='-O2 -std=gnu17'"
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/include" "$DESTDIR/usr/lib"
+rm -rf "$DESTDIR/usr/share"
 for f in "$DESTDIR"/usr/bin/*; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     if readelf -lW "$f" 2>/dev/null | grep -q ELF; then strip "$f" 2>/dev/null || true; fi
 done
-if readelf -lW "$DESTDIR/usr/bin/xz" | grep -q INTERP; then echo "xz is dynamic" >&2; exit 1; fi
-test "$(echo hello | "$DESTDIR/usr/bin/xz" | "$DESTDIR/usr/bin/xz" -d)" = hello
+test "$(echo hello | LD_LIBRARY_PATH="$DESTDIR/usr/lib" "$DESTDIR/usr/bin/xz" | LD_LIBRARY_PATH="$DESTDIR/usr/lib" "$DESTDIR/usr/bin/xz" -d)" = hello
 '''

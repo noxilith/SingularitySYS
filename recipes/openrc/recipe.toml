@@ -6,10 +6,10 @@ name        = "openrc"
 version     = "0.64.1"
 description = "OpenRC init and service manager"
 license     = "BSD-2-Clause"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers", "pkgconf", "python", "ninja", "meson", "libcap"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "libcap"]
 
 [[source]]
 url    = "https://github.com/OpenRC/openrc/archive/refs/tags/0.64.1.tar.gz"

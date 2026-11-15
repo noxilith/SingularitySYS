@@ -9,10 +9,10 @@ name        = "linux-headers"
 version     = "6.12"
 description = "Linux kernel API headers (generated from the 6.12 source)"
 license     = "GPL-2.0 WITH Linux-syscall-note"
-libc        = ["musl"]
+libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "musl", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz"
