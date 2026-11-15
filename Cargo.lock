@@ -451,6 +451,7 @@ dependencies = [
 name = "forge-strap"
 version = "0.1.0"
 dependencies = [
+ "forge-decl",
  "forge-gen",
  "forge-schema",
  "forge-store",

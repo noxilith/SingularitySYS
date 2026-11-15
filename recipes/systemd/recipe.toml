@@ -4,16 +4,16 @@
 # `poweroff`, `halt` and `shutdown` links are NOT installed by this package: forge apply owns them (it switches
 # them together with the init system), so they can never clash with OpenRC's.
 name        = "systemd"
-version     = "262.2_r1"
+version     = "262.2_r2"
 description = "systemd system and service manager (with udev)"
 license     = "LGPL-2.1-or-later"
 libc        = ["glibc"]
 
 [depends]
 build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson",
-         "gperf", "python-jinja2", "python-markupsafe", "util-linux", "libcap", "kmod", "libxcrypt", "dbus",
+         "gperf", "python-jinja2", "python-markupsafe", "util-linux", "libcap", "kmod", "libxcrypt",
          "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils"]
-run   = ["util-linux", "kmod", "dbus"]
+run   = ["util-linux", "kmod"]
 
 [[source]]
 url    = "https://github.com/systemd/systemd/archive/refs/tags/v262.2.tar.gz"
@@ -25,7 +25,7 @@ export PYTHONPATH=/usr/lib/python3.12/site-packages
 CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=lib --bindir=bin --sbindir=sbin \
     --buildtype=release -Dmode=release -Dauto_features=disabled \
     -Dlibc=glibc -Dsplit-bin=false -Dtests=false -Dman=disabled -Dhtml=disabled -Dtranslations=false \
-    -Dlibmount=enabled -Dkmod=enabled -Dblkid=enabled -Dlibcrypt=enabled -Ddbus=enabled \
+    -Dlibmount=enabled -Dkmod=enabled -Dblkid=enabled -Dlibcrypt=enabled \
     -Dpam=disabled -Dseccomp=disabled -Dacl=disabled -Daudit=disabled -Dselinux=disabled -Dapparmor=disabled \
     -Defi=false -Dbootloader=disabled -Dbpf-framework=disabled -Dtpm2=disabled -Dukify=disabled \
     -Dcreate-log-dirs=false -Dfirstboot=false -Dhomed=disabled -Dmachined=false -Dportabled=false -Dsysext=false \

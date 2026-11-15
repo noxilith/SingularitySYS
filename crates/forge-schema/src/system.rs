@@ -66,12 +66,34 @@ pub struct UserAccount {
     pub name: String,
     #[serde(default)]
     pub groups: Vec<String>,
-    #[serde(default = "default_shell")]
-    pub shell: String,
+    /// The login shell as a program name or path (`fish`, `/usr/bin/fish`); the system's `shell` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
 }
 
+/// The login shell for root and for users who do not name their own: a program name (`bash`, `fish`). Anything
+/// other than the base system's bash is installed for you.
 fn default_shell() -> String {
-    "/bin/bash".into()
+    "bash".into()
+}
+
+/// `packages = ["a", "b"]` or `packages = """ a, b """`: names separated by commas and/or white space.
+fn de_packages<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Either {
+        List(Vec<String>),
+        Text(String),
+    }
+    let mut out = Vec::new();
+    let parts: Vec<String> = match Either::deserialize(d)? {
+        Either::List(l) => l,
+        Either::Text(t) => vec![t],
+    };
+    for part in parts {
+        out.extend(part.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(String::from));
+    }
+    Ok(out)
 }
 
 /// `/etc/forge/system.toml`: the single source of truth for the system.
@@ -95,9 +117,13 @@ pub struct SystemDecl {
     pub users: Vec<UserAccount>,
     #[serde(default)]
     pub kernel_modules: Vec<String>,
-    /// System-wide packages, visible to every user.
-    #[serde(default)]
+    /// Packages you chose, on top of the base system (which is not listed): a list, or names separated by commas and
+    /// white space in one multi-line string.
+    #[serde(default, deserialize_with = "de_packages")]
     pub packages: Vec<String>,
+    /// The login shell for root and for users who name none: `bash` (the base) or another, which is installed for you.
+    #[serde(default = "default_shell")]
+    pub shell: String,
     /// Package repositories, as local directories (searched in order).
     #[serde(default)]
     pub repos: Vec<String>,
@@ -147,7 +173,7 @@ impl SystemDecl {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UserDecl {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_packages")]
     pub packages: Vec<String>,
 }
 
@@ -217,6 +243,32 @@ mod tests {
     fn unknown_init_system_is_rejected() {
         let err = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\ninit = \"runit\"\n").unwrap_err().to_string();
         assert!(err.contains("runit") && err.contains("systemd"), "{err}");
+    }
+
+    #[test]
+    fn packages_may_be_a_list_or_readable_text() {
+        let list = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = [\"a\", \"b\"]\n").unwrap();
+        assert_eq!(list.packages, ["a", "b"]);
+        let text = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = \"\"\"\n  htop,\n  git, vim\n\n  fish\n\"\"\"\n").unwrap();
+        assert_eq!(text.packages, ["htop", "git", "vim", "fish"]);
+        let empty = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = \"\"\"\n\"\"\"\n").unwrap();
+        assert!(empty.packages.is_empty());
+        assert!(SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = \"\"\"\n a,\n a\n\"\"\"\n").is_err(), "duplicates are still refused");
+    }
+
+    #[test]
+    fn the_shell_setting_and_per_user_shells() {
+        let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\nshell = \"fish\"\n[[users]]\nname = \"ada\"\ngroups = [\"wheel\"]\n[[users]]\nname = \"bob\"\nshell = \"zsh\"\n").unwrap();
+        assert_eq!(d.shell, "fish");
+        assert_eq!(d.users[0].shell, None);
+        assert_eq!(d.users[1].shell.as_deref(), Some("zsh"));
+        assert_eq!(SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\n").unwrap().shell, "bash");
+    }
+
+    #[test]
+    fn the_base_system_is_known_and_includes_what_boots_it() {
+        assert!(crate::is_base_package("forge") && crate::is_base_package("limine") && crate::is_base_package("systemd"));
+        assert!(!crate::is_base_package("htop") && !crate::is_base_package("linux"));
     }
     #[test]
     fn user_decl_defaults_empty() {

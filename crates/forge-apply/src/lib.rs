@@ -9,6 +9,7 @@
 //! exercised against a scratch directory instead of `/`.
 
 mod state;
+mod users;
 
 use std::fmt;
 use std::fs;
@@ -78,6 +79,8 @@ enum Op {
     Install { store_root: PathBuf, archive: PathBuf, url: Option<String>, fetch: FetchHandle, sha256: String, id: StoreId },
     /// Shown in the preview; the real work is the profile switch that follows.
     Note(PathBuf),
+    /// Run a program (the shadow tools for users and groups, systemd's sysusers and tmpfiles). A best-effort one may fail.
+    Run { program: PathBuf, args: Vec<String>, best_effort: bool },
 }
 
 impl Op {
@@ -86,6 +89,7 @@ impl Op {
             Op::WriteFile { path, .. } | Op::RemoveFile(path) | Op::RemoveLink(path) | Op::Note(path) => path,
             Op::Symlink { link, .. } => link,
             Op::Install { archive, .. } => archive,
+            Op::Run { program, .. } => program,
         }
     }
 }
@@ -115,6 +119,12 @@ impl Change {
             return None;
         }
         StoreId::parse(self.summary.split_whitespace().next()?)
+    }
+
+    /// Changes that must come after the packages are in the tree: the init links and units, and users (whose
+    /// shells and tools come from packages).
+    fn is_late(&self) -> bool {
+        self.section == "init" || self.section == "users" || self.section == "shell"
     }
 
     /// True when applying this change downloads an archive.
@@ -170,6 +180,8 @@ pub struct Options {
     /// Replace files in the system tree that forge did not put there (the first apply over a system that was
     /// not installed by forge). Off by default: such files are the user's.
     pub adopt: bool,
+    /// Packages every system has (the base system), installed without being declared. Empty: only what is declared.
+    pub base: Vec<String>,
 }
 
 fn under(root: &Path, abs: &str) -> PathBuf {
@@ -404,12 +416,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         }
     }
 
-    for u in &decl.users {
-        pending.push(Pending {
-            section: "users",
-            summary: format!("user `{}`: user management is not implemented yet", u.name),
-        });
-    }
+    users::plan_users(&mut p, decl)?;
     // The power commands work under either init system and are kept current on every apply (on a real system, which
     // has /usr/sbin); the /sbin/init link changes only when the init system does, and then takes effect at the next boot.
     if !switching && under(root, "/usr/sbin").is_dir() {
@@ -443,8 +450,19 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         }
         new_state.init = (system != "openrc" || old_state.init.is_some()).then(|| system.to_string());
     }
-    let package_names = effective_packages(decl, old_state.init.is_some());
+    let package_names = effective_packages(decl, old_state.init.is_some(), &p.opts.base);
     let profile_switch = plan_packages(&package_names, decl, root, &mut p, &old_state.repo_serials, &mut new_state.repo_serials)?;
+    // systemd's own users (journal, network, ...) and dbus's runtime directories are created at boot, but doing it
+    // now means the first boot starts with them in place (a dbus that races its user at first boot is not a good
+    // first impression). Best effort: the units order themselves after these at boot anyway.
+    if systemd && root == Path::new("/") && (switching || profile_switch.is_some()) {
+        for (summary, tool, args) in [
+            ("systemd system users (sysusers)", "/usr/bin/systemd-sysusers", vec![]),
+            ("dbus runtime directories (tmpfiles)", "/usr/bin/systemd-tmpfiles", vec!["--create".to_string(), "/usr/lib/tmpfiles.d/dbus.conf".to_string()]),
+        ] {
+            p.changes.push(Change { section: "init", kind: Kind::Add, summary: summary.into(), op: Op::Run { program: PathBuf::from(tool), args, best_effort: true } });
+        }
+    }
 
     // Installs and modifications first, removals last, so a swap never leaves a gap.
     let mut changes = p.changes;
@@ -470,18 +488,20 @@ fn profile_env() -> String {
 
 /// The packages to have installed: the declared ones, without the other init systems' packages, plus the chosen
 /// init system's own. (A declaration that lists no packages and keeps OpenRC asks for nothing: the image already has it.)
-fn effective_packages(decl: &SystemDecl, switched_before: bool) -> Vec<String> {
+fn effective_packages(decl: &SystemDecl, switched_before: bool, base: &[String]) -> Vec<String> {
     let system = decl.init.system.as_str();
-    // The image's own OpenRC is in the declaration already (forge strap writes it); only once forge has switched the
-    // machine (or for another init system) is the init system's package added on top of the declared ones.
-    let add_init = system != "openrc" || switched_before;
+    // Without a base set (tests, minimal repositories) the image's own OpenRC is expected in the declaration; with
+    // one, the init system's packages are always part of the system, whatever the declaration lists.
+    let add_init = system != "openrc" || switched_before || !base.is_empty();
     let foreign = forge_schema::foreign_init_packages(system);
-    let mut names: Vec<String> = decl.packages.iter().filter(|p| !foreign.contains(&p.as_str())).cloned().collect();
-    for p in forge_schema::init_packages(system).iter().filter(|_| add_init) {
-        if !names.iter().any(|n| n == p) {
-            names.push((*p).to_string());
-        }
+    let mut names: Vec<String> = base.to_vec();
+    names.extend(decl.packages.iter().filter(|p| !foreign.contains(&p.as_str())).cloned());
+    if add_init {
+        names.extend(forge_schema::init_packages(system).iter().map(|s| s.to_string()));
     }
+    names.extend(users::shell_packages(decl));
+    let mut seen = BTreeSet::new();
+    names.retain(|n| seen.insert(n.clone()));
     names
 }
 
@@ -646,6 +666,15 @@ fn run(op: &Op) -> io::Result<()> {
             Ok(())
         }
         Op::Note(_) => Ok(()),
+        Op::Run { program, args, best_effort } => {
+            let out = std::process::Command::new(program).args(args).stdin(std::process::Stdio::null()).output();
+            match out {
+                Ok(o) if o.status.success() => Ok(()),
+                Ok(_) | Err(_) if *best_effort => Ok(()),
+                Ok(o) => Err(io::Error::other(format!("{} failed: {}", program.display(), String::from_utf8_lossy(&o.stderr).trim()))),
+                Err(e) => Err(e),
+            }
+        }
     }
 }
 
@@ -683,7 +712,7 @@ pub fn apply_with(plan: &Plan, on: &mut dyn FnMut(Progress<'_>)) -> Result<(), A
         on(Progress::Done { index, total, change: c });
         Ok(())
     };
-    for c in plan.changes.iter().filter(|c| c.section != "init") {
+    for c in plan.changes.iter().filter(|c| !c.is_late()) {
         step(c, on)?;
     }
     if let Some(sw) = &plan.profile_switch {
@@ -712,7 +741,7 @@ pub fn apply_with(plan: &Plan, on: &mut dyn FnMut(Progress<'_>)) -> Result<(), A
             source: io::Error::other(e.to_string()),
         })?;
     }
-    for c in plan.changes.iter().filter(|c| c.section == "init") {
+    for c in plan.changes.iter().filter(|c| c.is_late()) {
         step(c, on)?;
     }
     if let Some((path, content)) = &plan.state_write {

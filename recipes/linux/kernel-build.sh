@@ -15,6 +15,12 @@ kmake() { make ARCH=x86_64 CC="$cc" "$@"; }
 case "${1:?usage: kernel-build.sh compile|install}" in
 compile)
     KC='-Wno-error -Wno-unterminated-string-initialization'
+    # Boot messages that alarm without anything to act on: the kernel already turns RDSEED off by itself on the
+    # AMD chips with the old-microcode (Zen 5) or Cyan Skillfish bug, and says so with pr_emerg, which `quiet`
+    # cannot hide. The behaviour stays; only the message becomes a debug message.
+    if [ -f arch/x86/kernel/cpu/amd.c ]; then
+        sed -i 's/pr_emerg_once("RDSEED32 is broken/pr_debug("RDSEED32 is broken/; s/pr_emerg("RDSEED is not reliable/pr_debug("RDSEED is not reliable/' arch/x86/kernel/cpu/amd.c
+    fi
     kmake KCFLAGS="$KC" -j"${JOBS:-1}" bzImage
     # Thousands of modules: one that fails to build must not lose the rest.
     kmake -k KCFLAGS="$KC" -j"${JOBS:-1}" modules || echo "note: some modules failed to build and are left out" >&2

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn forge(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_forge")).args(args).output().expect("run forge")
+    Command::new(env!("CARGO_BIN_EXE_forge")).args(args).env("FORGE_BASE_PACKAGES", "").output().expect("run forge")
 }
 
 fn text(o: &Output) -> String {

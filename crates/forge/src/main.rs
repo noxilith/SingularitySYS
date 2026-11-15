@@ -724,10 +724,23 @@ fn pkg(action: PkgAction) -> Result<()> {
         Err(_) => read_system_decl(&path)?,
     };
 
+    for name in &args.names {
+        if is_base_name(name) {
+            if adding {
+                ui::info(&format!("{name} is part of the base system: it is always installed"));
+            } else {
+                bail!("{name} is part of the base system, which forge keeps installed: it cannot be removed");
+            }
+        }
+    }
+    let args_names: Vec<String> = args.names.iter().filter(|n| !is_base_name(n)).cloned().collect();
+    if args_names.is_empty() {
+        return Ok(());
+    }
     // All the names are edited into the declaration first, then it is applied once (one generation).
     let verb = if adding { "already in" } else { "not in" };
     let mut edited = forge_decl::Edited { text: text.clone(), changed: false };
-    for name in &args.names {
+    for name in &args_names {
         let e = if adding { forge_decl::add_package(&edited.text, name)? } else { forge_decl::remove_package(&edited.text, name)? };
         if e.changed {
             edited = e;
@@ -738,7 +751,7 @@ fn pkg(action: PkgAction) -> Result<()> {
     if !edited.changed {
         return Ok(());
     }
-    let label = args.names.join(" ");
+    let label = args_names.join(" ");
 
     // For a system package, check that the edited declaration can actually be applied BEFORE writing it:
     // a typo or a package missing from the repositories must not leave a declaration that cannot apply.
@@ -748,6 +761,7 @@ fn pkg(action: PkgAction) -> Result<()> {
             trust: load_trust(args.keys.clone(), args.allow_unsigned, args.root.join("etc/forge/keys"))?,
             fetch: Default::default(),
             adopt: args.adopt,
+            base: base_packages(),
         };
         let decl = SystemDecl::parse(&edited.text).with_context(|| format!("in the edited {}", path.display()))?;
         forge_apply::plan_system(&decl, &args.root, o.clone())
@@ -963,7 +977,7 @@ fn upgrade(a: UpgradeArgs) -> Result<()> {
     let path = a.root.join("etc/forge/system.toml");
     let text = read_system_decl(&path)?;
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
-    if decl.packages.is_empty() {
+    if decl.packages.is_empty() && base_packages().is_empty() {
         ui::info("no packages are installed through forge yet (see: forge install NAME); nothing to upgrade");
         return Ok(());
     }
@@ -987,25 +1001,30 @@ fn list_cmd(a: ListArgs) -> Result<()> {
     let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
     let profile = forge_store::Profile::new(a.root.join("forge/profiles/system"));
     let installed = profile.current_packages().unwrap_or_default();
-    let width = installed.iter().map(|id| id.name().len()).chain(decl.packages.iter().map(|n| n.len())).max().unwrap_or(0);
+    // What you chose; the base system is not listed one by one (it comes with forge).
+    let chosen: Vec<&String> = decl.packages.iter().filter(|n| !is_base_name(n)).collect();
+    let base: Vec<_> = installed.iter().filter(|id| is_base_name(id.name())).collect();
+    let others: Vec<_> = installed.iter().filter(|id| !is_base_name(id.name()) && !chosen.iter().any(|n| n.as_str() == id.name())).collect();
+    let width = installed.iter().map(|id| id.name().len()).chain(chosen.iter().map(|n| n.len())).max().unwrap_or(0);
     let u = ui::ui();
     ui::heading("Installed with forge");
-    if decl.packages.is_empty() {
+    if chosen.is_empty() {
         println!("  (none; try: forge install NAME)");
     }
-    for name in &decl.packages {
-        match installed.iter().find(|id| id.name() == name) {
+    for name in chosen {
+        match installed.iter().find(|id| id.name() == name.as_str()) {
             Some(id) => println!("  {} {name:<width$}  {}", u.on(), id.version()),
             None => println!("  {} {name:<width$}  {}", u.off(), u.dim("declared, not applied yet: run forge upgrade")),
         }
     }
-    let others: Vec<_> = installed.iter().filter(|id| !decl.packages.iter().any(|n| n == id.name())).collect();
     if !others.is_empty() {
         ui::heading(&format!("Pulled in as dependencies ({})", others.len()));
         for id in others {
             println!("  {} {:<width$}  {}", u.dot(), id.name(), u.dim(id.version()));
         }
     }
+    println!();
+    ui::dim(&format!("plus the base system: {} packages, kept installed and upgraded by forge", base.len()));
     Ok(())
 }
 
@@ -1070,6 +1089,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
         trust: load_trust(a.keys, a.allow_unsigned, a.root.join("etc/forge/keys"))?,
         fetch: Default::default(),
         adopt: a.adopt,
+        base: base_packages(),
     };
     let plan = forge_apply::plan_system(&decl, &a.root, opts)?;
 
@@ -1590,7 +1610,7 @@ struct IsoArgs {
     #[arg(long, required = true)]
     repo: Vec<PathBuf>,
     /// Packages in the live system; their dependencies come along
-    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales", "curl", "ca-certificates", "micro"].map(String::from))]
+    #[arg(long = "package", default_values_t = default_iso_packages())]
     packages: Vec<String>,
     #[arg(long, default_value = "glibc")]
     libc: String,
@@ -2040,4 +2060,26 @@ fn system_repos() -> Vec<String> {
         .map(|d| d.repos)
         .filter(|r| !r.is_empty())
         .unwrap_or_else(|| vec![forge_schema::DEFAULT_REPO_URL.to_string()])
+}
+
+/// The base system's packages, as `forge apply` wants them (see `forge_schema::BASE_PACKAGES`).
+/// `FORGE_BASE_PACKAGES` (a comma-separated list, possibly empty) replaces them: for tests and tiny repositories.
+fn base_packages() -> Vec<String> {
+    match std::env::var("FORGE_BASE_PACKAGES") {
+        Ok(list) => list.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect(),
+        Err(_) => forge_schema::BASE_PACKAGES.iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+/// A package of the base system or of an init system: always installed, never removable.
+fn is_base_name(name: &str) -> bool {
+    base_packages().iter().any(|b| b == name) || forge_schema::INIT_SYSTEMS.iter().any(|s| forge_schema::init_packages(s).contains(&name))
+}
+
+/// What `forge iso` puts in the image by default: the kernel, the base system, and OpenRC.
+fn default_iso_packages() -> Vec<String> {
+    let mut v = vec!["linux".to_string()];
+    v.extend(forge_schema::BASE_PACKAGES.iter().map(|s| s.to_string()));
+    v.extend(forge_schema::init_packages("openrc").iter().map(|s| s.to_string()));
+    v
 }

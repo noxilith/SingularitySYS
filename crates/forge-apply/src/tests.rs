@@ -35,7 +35,7 @@ fn trust_of(keys: &[&SecretKey]) -> Trust {
 }
 
 fn opts() -> Options {
-    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false }
+    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false, base: vec![] }
 }
 
 fn plan(d: &SystemDecl, r: &Path) -> Plan {
@@ -181,13 +181,51 @@ fn rejects_unsafe_values() {
 }
 
 #[test]
-fn users_are_pending_not_applied() {
+fn declared_users_are_created_with_their_groups_and_shell() {
     let r = root();
-    let d = decl("[[users]]\nname = \"alice\"\n");
+    let d = decl("[[users]]\nname = \"alice\"\ngroups = [\"wheel\", \"audio\"]\n");
     let p = plan(&d, r.path());
-    assert!(p.pending.iter().any(|x| x.section == "users" && x.summary.contains("alice")));
-    apply(&p).unwrap();
-    assert!(plan(&d, r.path()).is_empty());
+    let users: Vec<_> = p.changes.iter().filter(|c| c.section == "users").map(|c| c.summary.clone()).collect();
+    assert!(users.iter().any(|s| s == "group wheel: create") && users.iter().any(|s| s == "group audio: create"), "{users:?}");
+    assert!(users.iter().any(|s| s.starts_with("user alice: create") && s.contains("sudo passwd alice")), "{users:?}");
+    assert!(p.pending.iter().all(|x| x.section != "users"), "no longer pending");
+}
+
+#[test]
+fn an_existing_user_is_only_adjusted_where_it_differs() {
+    let r = root();
+    fs::write(r.path().join("etc/passwd"), "alice:x:1000:1000::/home/alice:/bin/sh\nroot:x:0:0::/root:/bin/bash\n").unwrap();
+    fs::write(r.path().join("etc/group"), "wheel:x:10:alice\naudio:x:11:\nalice:x:1000:\n").unwrap();
+    let d = decl("[[users]]\nname = \"alice\"\ngroups = [\"wheel\", \"audio\"]\n");
+    let users: Vec<_> = plan(&d, r.path()).changes.iter().filter(|c| c.section == "users").map(|c| c.summary.clone()).collect();
+    assert_eq!(users, ["user alice: shell /bin/sh -> /usr/bin/bash", "user alice: join audio"], "{users:?}");
+    // Already as declared: nothing to do for the user.
+    fs::write(r.path().join("etc/passwd"), "alice:x:1000:1000::/home/alice:/bin/bash\n").unwrap();
+    fs::write(r.path().join("etc/group"), "wheel:x:10:alice\naudio:x:11:alice\n").unwrap();
+    assert!(plan(&d, r.path()).changes.iter().all(|c| c.section != "users"));
+}
+
+#[test]
+fn another_shell_is_installed_and_listed_in_etc_shells() {
+    let r = root();
+    fs::write(r.path().join("etc/shells"), "/bin/sh\n/bin/bash\n").unwrap();
+    fs::write(r.path().join("etc/passwd"), "root:x:0:0::/root:/bin/bash\n").unwrap();
+    publish_all(r.path(), &["fish"]);
+    let d = decl("repos = [\"/srv/repo\"]\nshell = \"fish\"\n");
+    let p = plan(&d, r.path());
+    assert!(p.changes.iter().any(|c| c.section == "packages" && c.summary.starts_with("fish-")), "the shell's package is installed");
+    assert!(p.changes.iter().any(|c| c.section == "shell" && c.summary.contains("/etc/shells")));
+    assert!(p.changes.iter().any(|c| c.section == "users" && c.summary == "user root: shell /bin/bash -> /usr/bin/fish"));
+}
+
+#[test]
+fn the_base_system_is_installed_without_being_declared() {
+    let r = root();
+    publish_all(r.path(), &["basepkg", "a", "openrc"]);
+    let o = Options { base: vec!["basepkg".into()], ..opts() };
+    let p = plan_system(&pkg_decl(&["a"]), r.path(), o).unwrap();
+    let names: Vec<_> = p.changes.iter().filter_map(|c| c.package_id()).map(|id| id.name().to_string()).collect();
+    assert!(names.contains(&"basepkg".to_string()) && names.contains(&"a".to_string()), "{names:?}");
 }
 
 // ---- packages -------------------------------------------------------------
@@ -533,7 +571,7 @@ fn remote_decl(names: &[&str]) -> SystemDecl {
 
 fn remote_opts(r: &Path) -> (Options, Arc<Served>) {
     let served = Arc::new(Served { dir: r.join("srv/repo"), log: Default::default() });
-    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false };
+    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false, base: vec![] };
     (opts, served)
 }
 

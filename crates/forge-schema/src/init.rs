@@ -28,6 +28,21 @@ pub fn foreign_init_packages(system: &str) -> Vec<&'static str> {
     INIT_SYSTEMS.iter().filter(|s| **s != system).flat_map(|s| exclusive_packages(s).iter().copied()).collect()
 }
 
+/// The packages every SingularitySYS system has: forge installs and upgrades them without the declaration naming
+/// them (the declaration lists what *you* chose). The kernel (`linux`, managed with `forge kernel`) and the init
+/// system's packages (see [`init_packages`]) are not in this list.
+pub const BASE_PACKAGES: &[&str] = &[
+    "glibc", "filesystem", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz",
+    "diffutils", "util-linux", "shadow", "sudo", "kmod", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb",
+    "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl",
+    "tzdata", "glibc-locales", "curl", "ca-certificates", "micro",
+];
+
+/// True for a package that is part of the base system (it cannot be removed, and need not be declared).
+pub fn is_base_package(name: &str) -> bool {
+    BASE_PACKAGES.contains(&name) || INIT_SYSTEMS.iter().any(|s| init_packages(s).contains(&name))
+}
+
 /// A file forge owns outside the packages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {

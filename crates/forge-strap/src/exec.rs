@@ -482,21 +482,10 @@ impl Exec<'_> {
                 .or_else(|| detect_libc(&mp))
                 .ok_or(StrapError::UnknownLibc)?;
             let libc = if libc == Libc::Musl { "musl" } else { "glibc" };
-            // The base system is declared in full: every package the live image was built from, so that `forge
-            // apply` and `forge upgrade` keep all of it current (and know nothing is to be removed).
-            let packages = base_packages(&self.req.source)
-                .iter()
-                .map(|p| format!("\"{p}\""))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let mut decl = format!(
-                "hostname = \"{}\"\nlibc = \"{libc}\"\ninit = \"openrc\"\nrepos = [\"{}\"]\npackages = [{packages}]\n",
-                self.req.hostname,
-                forge_schema::DEFAULT_REPO_URL
-            );
+            let mut decl = starter_declaration(&self.req.hostname, libc, forge_schema::DEFAULT_REPO_URL);
             if let Some(u) = &self.req.accounts.user {
                 let groups: Vec<String> = USER_GROUPS.iter().map(|g| format!("\"{g}\"")).collect();
-                decl.push_str(&format!("\n[[users]]\nname = \"{}\"\ngroups = [{}]\n", u.name, groups.join(", ")));
+                decl.push_str(&format!("\n[[users]]\nname   = \"{}\"\ngroups = [{}]\n", u.name, groups.join(", ")));
             }
             SystemDecl::parse(&decl).map_err(|e| StrapError::Invalid {
                 what: "generated system.toml",
@@ -644,40 +633,59 @@ pub fn execute(req: &Request, run: &mut dyn Runner, ui: &mut dyn Ui) -> Result<(
 #[cfg(test)]
 mod tests;
 
-/// Names of the packages the live system was built from (its recorded package generation), except the kernel,
-/// which `forge kernel` manages and `forge apply` must never touch. If the record is missing (a live system not
-/// built by this version), only `forge` itself, so the installed system can fetch the rest.
-pub fn base_packages(source: &Path) -> Vec<String> {
-    let ids = forge_store::Profile::new(source.join("forge/profiles/system")).current_packages().unwrap_or_default();
-    let mut names: Vec<String> = ids.iter().map(|id| id.name().to_string()).filter(|n| n != "linux").collect();
-    names.sort();
-    names.dedup();
-    if names.is_empty() {
-        names.push("forge".to_string());
-    }
-    names
+/// The declaration a new system starts with: every setting people usually want, with a comment for each, an empty
+/// package list (the base system is not listed: forge always installs it), and the repository.
+pub fn starter_declaration(hostname: &str, libc: &str, repo: &str) -> String {
+    format!(
+        "# SingularitySYS system declaration.\n\
+         #\n\
+         # This file describes the whole machine. Edit it with `sudo forge edit` (or press Ctrl+H): when you close the\n\
+         # editor it is checked and applied, and a generation is saved that you can boot from the Limine menu to\n\
+         # roll back. The base system (shell, networking, forge itself, ...) is always installed and is not listed.\n\
+         \n\
+         hostname = \"{hostname}\"\n\
+         libc     = \"{libc}\"\n\
+         \n\
+         # Language and time. Time zones are in /usr/share/zoneinfo (for example \"Europe/Paris\").\n\
+         timezone = \"UTC\"\n\
+         locale   = \"en_US.UTF-8\"\n\
+         keymap   = \"us\"\n\
+         \n\
+         # The init system: \"openrc\" or \"systemd\". Changing it installs the new one and removes the old one;\n\
+         # reboot to start it (the previous generation still boots the old one).\n\
+         init = \"openrc\"\n\
+         \n\
+         # The login shell for root and for users who do not name their own. bash is part of the base system;\n\
+         # anything else (fish, zsh, ...) is installed for you.\n\
+         shell = \"bash\"\n\
+         \n\
+         # Where packages come from.\n\
+         repos = [\"{repo}\"]\n\
+         \n\
+         # The packages you chose: names separated by commas or new lines (or run `sudo forge install NAME`).\n\
+         packages = \"\"\"\n\
+         \"\"\"\n\
+         \n\
+         # Services to start at boot (OpenRC service names, or systemd units), and kernel modules to load.\n\
+         services       = []\n\
+         kernel_modules = []\n"
+    )
 }
 
 #[cfg(test)]
-mod base_packages_tests {
+mod starter_tests {
     use super::*;
-    use std::collections::BTreeSet;
-
-    fn id(name: &str) -> forge_store::StoreId {
-        forge_store::StoreId::new(name, "1.0", &"ab".repeat(32)).unwrap()
-    }
 
     #[test]
-    fn the_declaration_lists_the_live_systems_packages_but_not_the_kernel() {
-        let t = tempfile::tempdir().unwrap();
-        let ids: BTreeSet<_> = ["linux", "glibc", "forge", "coreutils", "glibc"].iter().map(|n| id(n)).collect();
-        forge_store::Profile::new(t.path().join("forge/profiles/system")).record(&ids, 1).unwrap();
-        assert_eq!(base_packages(t.path()), ["coreutils", "forge", "glibc"]);
-    }
-
-    #[test]
-    fn without_a_record_only_forge_is_declared() {
-        let t = tempfile::tempdir().unwrap();
-        assert_eq!(base_packages(t.path()), ["forge"]);
+    fn the_starter_declaration_is_valid_commented_and_lists_no_base_packages() {
+        let text = starter_declaration("nova", "glibc", "https://example.org/repo");
+        let d = SystemDecl::parse(&text).unwrap();
+        assert_eq!((d.hostname.as_str(), d.init.system.as_str(), d.shell.as_str()), ("nova", "openrc", "bash"));
+        assert!(d.packages.is_empty(), "the base system is not declared");
+        assert_eq!(d.repos, ["https://example.org/repo"]);
+        assert!(text.contains("sudo forge edit") && text.contains("timezone") && text.contains("keymap"));
+        // `forge install` edits it in place, keeping the comments and the readable layout.
+        let e = forge_decl::add_package(&text, "htop").unwrap();
+        assert!(e.text.contains("packages = \"\"\"\n  htop,\n\"\"\"") && e.text.contains("# Where packages come from."), "{}", e.text);
     }
 }
