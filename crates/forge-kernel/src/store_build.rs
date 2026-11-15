@@ -48,9 +48,14 @@ fn configure_step(mode: &Mode) -> Result<String, KernelError> {
     let cc = r#"make ARCH=x86_64 CC="gcc -std=gnu11""#;
     Ok(match mode {
         Mode::Full => "sh \"$RECIPE_DIR/full-config.sh\" full".to_string(),
-        Mode::Auto { .. } => format!(
-            "cp \"$RECIPE_DIR/base-config\" .config\n{cc} olddefconfig\n{cc} LSMOD=\"$RECIPE_DIR/lsmod.txt\" localmodconfig\nsh \"$RECIPE_DIR/full-config.sh\" essential\n"
-        ),
+        Mode::Auto { base_config, .. } => {
+            let start = match base_config {
+                Some(_) => format!("cp \"$RECIPE_DIR/base-config\" .config\n{cc} olddefconfig\n"),
+                // No configuration of the running kernel: start from the standard one (every driver a module).
+                None => "sh \"$RECIPE_DIR/full-config.sh\" full\n".to_string(),
+            };
+            format!("{start}{cc} LSMOD=\"$RECIPE_DIR/lsmod.txt\" localmodconfig\nsh \"$RECIPE_DIR/full-config.sh\" essential\n")
+        }
         Mode::File(_) => format!("cp \"$RECIPE_DIR/base-config\" .config\n{cc} olddefconfig\nsh \"$RECIPE_DIR/full-config.sh\" check\n"),
         Mode::Menu { .. } => {
             return Err(KernelError::Invalid(
@@ -82,7 +87,9 @@ pub fn write_recipe(dir: &Path, spec: &StoreBuildSpec) -> Result<(), KernelError
     write(&dir.join("kernel-build.sh"), BUILD_SCRIPT)?;
     match &spec.mode {
         Mode::Auto { base_config, loaded_modules, keep } => {
-            fs::copy(base_config, dir.join("base-config")).map_err(io_ctx(format!("copying {}", base_config.display())))?;
+            if let Some(base) = base_config {
+                fs::copy(base, dir.join("base-config")).map_err(io_ctx(format!("copying {}", base.display())))?;
+            }
             write(&dir.join("lsmod.txt"), &lsmod_file(loaded_modules, keep))?;
         }
         Mode::File(f) | Mode::Menu { base_config: f } => {
@@ -186,7 +193,7 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let base = t.path().join("cfg");
         fs::write(&base, "CONFIG_X=y\n").unwrap();
-        let mode = Mode::Auto { base_config: base, loaded_modules: "e1000e 1 0 - Live 0x0\n".into(), keep: vec!["usb_storage".into()] };
+        let mode = Mode::Auto { base_config: Some(base), loaded_modules: "e1000e 1 0 - Live 0x0\n".into(), keep: vec!["usb_storage".into()] };
         let dir = t.path().join("r");
         write_recipe(&dir, &spec(t.path(), mode)).unwrap();
         let text = fs::read_to_string(dir.join("recipe.toml")).unwrap();
@@ -195,6 +202,18 @@ mod tests {
         assert_eq!(fs::read_to_string(dir.join("base-config")).unwrap(), "CONFIG_X=y\n");
         let lsmod = fs::read_to_string(dir.join("lsmod.txt")).unwrap();
         assert!(lsmod.contains("e1000e 1 0\n") && lsmod.contains("usb_storage 0 0\n"), "{lsmod}");
+    }
+
+    #[test]
+    fn auto_mode_without_a_running_config_starts_from_the_standard_one() {
+        let t = tempfile::tempdir().unwrap();
+        let mode = Mode::Auto { base_config: None, loaded_modules: "e1000e 1 0 - Live 0x0\n".into(), keep: vec![] };
+        let dir = t.path().join("r");
+        write_recipe(&dir, &spec(t.path(), mode)).unwrap();
+        let text = fs::read_to_string(dir.join("recipe.toml")).unwrap();
+        assert!(forge_schema::Recipe::parse(&text).is_ok());
+        assert!(text.contains("full-config.sh\" full") && text.contains("localmodconfig"), "{text}");
+        assert!(!text.contains("base-config") && !dir.join("base-config").exists());
     }
 
     #[test]

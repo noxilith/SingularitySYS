@@ -1594,7 +1594,16 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             bail!("no modules are loaded, so there is nothing to base a trimmed kernel on; use --full or --menuconfig");
         }
         forge_kernel::Mode::Auto {
-            base_config: match b.base_config { Some(c) => c, None => running_config(&work)? },
+            base_config: match b.base_config {
+                Some(c) => Some(c),
+                None => match running_config(&work) {
+                    Ok(c) => Some(c),
+                    Err(_) => {
+                        eprintln!("the running kernel does not expose its configuration: starting from Singularity's standard kernel configuration");
+                        None
+                    }
+                },
+            },
             loaded_modules: loaded,
             keep: b.also_keep,
         }

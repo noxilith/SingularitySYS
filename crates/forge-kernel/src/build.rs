@@ -13,7 +13,7 @@ pub enum Mode {
     Full,
     /// Start from a known-good configuration (normally the running kernel's) and drop every module that
     /// is not loaded right now. `keep` names modules to keep anyway (hardware not plugged in at the moment).
-    Auto { base_config: PathBuf, loaded_modules: String, keep: Vec<String> },
+    Auto { base_config: Option<PathBuf>, loaded_modules: String, keep: Vec<String> },
     /// Start from `base_config`, then you choose in `make menuconfig`.
     Menu { base_config: PathBuf },
     /// Use this configuration as given (only checked).
@@ -110,8 +110,14 @@ pub fn build(spec: &BuildSpec, runner: &mut dyn Runner) -> Result<Staged, Kernel
     match &spec.mode {
         Mode::Full => runner.run(&run_script("full"))?,
         Mode::Auto { base_config, loaded_modules, keep } => {
-            fs::copy(base_config, tree.join(".config")).map_err(io_ctx(format!("copying {}", base_config.display())))?;
-            runner.run(&kmake(spec, &tree, &["olddefconfig"]))?;
+            match base_config {
+                Some(base) => {
+                    fs::copy(base, tree.join(".config")).map_err(io_ctx(format!("copying {}", base.display())))?;
+                    runner.run(&kmake(spec, &tree, &["olddefconfig"]))?;
+                }
+                // No configuration of the running kernel: start from the standard one (every driver as a module).
+                None => runner.run(&run_script("full"))?,
+            }
             let lsmod = spec.work.join("lsmod.txt");
             write(&lsmod, &lsmod_file(loaded_modules, keep))?;
             runner.run(&kmake(spec, &tree, &[&format!("LSMOD={}", lsmod.display()), "localmodconfig"]))?;
@@ -252,7 +258,7 @@ mod tests {
         let base = t.path().join("base-config");
         fs::write(&base, "CONFIG_BASE=y\n").unwrap();
         let mode = Mode::Auto {
-            base_config: base,
+            base_config: Some(base),
             loaded_modules: "e1000e 311296 0 - Live 0x0\nsnd 1 2 - Live 0x1\n".into(),
             keep: vec!["usb_storage".into()],
         };
