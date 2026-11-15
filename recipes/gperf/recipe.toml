@@ -1,0 +1,23 @@
+# GNU gperf: perfect hash function generator. A build tool (systemd generates its lookup tables with it).
+name        = "gperf"
+version     = "3.3"
+description = "GNU perfect hash function generator"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://mirrors.kernel.org/gnu/gperf/gperf-3.3.tar.gz"
+sha256 = "fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8"
+
+[build]
+configure = "./configure --prefix=/usr --disable-dependency-tracking CFLAGS='-O2' CXXFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man"
+strip "$DESTDIR/usr/bin/gperf"
+test -x "$DESTDIR/usr/bin/gperf"
+'''

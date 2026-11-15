@@ -1,0 +1,61 @@
+# The D-Bus message bus: systemd's tools (loginctl, timedatectl, hostnamectl, ...) and most desktop software talk
+# to it. Built without systemd support so that the two are not circular; systemd finds the bus at run time.
+name        = "dbus"
+version     = "1.16.2_r3"
+description = "D-Bus message bus system"
+license     = "AFL-2.1 OR GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "expat"]
+
+[[source]]
+url    = "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz"
+sha256 = "0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2"
+
+[build]
+configure = '''
+CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=lib --bindir=bin --sbindir=sbin \
+    --buildtype=release -Dsystemd=disabled -Dselinux=disabled -Dapparmor=disabled -Dlibaudit=disabled \
+    -Dx11_autolaunch=disabled -Dxml_docs=disabled -Ddoxygen_docs=disabled -Dducktype_docs=disabled \
+    -Dqt_help=disabled -Dmodular_tests=disabled -Dasserts=false -Druntime_dir=/run
+'''
+compile = "meson compile -C build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/run" "$DESTDIR/var/run"
+# Units, the bus user and the runtime directories for systemd (dbus is built without systemd support, so its
+# build installs none of them).
+mkdir -p "$DESTDIR/usr/lib/systemd/system" "$DESTDIR/usr/lib/sysusers.d" "$DESTDIR/usr/lib/tmpfiles.d"
+cat > "$DESTDIR/usr/lib/systemd/system/dbus.socket" <<'UNIT'
+[Unit]
+Description=D-Bus System Message Bus Socket
+Documentation=man:dbus-daemon(1)
+
+[Socket]
+ListenStream=/run/dbus/system_bus_socket
+
+[Install]
+WantedBy=sockets.target
+UNIT
+cat > "$DESTDIR/usr/lib/systemd/system/dbus.service" <<'UNIT'
+[Unit]
+Description=D-Bus System Message Bus
+Documentation=man:dbus-daemon(1)
+Requires=dbus.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+ExecReload=/usr/bin/dbus-send --print-reply --system --type=method_call --dest=org.freedesktop.DBus / org.freedesktop.DBus.ReloadConfig
+OOMScoreAdjust=-900
+
+[Install]
+WantedBy=multi-user.target
+Alias=messagebus.service
+UNIT
+printf 'u messagebus 81 "System Message Bus"\n' > "$DESTDIR/usr/lib/sysusers.d/dbus.conf"
+printf 'd /run/dbus 0755 root root -\nd /var/lib/dbus 0755 root root -\nL /var/lib/dbus/machine-id - - - - /etc/machine-id\n' > "$DESTDIR/usr/lib/tmpfiles.d/dbus.conf"
+test -f "$DESTDIR/usr/lib/libdbus-1.so.3"
+test -x "$DESTDIR/usr/bin/dbus-daemon"
+'''

@@ -3,7 +3,7 @@
 # aliases), and the real modprobe handles aliases, blacklists and options properly. Its links replace
 # the BusyBox applets of the same names where both are present.
 name        = "kmod"
-version     = "34.3"
+version     = "34.3_r1"
 description = "Linux kernel module tools (depmod, modprobe, modinfo, ...)"
 license     = "GPL-2.0-or-later AND LGPL-2.1-or-later"
 libc        = ["glibc"]
@@ -27,10 +27,12 @@ install = '''
 # The install hook makes the tool links with GNU `ln --relative`, which BusyBox's ln lacks: let that last
 # step fail, then make the same links here and check the binary really was installed.
 make install DESTDIR=$DESTDIR || true
+make install-data DESTDIR=$DESTDIR
 test -x "$DESTDIR/usr/bin/kmod"
 mkdir -p "$DESTDIR/usr/sbin"
 for t in insmod lsmod rmmod depmod modprobe modinfo; do ln -sf ../bin/kmod "$DESTDIR/usr/sbin/$t"; done
-rm -rf "$DESTDIR/usr/share"
+[ -d "$DESTDIR/usr/share" ] && find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name pkgconfig -exec rm -rf {} + || true
+test -f "$DESTDIR/usr/lib/pkgconfig/libkmod.pc"
 rm -f "$DESTDIR"/usr/lib/*.la
 strip "$DESTDIR/usr/bin/kmod"
 for t in depmod modprobe modinfo insmod rmmod lsmod; do

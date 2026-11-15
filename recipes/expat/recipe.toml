@@ -1,0 +1,23 @@
+# expat XML parser (dbus needs it).
+name        = "expat"
+version     = "2.10.0"
+description = "Stream-oriented XML parser library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.gz"
+sha256 = "5466a341f9c692ef7a958a6881311be597f8e1ce345984cf78414f54793dea4c"
+
+[build]
+configure = "./configure --prefix=/usr --without-docbook --without-examples --without-tests --disable-static --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/libexpat.la" "$DESTDIR/usr/lib/cmake"
+strip "$DESTDIR/usr/bin/xmlwf"
+test -f "$DESTDIR/usr/lib/libexpat.so.1"
+'''

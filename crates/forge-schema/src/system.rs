@@ -46,6 +46,23 @@ fn default_init() -> String {
     "openrc".into()
 }
 
+/// The init systems forge knows how to set up.
+pub const INIT_SYSTEMS: &[&str] = &["openrc", "systemd"];
+
+/// `init = "systemd"` (just the name) or the `[init]` table with `system` and `services`.
+fn de_init<'de, D: serde::Deserializer<'de>>(d: D) -> Result<InitSection, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Either {
+        Name(String),
+        Table(InitSection),
+    }
+    Ok(match Either::deserialize(d)? {
+        Either::Name(system) => InitSection { system, services: Vec::new() },
+        Either::Table(t) => t,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserAccount {
     pub name: String,
@@ -71,8 +88,11 @@ pub struct SystemDecl {
     pub locale: String,
     #[serde(default = "default_keymap")]
     pub keymap: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_init")]
     pub init: InitSection,
+    /// Services to enable under the init system (shorthand for `[init] services`).
+    #[serde(default)]
+    pub services: Vec<String>,
     #[serde(default)]
     pub users: Vec<UserAccount>,
     #[serde(default)]
@@ -97,7 +117,13 @@ fn default_keymap() -> String {
 
 impl SystemDecl {
     pub fn parse(text: &str) -> Result<Self, SchemaError> {
-        let decl: Self = toml::from_str(text)?;
+        let mut decl: Self = toml::from_str(text)?;
+        let extra = std::mem::take(&mut decl.services);
+        for s in extra {
+            if !decl.init.services.contains(&s) {
+                decl.init.services.push(s);
+            }
+        }
         decl.validate()?;
         Ok(decl)
     }
@@ -105,6 +131,9 @@ impl SystemDecl {
     pub fn validate(&self) -> Result<(), SchemaError> {
         if self.hostname.is_empty() {
             return Err(SchemaError::Invalid("hostname must not be empty".into()));
+        }
+        if !INIT_SYSTEMS.contains(&self.init.system.as_str()) {
+            return Err(SchemaError::Invalid(format!("unknown init system `{}` (supported: {})", self.init.system, INIT_SYSTEMS.join(", "))));
         }
         let mut seen = std::collections::BTreeSet::new();
         for p in &self.packages {
@@ -171,6 +200,26 @@ mod tests {
         assert!(SystemDecl::parse("hostname = \"x\"\nlibc = \"musl\"\n").unwrap().repos.is_empty());
     }
 
+
+    #[test]
+    fn init_can_be_just_a_name() {
+        let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\ninit = \"systemd\"\nservices = [\"sshd\"]\n").unwrap();
+        assert_eq!(d.init.system, "systemd");
+        assert_eq!(d.init.services, ["sshd"]);
+    }
+
+    #[test]
+    fn init_table_form_still_works() {
+        let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\n[init]\nsystem = \"openrc\"\nservices = [\"sshd\"]\n").unwrap();
+        assert_eq!(d.init.system, "openrc");
+        assert_eq!(d.init.services, ["sshd"]);
+    }
+
+    #[test]
+    fn unknown_init_system_is_rejected() {
+        let err = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\ninit = \"runit\"\n").unwrap_err().to_string();
+        assert!(err.contains("runit") && err.contains("systemd"), "{err}");
+    }
     #[test]
     fn user_decl_defaults_empty() {
         assert!(UserDecl::parse("").unwrap().packages.is_empty());

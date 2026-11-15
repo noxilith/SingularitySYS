@@ -1,0 +1,49 @@
+# systemd 262: the alternative init system (`init = "systemd"` in system.toml). Built without PAM, seccomp, ACLs,
+# audit, SELinux, EFI/boot tools and the optional network/container services; with the core manager, journald, udev,
+# logind, networkd, resolved, timesyncd, tmpfiles/sysusers and the command-line tools. The `init`, `reboot`,
+# `poweroff`, `halt` and `shutdown` links are NOT installed by this package: forge apply owns them (it switches
+# them together with the init system), so they can never clash with OpenRC's.
+name        = "systemd"
+version     = "262.2"
+description = "systemd system and service manager (with udev)"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson",
+         "gperf", "python-jinja2", "python-markupsafe", "util-linux", "libcap", "kmod", "libxcrypt", "dbus",
+         "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils"]
+run   = ["util-linux", "kmod", "dbus"]
+
+[[source]]
+url    = "https://github.com/systemd/systemd/archive/refs/tags/v262.2.tar.gz"
+sha256 = "116432ee9dce9bfef4c7da7963c6de41899ab44197f2876ee99545707a5c7c1f"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=lib --bindir=bin --sbindir=sbin \
+    --buildtype=release -Dmode=release -Dauto_features=disabled \
+    -Dlibc=glibc -Dsplit-bin=false -Dtests=false -Dman=disabled -Dhtml=disabled -Dtranslations=false \
+    -Dlibmount=enabled -Dkmod=enabled -Dblkid=enabled -Dlibcrypt=enabled -Ddbus=enabled \
+    -Dpam=disabled -Dseccomp=disabled -Dacl=disabled -Daudit=disabled -Dselinux=disabled -Dapparmor=disabled \
+    -Defi=false -Dbootloader=disabled -Dbpf-framework=disabled -Dtpm2=disabled -Dukify=disabled \
+    -Dcreate-log-dirs=false -Dfirstboot=false -Dhomed=disabled -Dmachined=false -Dportabled=false -Dsysext=false \
+    -Dimportd=disabled -Dremote=disabled -Dcoredump=false -Doomd=false -Dvconsole=false -Dldconfig=false \
+    -Dkernel-install=false -Dnss-myhostname=false -Dnss-systemd=false -Dnss-resolve=disabled -Dnss-mymachines=disabled \
+    -Dagetty-path=/usr/sbin/agetty -Dmount-path=/usr/bin/mount -Dumount-path=/usr/bin/umount \
+    -Dkmod-path=/usr/bin/kmod -Dnologin-path=/usr/sbin/nologin -Dswapon-path=/usr/sbin/swapon -Dswapoff-path=/usr/sbin/swapoff \
+    -Ddefault-dnssec=no -Dfallback-hostname=singularity
+'''
+compile = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+cd "$DESTDIR"
+# forge apply owns these (see the recipe header).
+rm -f usr/sbin/init usr/sbin/reboot usr/sbin/poweroff usr/sbin/halt usr/sbin/shutdown usr/sbin/telinit usr/sbin/runlevel
+rm -rf usr/share/doc usr/share/man usr/share/locale usr/share/bash-completion usr/share/zsh var run
+find . -name '*.a' -delete
+test -x usr/lib/systemd/systemd
+test -x usr/bin/systemctl
+'''
