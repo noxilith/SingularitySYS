@@ -857,3 +857,23 @@ BusyBox remains in two places, both *build* tools and neither part of a system: 
 initramfs is made of (`forge iso` fetches it on its own, it is not put in the image), and the build sandbox's userland
 (every recipe names `busybox` as a build dependency). Moving the sandbox to GNU tools is a later step (it means
 rebuilding the toolchain's world with them). The power commands' last resort is the kernel's sysrq, not BusyBox.
+
+## Everything through forge: managed files, boot loader, signing keys (implemented; untested on hardware)
+
+What used to exist only in the image now follows `forge upgrade`:
+
+- **Managed files** (`forge_schema::managed`, shared by the image builder and `forge apply`): the network and driver
+  services and their watcher, the `wifi` command, `/etc/inputrc`, the watchdog blacklist, the shell environment
+  (`/etc/profile.d/forge.sh`) and the OpenRC runlevels. They live in the forge package, so a fix ships with a new forge
+  and the next apply rewrites the copies on disk. Programs and services are always rewritten; starting points you may
+  edit (`/etc/conf.d/network`, `wpa_supplicant.conf`, the terminal settings) are only created when missing. Baseline
+  runlevel links are put back if missing (add services of your own freely; the baseline is part of the system).
+  `forge doctor` reports files that are out of date.
+- **The boot loader**: `forge strap` records how Limine was installed in `/etc/forge/boot.toml`; when the `limine`
+  package changes, apply copies the new `BOOTX64.EFI` (or `limine-bios.sys` and rewrites the BIOS boot sector with
+  `limine bios-install`) so the boot partition does not stay at the installed version.
+- **Signing keys**: an index may announce public keys (`trust`); a system that verified the index with a key it already
+  trusts adds them to `/etc/forge/keys`. To rotate: publish once signed with the old key announcing the new one
+  (`NEXT_KEYS=new.pub scripts/publish-release.sh`), wait until systems have updated, then sign with the new key.
+  Announced keys from an unsigned or untrusted repository are never looked at.
+- **The kernel** stays `forge kernel` (built on the machine); there is deliberately no prebuilt kernel package to apply.

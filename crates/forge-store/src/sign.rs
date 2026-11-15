@@ -204,6 +204,11 @@ pub fn load_secret_key(path: &Path) -> Result<SecretKey, StoreError> {
     Ok(key)
 }
 
+/// The contents of a `<name>.pub` file for `key` (what `forge key trust` and the keyring directory hold).
+pub fn public_key_file_text(key: &PublicKey) -> String {
+    toml::to_string(&PubFile { version: 1, public_key: key.to_hex() }).expect("serializes")
+}
+
 pub fn load_public_key(path: &Path) -> Result<PublicKey, StoreError> {
     let text = fs::read_to_string(path).map_err(io_ctx(format!("reading {}", path.display())))?;
     let file: PubFile = toml::from_str(&text).map_err(|e| bad("public key file", format!("{}: {e}", path.display())))?;

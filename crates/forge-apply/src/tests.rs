@@ -817,3 +817,41 @@ fn the_limine_files_on_the_boot_partition_follow_the_package() {
     let q = plan(&pkg_decl(&[]), r.path());
     assert!(q.changes.iter().all(|c| c.section != "boot"));
 }
+
+// ---- moving to a new signing key ------------------------------------------------------
+
+#[test]
+fn a_new_signing_key_announced_by_the_current_one_is_trusted_from_then_on() {
+    let r = root();
+    let old = test_key();
+    let new = SecretKey::from_seed([42; 32]);
+    publish_as(r.path(), "a", Some(&old));
+    let repo = LocalRepo::new(r.path().join("srv/repo"));
+    repo.sign_announcing(&old, 0, &[new.public()]).unwrap();
+    let keys = r.path().join("etc/forge/keys");
+    fs::create_dir_all(&keys).unwrap();
+    fs::write(keys.join("old.pub"), forge_store::public_key_file_text(&old.public())).unwrap();
+    let d = pkg_decl(&["a"]);
+    let mut o = opts();
+    o.trust = Trust::Require(Keyring::load_dir(&keys).unwrap());
+    let p = plan_system(&d, r.path(), o).unwrap();
+    assert!(p.changes.iter().any(|c| c.section == "keys" && c.summary.contains(&new.public().id())), "{:?}", p.changes);
+    apply(&p).unwrap();
+    let ring = Keyring::load_dir(&keys).unwrap();
+    assert!(ring.ids().contains(&new.public().id()), "the announced key is in the keyring now");
+
+    // The repository can now be signed by the new key alone, and the system still trusts it.
+    repo.sign(&new).unwrap();
+    let loaded = repo.load(&Trust::Require(ring)).unwrap();
+    assert_eq!(loaded.signed_by, Some(new.public().id()));
+}
+
+#[test]
+fn keys_announced_by_an_unsigned_repository_are_ignored() {
+    let r = root();
+    let stranger = SecretKey::from_seed([77; 32]);
+    publish_as(r.path(), "a", None);
+    LocalRepo::new(r.path().join("srv/repo")).sign_announcing(&stranger, 0, &[SecretKey::from_seed([5; 32]).public()]).unwrap();
+    // Signed by a key nobody trusts: refused outright, so nothing it announces can matter.
+    assert!(plan_system(&pkg_decl(&["a"]), r.path(), opts()).is_err());
+}

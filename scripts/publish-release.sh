@@ -45,6 +45,9 @@ min_serial=$(( ${live:-0} + 1 ))
 echo "published serial is ${live:-none}; the new one will be at least $min_serial"
 from=()
 for s in $SOURCES; do from+=(--from "$s"); done
+# Moving to a new signing key: NEXT_KEYS="path/new.pub" announces it in this release (signed with the current key), so
+# installed systems start trusting it; sign with the new key in the release after that.
+for k in ${NEXT_KEYS:-}; do from+=(--trust-key "$k"); done
 "$FORGE" repo assemble "$DEST" "${from[@]}" --key "$RELEASE_KEY" --min-serial "$min_serial" 2>&1 | grep -v 'no version information available'
 
 # Never publish something the project's own public key would not accept.

@@ -1532,6 +1532,10 @@ enum RepoAction {
         /// Leave out packages whose name contains this (default: -stage, the bootstrap steps)
         #[arg(long, default_value = "-stage")]
         skip: Vec<String>,
+        /// A public key (`.pub` file) to announce: systems that trust KEY will trust it too, so the repository can move to
+        /// a new signing key (publish with the old key announcing the new one; sign with the new key afterwards)
+        #[arg(long = "trust-key")]
+        trust_key: Vec<PathBuf>,
     },
     /// Check a repository's signature against the trusted keys
     Verify {
@@ -1550,7 +1554,7 @@ fn repo_cmd(a: RepoArgs) -> Result<()> {
             repo_handle.sign(&signer)?;
             println!("signed {} with key {}", repo.display(), signer.public().id());
         }
-        RepoAction::Assemble { dest, from, key, skip, min_serial } => {
+        RepoAction::Assemble { dest, from, key, skip, min_serial, trust_key } => {
             if dest.exists() {
                 bail!("{} already exists; remove it or choose another name", dest.display());
             }
@@ -1583,7 +1587,8 @@ fn repo_cmd(a: RepoArgs) -> Result<()> {
                 target.publish(path, Some(&signer)).with_context(|| format!("adding {} {}", e.name, e.version))?;
                 println!("  {} {}", e.name, e.version);
             }
-            target.sign_at_least(&signer, min_serial)?;
+            let announced: Vec<forge_store::PublicKey> = trust_key.iter().map(|f| forge_store::load_public_key(f)).collect::<Result<_, _>>()?;
+            target.sign_announcing(&signer, min_serial, &announced)?;
             // Run-time dependencies are exact builds: every one must have come along.
             let index = target.load(&forge_store::Trust::AllowUnsigned)?.index;
             let mut missing = Vec::new();

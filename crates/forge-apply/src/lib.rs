@@ -521,6 +521,28 @@ fn profile_env() -> String {
     forge_schema::profile_script()
 }
 
+/// Keys a repository announces (its `trust` list) are trusted from now on: the index was verified with a key already
+/// in the keyring, so what it vouches for is vouched for by a key we trust. This is how the project moves to a new
+/// signing key without reinstalling anyone.
+fn announce_keys(p: &mut Planner, root: &Path, announced: &[String]) {
+    let dir = under(root, "/etc/forge/keys");
+    let known: BTreeSet<String> = forge_store::Keyring::load_dir(&dir).map(|k| k.ids().into_iter().collect()).unwrap_or_default();
+    for hex in announced {
+        let Ok(key) = forge_store::PublicKey::from_hex(hex) else { continue };
+        let id = key.id();
+        let summary = format!("/etc/forge/keys/{id}.pub (a new signing key, announced by the repository's current key)");
+        if known.contains(&id) || p.changes.iter().any(|c| c.summary == summary) {
+            continue;
+        }
+        p.changes.push(Change {
+            section: "keys",
+            kind: Kind::Add,
+            summary,
+            op: Op::WriteFile { path: dir.join(format!("{id}.pub")), content: forge_store::public_key_file_text(&key), mode: 0o644 },
+        });
+    }
+}
+
 /// The packages to have installed: the declared ones, without the other init systems' packages, plus the chosen
 /// init system's own. (A declaration that lists no packages and keeps OpenRC asks for nothing: the image already has it.)
 fn effective_packages(decl: &SystemDecl, switched_before: bool, base: &[String]) -> Vec<String> {
@@ -584,6 +606,7 @@ fn plan_packages(
                     }));
                 }
                 new_serials.insert(r.clone(), seen.max(loaded.index.serial));
+                announce_keys(p, root, &loaded.index.trust);
             }
             repos.push((repo, loaded.index));
         }
