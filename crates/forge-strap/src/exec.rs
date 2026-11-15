@@ -663,7 +663,12 @@ pub fn starter_declaration(hostname: &str, libc: &str, repo: &str) -> String {
          repos = [\"{repo}\"]\n\
          \n\
          # The packages you chose: names separated by commas or new lines (or run `sudo forge install NAME`).\n\
+         # Lines starting with # are notes: remove the # in front of an example to install it, then save and close.\n\
+         # `forge search` lists what the repository has.\n\
          packages = \"\"\"\n\
+         \x20 # python,    # the Python interpreter\n\
+         \x20 # gcc, make, # a C compiler and make\n\
+         \x20 # bc,        # a calculator\n\
          \"\"\"\n\
          \n\
          # Services to start at boot (OpenRC service names, or systemd units), and kernel modules to load.\n\
@@ -686,6 +691,7 @@ mod starter_tests {
         assert!(text.contains("sudo forge edit") && text.contains("timezone") && text.contains("keymap"));
         // `forge install` edits it in place, keeping the comments and the readable layout.
         let e = forge_decl::add_package(&text, "htop").unwrap();
-        assert!(e.text.contains("packages = \"\"\"\n  htop,\n\"\"\"") && e.text.contains("# Where packages come from."), "{}", e.text);
+        assert!(e.text.contains("  # python,") && e.text.contains("  htop,\n\"\"\"") && e.text.contains("# Where packages come from."), "{}", e.text);
+        assert_eq!(SystemDecl::parse(&e.text).unwrap().packages, ["htop"], "the examples are comments, not packages");
     }
 }

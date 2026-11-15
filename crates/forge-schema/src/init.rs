@@ -54,9 +54,11 @@ pub enum Entry {
 
 /// `reboot`, `halt` and `poweroff` for either init system. Which init is *running* decides (systemd announces itself
 /// with /run/systemd/system), not which one is configured: a machine switched to systemd is still running OpenRC until
-/// its next boot and must be able to reboot into the change.
+/// its next boot and must be able to reboot into the change. By then OpenRC's own tools are gone (the package was
+/// removed), so when `openrc-shutdown` is missing the running openrc-init is asked directly, through its control
+/// FIFO (which is all `openrc-shutdown` does), and as a last resort BusyBox forces it.
 pub fn power_script(action: &str) -> String {
-    let (systemctl, openrc) = match action {
+    let (word, flag) = match action {
         "reboot" => ("reboot", "-r"),
         "halt" => ("halt", "-H"),
         _ => ("poweroff", "-p"),
@@ -64,14 +66,22 @@ pub fn power_script(action: &str) -> String {
     format!(
         "#!/bin/sh\n\
          if [ -d /run/systemd/system ]; then\n\
-         \texec /usr/bin/systemctl {systemctl} \"$@\"\n\
+         \texec /usr/bin/systemctl {word} \"$@\"\n\
          fi\n\
-         exec /usr/sbin/openrc-shutdown {openrc} now\n"
+         if [ -x /usr/sbin/openrc-shutdown ]; then\n\
+         \texec /usr/sbin/openrc-shutdown {flag} now\n\
+         fi\n\
+         sync\n\
+         if [ -p /run/openrc/init.ctl ]; then\n\
+         \techo {word} > /run/openrc/init.ctl\n\
+         \texit 0\n\
+         fi\n\
+         exec /usr/bin/busybox {word} -f\n"
     )
 }
 
 /// `shutdown [-h|-P|-p|-H|-r] [now|+minutes]`: power off by default; `-r` reboots, `-H` halts. A thin front end for
-/// `systemctl` or `openrc-shutdown` (which takes the time as a required argument), whichever init is running.
+/// `systemctl`, `openrc-shutdown` (which takes the time as a required argument), or the running init directly.
 pub const SHUTDOWN_SCRIPT: &str = r#"#!/bin/sh
 flag=-p
 when=now
@@ -88,7 +98,15 @@ done
 if [ -d /run/systemd/system ]; then
     exec /usr/bin/systemctl $action
 fi
-exec /usr/sbin/openrc-shutdown $flag $when
+if [ -x /usr/sbin/openrc-shutdown ]; then
+    exec /usr/sbin/openrc-shutdown $flag $when
+fi
+sync
+if [ -p /run/openrc/init.ctl ]; then
+    echo $action > /run/openrc/init.ctl
+    exit 0
+fi
+exec /usr/bin/busybox $action -f
 "#;
 
 /// The power commands as (name, script).
@@ -195,6 +213,18 @@ mod tests {
         assert!(plumbing("systemd").iter().any(|(p, e)| *p == "/usr/sbin/init" && *e == Entry::Link("../lib/systemd/systemd".into())));
     }
 
+
+    #[test]
+    fn the_power_scripts_are_valid_shell_and_do_not_need_openrcs_tools() {
+        use std::io::Write;
+        for (name, script) in power_commands() {
+            let mut sh = std::process::Command::new("sh").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
+            sh.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+            assert!(sh.wait().unwrap().success(), "{name} is not valid shell:\n{script}");
+            // With openrc-shutdown gone (OpenRC removed, still running) they talk to the running init.
+            assert!(script.contains("/run/openrc/init.ctl") && script.contains("busybox"), "{name}:\n{script}");
+        }
+    }
     #[test]
     fn unit_names() {
         assert_eq!(systemd_unit("sshd"), "sshd.service");

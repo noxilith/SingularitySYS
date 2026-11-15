@@ -40,12 +40,15 @@ fn packages_mut(doc: &mut DocumentMut) -> Result<&mut Array, EditError> {
     Ok(arr)
 }
 
-/// Names in a `packages = """ ... """` text: separated by commas and/or white space.
+/// Names in a `packages = """ ... """` text: separated by commas and/or white space; a `#` starts a comment
+/// that runs to the end of the line (so the block can carry examples and notes).
 pub fn names_in_text(text: &str) -> Vec<String> {
-    text.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(String::from).collect()
+    text.lines()
+        .flat_map(|l| l.split('#').next().unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(String::from).collect::<Vec<_>>())
+        .collect()
 }
 
-/// The multi-line string form of a package list, one name per line, as forge writes it:
+/// A `packages` text value with these lines, printed as a multi-line string:
 ///
 /// ```toml
 /// packages = """
@@ -53,20 +56,21 @@ pub fn names_in_text(text: &str) -> Vec<String> {
 ///   htop,
 /// """
 /// ```
-pub fn text_repr(names: &[String]) -> String {
+fn text_repr(lines: &[String]) -> String {
     let mut s = String::from("\"\"\"\n");
-    for n in names {
-        s.push_str(&format!("  {n},\n"));
+    for l in lines {
+        s.push_str(l);
+        s.push('\n');
     }
     s.push_str("\"\"\"");
     s
 }
 
-/// `packages` as a text value: replace it with `names`, keeping the comment after it.
-fn set_text(doc: &mut DocumentMut, names: &[String]) {
+/// `packages` as a text value made of `lines`, keeping the comment after it on the `packages` line.
+fn set_text(doc: &mut DocumentMut, lines: &[String]) {
     let decor = doc.get("packages").and_then(|i| i.as_value()).map(|v| v.decor().clone());
     // Parsing the wanted text gives a value that prints exactly like that (the repr cannot be set directly).
-    let fresh: DocumentMut = format!("packages = {}\n", text_repr(names)).parse().expect("the generated text is valid TOML");
+    let fresh: DocumentMut = format!("packages = {}\n", text_repr(lines)).parse().expect("the generated text is valid TOML");
     let mut value = fresh["packages"].as_value().expect("a value").clone();
     if let Some(d) = decor {
         *value.decor_mut() = d;
@@ -78,22 +82,23 @@ fn is_text(doc: &DocumentMut) -> bool {
     doc.get("packages").and_then(|i| i.as_value()).is_some_and(|v| v.is_str())
 }
 
-fn current_text_names(doc: &DocumentMut) -> Vec<String> {
-    doc.get("packages").and_then(|i| i.as_str()).map(names_in_text).unwrap_or_default()
+/// The lines of the text form, comments and all.
+fn text_lines(doc: &DocumentMut) -> Vec<String> {
+    doc.get("packages").and_then(|i| i.as_str()).map(|s| s.lines().map(String::from).collect()).unwrap_or_default()
 }
 
-/// Add `name` to `packages` (no-op if already present).
+/// Add `name` to `packages` (no-op if already present). In the text form the new name goes on its own line at the end;
+/// every other line, comments included, stays as it is.
 pub fn add_package(text: &str, name: &str) -> Result<Edited, EditError> {
     check_name(name)?;
     let mut doc: DocumentMut = text.parse()?;
     if is_text(&doc) {
-        let mut names = current_text_names(&doc);
-        if names.iter().any(|n| n == name) {
+        let mut lines = text_lines(&doc);
+        if names_in_text(&lines.join("\n")).iter().any(|n| n == name) {
             return Ok(Edited { text: text.to_string(), changed: false });
         }
-        names.push(name.to_string());
-        names.sort();
-        set_text(&mut doc, &names);
+        lines.push(format!("  {name},"));
+        set_text(&mut doc, &lines);
         return Ok(Edited { text: doc.to_string(), changed: true });
     }
     let arr = packages_mut(&mut doc)?;
@@ -104,7 +109,8 @@ pub fn add_package(text: &str, name: &str) -> Result<Edited, EditError> {
     Ok(Edited { text: doc.to_string(), changed: true })
 }
 
-/// Remove `name` from `packages` (no-op if absent).
+/// Remove `name` from `packages` (no-op if absent). In the text form its line goes (or just the name, when the line
+/// lists several); comment lines stay.
 pub fn remove_package(text: &str, name: &str) -> Result<Edited, EditError> {
     check_name(name)?;
     let mut doc: DocumentMut = text.parse()?;
@@ -112,12 +118,29 @@ pub fn remove_package(text: &str, name: &str) -> Result<Edited, EditError> {
         return Ok(Edited { text: text.to_string(), changed: false });
     }
     if is_text(&doc) {
-        let mut names = current_text_names(&doc);
-        let Some(idx) = names.iter().position(|n| n == name) else {
+        let lines = text_lines(&doc);
+        if !names_in_text(&lines.join("\n")).iter().any(|n| n == name) {
             return Ok(Edited { text: text.to_string(), changed: false });
-        };
-        names.remove(idx);
-        set_text(&mut doc, &names);
+        }
+        let mut out = Vec::new();
+        for l in lines {
+            let (code, comment) = match l.find('#') {
+                Some(i) => (&l[..i], &l[i..]),
+                None => (l.as_str(), ""),
+            };
+            let names = names_in_text(code);
+            if !names.iter().any(|n| n == name) {
+                out.push(l);
+                continue;
+            }
+            let rest: Vec<String> = names.into_iter().filter(|n| n != name).collect();
+            if rest.is_empty() {
+                continue;
+            }
+            let tail = if comment.is_empty() { String::new() } else { format!("  {comment}") };
+            out.push(format!("  {},{tail}", rest.join(", ")));
+        }
+        set_text(&mut doc, &out);
         return Ok(Edited { text: doc.to_string(), changed: true });
     }
     let arr = packages_mut(&mut doc)?;
@@ -161,20 +184,29 @@ mod tests {
 
 
     #[test]
-    fn text_form_gets_one_name_per_line_and_keeps_its_comment() {
-        let src = "hostname = \"x\"\npackages = \"\"\"\n\"\"\" # mine\n";
+    fn text_form_gets_one_name_per_line_and_keeps_its_comments() {
+        let src = "hostname = \"x\"\npackages = \"\"\"\n  # python,   # an example\n\"\"\" # mine\n";
         let e = add_package(src, "htop").unwrap();
         assert!(e.changed);
-        assert!(e.text.contains("packages = \"\"\"\n  htop,\n\"\"\" # mine"), "{}", e.text);
+        assert!(e.text.contains("packages = \"\"\"\n  # python,   # an example\n  htop,\n\"\"\" # mine"), "{}", e.text);
         let e = add_package(&e.text, "git").unwrap();
-        assert!(e.text.contains("  git,\n  htop,\n"), "sorted, one per line: {}", e.text);
+        assert!(e.text.contains("  htop,\n  git,\n"), "{}", e.text);
         assert!(!add_package(&e.text, "git").unwrap().changed);
-        assert_eq!(forge_schema::SystemDecl::parse(&e.text.replace("hostname = \"x\"", "hostname = \"x\"\nlibc = \"glibc\"")).unwrap().packages, ["git", "htop"]);
-        let e = remove_package(&e.text, "git").unwrap();
-        assert_eq!(forge_schema::SystemDecl::parse(&e.text.replace("hostname = \"x\"", "hostname = \"x\"\nlibc = \"glibc\"")).unwrap().packages, ["htop"]);
+        let names = |t: &str| forge_schema::SystemDecl::parse(&t.replace("hostname = \"x\"", "hostname = \"x\"\nlibc = \"glibc\"")).unwrap().packages;
+        assert_eq!(names(&e.text), ["htop", "git"], "commented-out examples are not packages");
         let e = remove_package(&e.text, "htop").unwrap();
-        assert!(e.text.contains("packages = \"\"\"\n\"\"\" # mine"), "{}", e.text);
+        assert_eq!(names(&e.text), ["git"]);
+        assert!(e.text.contains("# python,   # an example"), "comments survive: {}", e.text);
+        let e = remove_package(&e.text, "git").unwrap();
+        assert!(names(&e.text).is_empty() && e.text.contains("# mine"), "{}", e.text);
         assert!(!remove_package(&e.text, "zzz").unwrap().changed);
+    }
+
+    #[test]
+    fn a_line_with_several_names_loses_only_the_one_removed() {
+        let src = "packages = \"\"\"\n  a, b, c  # three\n\"\"\"\n";
+        let e = remove_package(src, "b").unwrap();
+        assert!(e.text.contains("  a, c,  # three"), "{}", e.text);
     }
     #[test]
     fn removes_package() {

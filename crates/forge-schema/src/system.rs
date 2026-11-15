@@ -91,7 +91,11 @@ fn de_packages<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D:
         Either::Text(t) => vec![t],
     };
     for part in parts {
-        out.extend(part.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(String::from));
+        // A `#` starts a comment that runs to the end of the line (the block can carry examples and notes).
+        for line in part.lines() {
+            let code = line.split('#').next().unwrap_or("");
+            out.extend(code.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).map(String::from));
+        }
     }
     Ok(out)
 }
@@ -256,6 +260,12 @@ mod tests {
         assert!(SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = \"\"\"\n a,\n a\n\"\"\"\n").is_err(), "duplicates are still refused");
     }
 
+
+    #[test]
+    fn comments_inside_the_packages_text_are_ignored() {
+        let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = \"\"\"\n  # git,  # not yet\n  htop, vim # editor\n\"\"\"\n").unwrap();
+        assert_eq!(d.packages, ["htop", "vim"]);
+    }
     #[test]
     fn the_shell_setting_and_per_user_shells() {
         let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\nshell = \"fish\"\n[[users]]\nname = \"ada\"\ngroups = [\"wheel\"]\n[[users]]\nname = \"bob\"\nshell = \"zsh\"\n").unwrap();

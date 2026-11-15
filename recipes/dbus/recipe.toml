@@ -1,7 +1,7 @@
 # The D-Bus message bus: systemd's tools (loginctl, timedatectl, hostnamectl, ...) and most desktop software talk
 # to it. Built without systemd support so that the two are not circular; systemd finds the bus at run time.
 name        = "dbus"
-version     = "1.16.2_r4"
+version     = "1.16.2_r5"
 description = "D-Bus message bus system"
 license     = "AFL-2.1 OR GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -50,6 +50,9 @@ Type=simple
 ExecStart=/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
 ExecReload=/usr/bin/dbus-send --print-reply --system --type=method_call --dest=org.freedesktop.DBus / org.freedesktop.DBus.ReloadConfig
 OOMScoreAdjust=-900
+# Make sure the bus user and runtime directories exist right before the bus starts, whatever ran before it.
+ExecStartPre=-/usr/bin/systemd-sysusers /usr/lib/sysusers.d/dbus.conf
+ExecStartPre=-/usr/bin/systemd-tmpfiles --create /usr/lib/tmpfiles.d/dbus.conf
 
 [Install]
 WantedBy=multi-user.target
