@@ -183,7 +183,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/profile",
         0o644,
-        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nexport INPUTRC=/etc/inputrc\nexport TERM=${TERM:-linux}\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
+        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nexport INPUTRC=/etc/inputrc\nexport EDITOR=micro VISUAL=micro\nexport TERM=${TERM:-linux}\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
     )?;
     if root.join("sbin/openrc-init").exists() {
         write_openrc(root)?;

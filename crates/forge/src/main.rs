@@ -22,6 +22,8 @@ enum Cmd {
     Install(PkgArgs),
     /// Remove packages from the system declaration and apply it
     Remove(PkgArgs),
+    /// Edit the system declaration (with micro, by default), check it, and apply it when you close the editor
+    Edit(EditArgs),
     /// Upgrade every declared package to the newest version in the repositories
     Upgrade(UpgradeArgs),
     /// List the packages you installed, and everything in the system profile
@@ -112,6 +114,115 @@ struct PkgArgs {
     /// Replace files in the system tree that forge did not put there
     #[arg(long)]
     adopt: bool,
+}
+
+#[derive(Args)]
+struct EditArgs {
+    /// The declaration to edit (default: <root>/etc/forge/system.toml)
+    file: Option<PathBuf>,
+    /// The editor to use (default: $VISUAL, $EDITOR, then micro, nano or vi, whichever is installed)
+    #[arg(long)]
+    editor: Option<String>,
+    /// Only check and save the declaration; do not apply it
+    #[arg(long)]
+    no_apply: bool,
+    /// Do not ask before applying
+    #[arg(long, short = 'y')]
+    yes: bool,
+    /// Work under this directory instead of / (for testing)
+    #[arg(long, default_value = "/")]
+    root: PathBuf,
+    /// Directory of trusted public keys (default: <root>/etc/forge/keys)
+    #[arg(long)]
+    keys: Option<PathBuf>,
+    /// Use repository indexes WITHOUT checking their signatures (insecure)
+    #[arg(long)]
+    allow_unsigned: bool,
+    /// Replace files in the system tree that forge did not put there
+    #[arg(long)]
+    adopt: bool,
+}
+
+/// The editor to run: the flag, `$VISUAL`, `$EDITOR`, or the first of micro, nano and vi that exists.
+fn pick_editor(flag: Option<String>) -> Result<String> {
+    let from_env = |n: &str| std::env::var(n).ok().filter(|v| !v.trim().is_empty());
+    if let Some(e) = flag.or_else(|| from_env("VISUAL")).or_else(|| from_env("EDITOR")) {
+        return Ok(e);
+    }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    for name in ["micro", "nano", "vi"] {
+        if std::env::split_paths(&path).any(|d| d.join(name).is_file()) {
+            return Ok(name.to_string());
+        }
+    }
+    bail!("no editor found: install one (forge install micro) or pass --editor")
+}
+
+/// Edit the system declaration the way a person wants to: open the editor on a copy, check the result when the
+/// editor closes (a mistake goes back into the editor instead of breaking the system), save it, and apply it.
+fn edit_cmd(a: EditArgs) -> Result<()> {
+    let path = a.file.clone().unwrap_or_else(|| a.root.join("etc/forge/system.toml"));
+    let system = a.file.is_none();
+    if system && a.root == Path::new("/") && !is_root() {
+        bail!("editing the system declaration needs root (try: sudo forge edit)");
+    }
+    let original = read_system_decl(&path)?;
+    let editor = pick_editor(a.editor.clone())?;
+    let mut parts = editor.split_whitespace();
+    let program = parts.next().context("the editor command is empty")?.to_string();
+    let editor_args: Vec<String> = parts.map(String::from).collect();
+
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("system.toml");
+    let work = dir.join(format!(".{name}.editing"));
+    std::fs::write(&work, &original).with_context(|| format!("writing {}", work.display()))?;
+    let cleanup = |p: &Path| {
+        let _ = std::fs::remove_file(p);
+    };
+
+    let edited = loop {
+        let status = std::process::Command::new(&program).args(&editor_args).arg(&work).status().with_context(|| format!("running {program}"))?;
+        if !status.success() {
+            cleanup(&work);
+            bail!("{program} did not finish normally, so {} was not changed", path.display());
+        }
+        let text = std::fs::read_to_string(&work).with_context(|| format!("reading {}", work.display()))?;
+        if text == original {
+            cleanup(&work);
+            ui::info(&format!("no changes to {}", path.display()));
+            return Ok(());
+        }
+        match SystemDecl::parse(&text) {
+            Ok(_) => break text,
+            Err(e) => {
+                ui::warn(&format!("the declaration is not valid: {e}"));
+                if !ui::confirm("edit it again?")? {
+                    cleanup(&work);
+                    println!("discarded: {} was not changed", path.display());
+                    return Ok(());
+                }
+            }
+        }
+    };
+    cleanup(&work);
+    std::fs::write(&path, &edited).with_context(|| format!("writing {}", path.display()))?;
+    ui::ok(&format!("saved {}", path.display()));
+    if a.no_apply {
+        ui::info("not applied (--no-apply): run `forge apply` when you are ready");
+        return Ok(());
+    }
+    apply(ApplyArgs {
+        category: Category::System,
+        file: Some(path),
+        root: a.root,
+        rebuild: false,
+        dry_run: false,
+        yes: a.yes,
+        no_generation: false,
+        keys: a.keys,
+        allow_unsigned: a.allow_unsigned,
+        adopt: a.adopt,
+    })
 }
 
 #[derive(Args)]
@@ -553,6 +664,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Cmd::Install(a) => pkg(PkgAction::Add(a)),
         Cmd::Remove(a) => pkg(PkgAction::Remove(a)),
+        Cmd::Edit(a) => edit_cmd(a),
         Cmd::Upgrade(a) => upgrade(a),
         Cmd::List(a) => list_cmd(a),
         Cmd::Search(a) => search_cmd(a),
@@ -1478,7 +1590,7 @@ struct IsoArgs {
     #[arg(long, required = true)]
     repo: Vec<PathBuf>,
     /// Packages in the live system; their dependencies come along
-    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales", "curl", "ca-certificates"].map(String::from))]
+    #[arg(long = "package", default_values_t = ["linux", "filesystem", "glibc", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "diffutils", "util-linux", "shadow", "sudo", "kmod", "openrc", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb", "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl", "tzdata", "glibc-locales", "curl", "ca-certificates", "micro"].map(String::from))]
     packages: Vec<String>,
     #[arg(long, default_value = "glibc")]
     libc: String,

@@ -179,3 +179,53 @@ fn search_lists_the_newest_version_of_matching_packages() {
     let o = forge(&["search", "zzz", "--root", &w.root()]);
     assert!(text(&o).contains("no package matches"), "{}", text(&o));
 }
+
+// ---- forge edit ---------------------------------------------------------------
+
+/// An "editor" that appends `line` to the file it is given (what a person typing and saving does).
+fn fake_editor(w: &World, name: &str, line: &str) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let script = w.p(name);
+    fs::write(&script, format!("#!/bin/sh\nprintf '%s\\n' '{line}' >> \"$1\"\n")).unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    script.to_str().unwrap().to_string()
+}
+
+#[test]
+fn edit_checks_saves_and_applies_the_declaration_when_the_editor_closes() {
+    let w = World::new();
+    let ed = fake_editor(&w, "ed.sh", "timezone = \"Europe/Paris\"");
+    let o = forge(&["edit", "--root", &w.root(), "--editor", &ed, "-y"]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(w.decl().contains("Europe/Paris"), "{}", w.decl());
+    assert!(text(&o).contains("saved") && text(&o).contains("applied"), "{}", text(&o));
+    assert_eq!(fs::read_link(w.p("root/etc/localtime")).unwrap(), Path::new("/usr/share/zoneinfo/Europe/Paris"));
+}
+
+#[test]
+fn edit_with_no_changes_does_nothing() {
+    let w = World::new();
+    let o = forge(&["edit", "--root", &w.root(), "--editor", "true", "-y"]);
+    assert!(o.status.success() && text(&o).contains("no changes"), "{}", text(&o));
+}
+
+#[test]
+fn an_invalid_edit_never_reaches_the_declaration() {
+    let w = World::new();
+    let before = w.decl();
+    let ed = fake_editor(&w, "bad.sh", "this is not toml");
+    let o = forge(&["edit", "--root", &w.root(), "--editor", &ed, "-y"]);
+    assert!(text(&o).contains("not valid") && text(&o).contains("was not changed"), "{}", text(&o));
+    assert_eq!(w.decl(), before);
+    assert!(!w.p("root/etc/forge/.system.toml.editing").exists(), "the working copy is removed");
+}
+
+#[test]
+fn edit_no_apply_only_saves() {
+    let w = World::new();
+    let ed = fake_editor(&w, "ed2.sh", "timezone = \"Europe/Paris\"");
+    let o = forge(&["edit", "--root", &w.root(), "--editor", &ed, "--no-apply"]);
+    assert!(o.status.success() && text(&o).contains("not applied"), "{}", text(&o));
+    assert!(w.decl().contains("Europe/Paris"));
+    assert!(fs::symlink_metadata(w.p("root/etc/localtime")).is_err(), "nothing was applied");
+}
