@@ -221,7 +221,7 @@ fn another_shell_is_installed_and_listed_in_etc_shells() {
 #[test]
 fn the_base_system_is_installed_without_being_declared() {
     let r = root();
-    publish_all(r.path(), &["basepkg", "a", "openrc"]);
+    publish_all(r.path(), &["basepkg", "a", "openrc", "chrony"]);
     let o = Options { base: vec!["basepkg".into()], ..opts() };
     let p = plan_system(&pkg_decl(&["a"]), r.path(), o).unwrap();
     let names: Vec<_> = p.changes.iter().filter_map(|c| c.package_id()).map(|id| id.name().to_string()).collect();
@@ -685,7 +685,7 @@ fn an_openrc_system_that_stays_openrc_is_not_touched() {
 #[test]
 fn switching_to_systemd_swaps_the_packages_the_init_links_and_the_default_units() {
     let r = image_root();
-    publish_all(r.path(), &["openrc", "systemd", "dbus", "a"]);
+    publish_all(r.path(), &["openrc", "chrony", "systemd", "dbus", "a"]);
     // The image declared OpenRC among its packages.
     apply(&plan(&pkg_decl(&["openrc", "a"]), r.path())).unwrap();
     assert_eq!(names_in_profile(r.path()), ["a", "openrc"]);
@@ -716,12 +716,12 @@ fn switching_to_systemd_swaps_the_packages_the_init_links_and_the_default_units(
 fn switching_back_to_openrc_restores_its_scripts_and_drops_systemd() {
     use std::os::unix::fs::PermissionsExt;
     let r = image_root();
-    publish_all(r.path(), &["openrc", "systemd", "dbus", "a"]);
+    publish_all(r.path(), &["openrc", "chrony", "systemd", "dbus", "a"]);
     apply(&plan(&pkg_decl(&["openrc", "a"]), r.path())).unwrap();
     apply(&plan(&init_decl("systemd", &["a"]), r.path())).unwrap();
     apply(&plan(&init_decl("openrc", &["a"]), r.path())).unwrap();
 
-    assert_eq!(names_in_profile(r.path()), ["a", "openrc"]);
+    assert_eq!(names_in_profile(r.path()), ["a", "chrony", "openrc"]);
     assert_eq!(fs::read_link(r.path().join("usr/sbin/init")).unwrap(), Path::new("openrc-init"));
     let reboot = r.path().join("usr/sbin/reboot");
     assert!(reboot.symlink_metadata().unwrap().is_file(), "the link became a script again");
