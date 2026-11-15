@@ -3,7 +3,7 @@
 # rtw88/rtw89/rtlwifi, MediaTek mt76, Marvell, Ralink, ...) and Realtek Ethernet. Graphics, sound,
 # DVB, storage and the rest of the repository are left out (they are most of its size).
 name        = "linux-firmware-wifi"
-version     = "20261019"
+version     = "20261019_r1"
 description = "Wi-Fi and Ethernet firmware from linux-firmware"
 license     = "Redistributable firmware (see /usr/share/licenses/linux-firmware)"
 libc        = ["glibc"]
@@ -22,6 +22,15 @@ mkdir -p "$fw"
 for d in intel/iwlwifi ath10k ath11k ath12k ath6k ath9k_htc brcm cypress mediatek mrvl nxp libertas \
          rsi rtlwifi rtw88 rtw89 rtl_nic ti-connectivity atmel mwlwifi mwl8k morsemicro; do
     if [ -e "$d" ]; then mkdir -p "$fw/$(dirname "$d")"; cp -R "$d" "$fw/$d"; fi
+done
+# The kernel asks for iwlwifi firmware by its plain name (/usr/lib/firmware/iwlwifi-*.ucode), while the
+# repository keeps the files in intel/iwlwifi/: link them at the top level, which costs no space.
+for f in intel/iwlwifi/iwlwifi-*; do
+    [ -e "$f" ] && ln -sf "intel/iwlwifi/${f##*/}" "$fw/${f##*/}"
+done
+# Intel Bluetooth (btintel loads intel/ibt-*) and the other small Intel firmware files.
+for f in intel/ibt-* intel/*.sfi intel/*.ddc; do
+    [ -f "$f" ] && cp "$f" "$fw/intel/${f##*/}"
 done
 for f in carl9170-1.fw ar5523.bin ar7010.fw ar7010_1_1.fw ar9170-1.fw ar9170-2.fw ar9271.fw \
          htc_7010.fw htc_9271.fw lbtf_usb.bin rsi_91x.fw rt2561.bin rt2561s.bin rt2661.bin \
