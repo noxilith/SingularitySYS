@@ -480,7 +480,7 @@ impl Exec<'_> {
                 .ok_or(StrapError::UnknownLibc)?;
             let libc = if libc == Libc::Musl { "musl" } else { "glibc" };
             let mut decl = format!(
-                "hostname = \"{}\"\nlibc = \"{libc}\"\nrepos = [\"{}\"]\npackages = []\n",
+                "hostname = \"{}\"\nlibc = \"{libc}\"\nrepos = [\"{}\"]\npackages = [\"forge\"]\n",
                 self.req.hostname,
                 forge_schema::DEFAULT_REPO_URL
             );

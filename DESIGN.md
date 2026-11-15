@@ -41,7 +41,9 @@ The installed system is a clone of the live system, so anything done in the live
 | Command | Does |
 |---|---|
 | `forge strap ...` | Installer (above) |
-| `forge pkg add/remove <name>` | Edit `packages` in the declaration, then converge |
+| `forge install/remove <name>...` | Edit `packages` in the declaration, then converge (`forge pkg add/remove` still works) |
+| `forge upgrade` | Re-resolve the declared packages to the newest versions and apply |
+| `forge list`, `forge search [term]` | What is installed; what the repositories offer |
 | `forge pkg add <name> --isolate` | Install into a self-contained store with its full dependency closure |
 | `forge apply [system\|user]` | Converge to the declaration: validate, plan per module, show `[+]` `[~]` `[-]` preview, y/N, apply (installs before removals), create a generation |
 | `forge apply --rebuild` | Re-apply everything even if satisfied |

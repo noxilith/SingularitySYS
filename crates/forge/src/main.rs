@@ -16,7 +16,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Add or remove packages in a declaration
+    /// Install packages: adds them to the system declaration and applies it
+    Install(PkgArgs),
+    /// Remove packages from the system declaration and apply it
+    Remove(PkgArgs),
+    /// Upgrade every declared package to the newest version in the repositories
+    Upgrade(UpgradeArgs),
+    /// List the packages you installed, and everything in the system profile
+    List(ListArgs),
+    /// Search the package repositories by name
+    Search(SearchArgs),
+    /// Add or remove packages in a declaration (the older spelling of install and remove)
+    #[command(hide = true)]
     Pkg {
         #[command(subcommand)]
         action: PkgAction,
@@ -72,7 +83,9 @@ enum PkgAction {
 
 #[derive(Args)]
 struct PkgArgs {
-    name: String,
+    /// One or more package names
+    #[arg(required = true)]
+    names: Vec<String>,
     /// Edit the system declaration (the default when you are root) instead of your user declaration
     #[arg(long)]
     system: bool,
@@ -86,6 +99,47 @@ struct PkgArgs {
     #[arg(long, short = 'y')]
     yes: bool,
     /// Work under this directory instead of / (for testing)
+    #[arg(long, default_value = "/")]
+    root: PathBuf,
+    /// Directory of trusted public keys (default: <root>/etc/forge/keys)
+    #[arg(long)]
+    keys: Option<PathBuf>,
+    /// Use repository indexes WITHOUT checking their signatures (insecure)
+    #[arg(long)]
+    allow_unsigned: bool,
+}
+
+#[derive(Args)]
+struct UpgradeArgs {
+    /// Show what would change and exit
+    #[arg(long)]
+    dry_run: bool,
+    /// Do not ask for confirmation
+    #[arg(long, short = 'y')]
+    yes: bool,
+    /// Work under this directory instead of / (for testing)
+    #[arg(long, default_value = "/")]
+    root: PathBuf,
+    /// Directory of trusted public keys (default: <root>/etc/forge/keys)
+    #[arg(long)]
+    keys: Option<PathBuf>,
+    /// Use repository indexes WITHOUT checking their signatures (insecure)
+    #[arg(long)]
+    allow_unsigned: bool,
+}
+
+#[derive(Args)]
+struct ListArgs {
+    /// Work under this directory instead of / (for testing)
+    #[arg(long, default_value = "/")]
+    root: PathBuf,
+}
+
+#[derive(Args)]
+struct SearchArgs {
+    /// Part of a package name (default: list everything)
+    term: Option<String>,
+    /// Look under this directory instead of / (for testing)
     #[arg(long, default_value = "/")]
     root: PathBuf,
     /// Directory of trusted public keys (default: <root>/etc/forge/keys)
@@ -486,6 +540,11 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Cmd::Install(a) => pkg(PkgAction::Add(a)),
+        Cmd::Remove(a) => pkg(PkgAction::Remove(a)),
+        Cmd::Upgrade(a) => upgrade(a),
+        Cmd::List(a) => list_cmd(a),
+        Cmd::Search(a) => search_cmd(a),
         Cmd::Pkg { action } => pkg(action),
         Cmd::Store(a) => store_cmd(a),
         Cmd::Key(a) => key_cmd(a),
@@ -534,7 +593,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         (None, false) => decl_path(false, None)?,
     };
     if system && args.root == Path::new("/") && !is_root() && args.file.is_none() {
-        bail!("changing the system declaration needs root (try: sudo forge pkg {} {})", if adding { "add" } else { "remove" }, args.name);
+        bail!("changing the system declaration needs root (try: sudo forge {} {})", if adding { "install" } else { "remove" }, args.names.join(" "));
     }
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
@@ -542,17 +601,21 @@ fn pkg(action: PkgAction) -> Result<()> {
         Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
     };
 
-    let edited = if adding {
-        forge_decl::add_package(&text, &args.name)?
-    } else {
-        forge_decl::remove_package(&text, &args.name)?
-    };
-
+    // All the names are edited into the declaration first, then it is applied once (one generation).
     let verb = if adding { "already in" } else { "not in" };
+    let mut edited = forge_decl::Edited { text: text.clone(), changed: false };
+    for name in &args.names {
+        let e = if adding { forge_decl::add_package(&edited.text, name)? } else { forge_decl::remove_package(&edited.text, name)? };
+        if e.changed {
+            edited = e;
+        } else {
+            println!("{name} is {verb} {}", path.display());
+        }
+    }
     if !edited.changed {
-        println!("{} is {verb} {}", args.name, path.display());
         return Ok(());
     }
+    let label = args.names.join(" ");
 
     // For a system package, check that the edited declaration can actually be applied BEFORE writing it:
     // a typo or a package missing from the repositories must not leave a declaration that cannot apply.
@@ -564,7 +627,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         };
         let decl = SystemDecl::parse(&edited.text).with_context(|| format!("in the edited {}", path.display()))?;
         forge_apply::plan_system(&decl, &args.root, o.clone())
-            .with_context(|| format!("{} cannot be applied, so {} was not changed", args.name, path.display()))?;
+            .with_context(|| format!("{} cannot be applied, so {} was not changed", label, path.display()))?;
         Some(o)
     } else {
         None
@@ -574,11 +637,11 @@ fn pkg(action: PkgAction) -> Result<()> {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
     std::fs::write(&path, edited.text).with_context(|| format!("writing {}", path.display()))?;
-    println!("{} {} {}", if adding { "added" } else { "removed" }, args.name, path.display());
+    println!("{} {} {}", if adding { "added" } else { "removed" }, label, path.display());
 
     if !system {
         println!("note: per-user installs are not implemented yet, so nothing was installed;");
-        println!("      for a system-wide package run: sudo forge pkg {} {}", if adding { "add" } else { "remove" }, args.name);
+        println!("      for a system-wide package run: sudo forge {} {}", if adding { "install" } else { "remove" }, label);
         return Ok(());
     }
     if opts.is_none() {
@@ -765,6 +828,88 @@ fn confirm(question: &str) -> Result<bool> {
     let mut line = String::new();
     std::io::stdin().lock().read_line(&mut line)?;
     Ok(matches!(line.trim(), "y" | "Y" | "yes" | "Yes"))
+}
+
+/// Bring every declared package to the newest version the repositories offer (what `apply` resolves anyway).
+fn upgrade(a: UpgradeArgs) -> Result<()> {
+    let path = a.root.join("etc/forge/system.toml");
+    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
+    if decl.packages.is_empty() {
+        println!("no packages are installed through forge yet (see: forge install NAME); nothing to upgrade");
+        return Ok(());
+    }
+    apply(ApplyArgs {
+        category: Category::System,
+        file: None,
+        root: a.root,
+        rebuild: false,
+        dry_run: a.dry_run,
+        yes: a.yes,
+        no_generation: false,
+        keys: a.keys,
+        allow_unsigned: a.allow_unsigned,
+    })
+}
+
+fn list_cmd(a: ListArgs) -> Result<()> {
+    let path = a.root.join("etc/forge/system.toml");
+    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let decl = SystemDecl::parse(&text).with_context(|| format!("in {}", path.display()))?;
+    let profile = forge_store::Profile::new(a.root.join("forge/profiles/system"));
+    let installed = profile.current_packages().unwrap_or_default();
+    if decl.packages.is_empty() {
+        println!("installed with forge: (none; try: forge install NAME)");
+    } else {
+        println!("installed with forge:");
+        for name in &decl.packages {
+            match installed.iter().find(|id| id.name() == name) {
+                Some(id) => println!("  {name}  ({id})"),
+                None => println!("  {name}  (declared, not applied yet: run forge upgrade)"),
+            }
+        }
+    }
+    let others: Vec<_> = installed.iter().filter(|id| !decl.packages.iter().any(|n| n == id.name())).collect();
+    if !others.is_empty() {
+        println!("pulled in as dependencies:");
+        for id in others {
+            println!("  {id}");
+        }
+    }
+    Ok(())
+}
+
+fn search_cmd(a: SearchArgs) -> Result<()> {
+    let path = a.root.join("etc/forge/system.toml");
+    let text = std::fs::read_to_string(&path).ok();
+    let decl = text.as_deref().and_then(|t| SystemDecl::parse(t).ok());
+    let repos = match &decl {
+        Some(d) if !d.repos.is_empty() => d.repos.clone(),
+        _ => vec![forge_schema::DEFAULT_REPO_URL.to_string()],
+    };
+    let libc = decl.as_ref().map(|d| d.libc).unwrap_or(forge_schema::Libc::Musl);
+    let trust = load_trust(a.keys, a.allow_unsigned, a.root.join("etc/forge/keys"))?;
+    let fetch = forge_store::SystemFetch;
+    let term = a.term.as_deref().unwrap_or("").to_lowercase();
+    let mut newest: std::collections::BTreeMap<String, String> = Default::default();
+    for r in &repos {
+        // A local repository path is inside the root being looked at (like in apply).
+        let spec = if forge_store::is_url(r) { r.clone() } else { a.root.join(r.trim_start_matches('/')).display().to_string() };
+        let loaded = forge_store::Repository::parse(&spec).load(&fetch, &trust)?;
+        for e in loaded.index.packages.iter().filter(|e| e.libc == libc && e.name.to_lowercase().contains(&term)) {
+            let better = newest.get(&e.name).is_none_or(|v| forge_store::version_cmp(&e.version, v).is_gt());
+            if better {
+                newest.insert(e.name.clone(), e.version.clone());
+            }
+        }
+    }
+    if newest.is_empty() {
+        println!("no package matches `{}`", a.term.unwrap_or_default());
+    }
+    for (name, version) in newest {
+        println!("{name:<24} {version}");
+    }
+    Ok(())
 }
 
 fn apply(a: ApplyArgs) -> Result<()> {

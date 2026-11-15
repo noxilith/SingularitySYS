@@ -11,7 +11,7 @@ new and little of it has met other machines. Read `DESIGN.md` for what is done, 
 1. Boot the live ISO (Limine, BIOS and UEFI), log in (`root` / `root`), partition the disk with `cfdisk`.
 2. `forge strap <root-partition> <boot-partition>` installs to a btrfs layout (`@ @snapshots @home @store`) and
    writes a starter `/etc/forge/system.toml`.
-3. The system is declared in `/etc/forge/system.toml`. `forge pkg add NAME` edits it and applies it; `forge apply`
+3. The system is declared in `/etc/forge/system.toml`. `forge install NAME` edits it and applies it (`forge remove`, `forge upgrade`, `forge list`, `forge search` work the same way); `forge apply`
    converges the machine to it. Every change can be rolled back through generations (`forge gen`).
 4. Packages come from this repository's `repo` release as signed binary archives, checked against the key in
    `distro/keys/` before anything is installed. `forge kernel` builds and installs kernels.

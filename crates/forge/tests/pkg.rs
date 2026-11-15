@@ -118,3 +118,62 @@ fn adding_twice_says_so_and_does_nothing() {
     assert!(text(&o).contains("already in"), "{}", text(&o));
     let _: &Path = w.dir.path();
 }
+
+impl World {
+    /// Publish another version of `tool` into the repository.
+    fn publish_tool(&self, version: &str) {
+        let archive = self.p(&format!("tool-{version}.tar.zst"));
+        let o = forge(&["store", "pack", self.p("tree").to_str().unwrap(), "--name", "tool", "--version", version, "--libc", "musl", "--out", archive.to_str().unwrap()]);
+        assert!(o.status.success(), "{}", text(&o));
+        let o = forge(&["store", "publish", archive.to_str().unwrap(), "--repo", self.p("root/srv/repo").to_str().unwrap(), "--sign", self.p("keys/k.key").to_str().unwrap()]);
+        assert!(o.status.success(), "{}", text(&o));
+    }
+}
+
+#[test]
+fn install_and_remove_are_top_level_commands_that_take_several_names() {
+    let w = World::new();
+    let o = forge(&["install", "tool", "--root", &w.root(), "-y"]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(w.decl().contains("packages = [\"tool\"]") && w.installed(), "{}", text(&o));
+    let o = forge(&["remove", "tool", "--root", &w.root(), "-y"]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(w.decl().contains("packages = []") && !w.installed());
+    // Several names are one edit and one apply.
+    let o = forge(&["install", "tool", "no-such-package", "--root", &w.root(), "-y"]);
+    assert!(!o.status.success() && text(&o).contains("was not changed"), "{}", text(&o));
+    assert!(w.decl().contains("packages = []"), "a bad name in the list changes nothing: {}", w.decl());
+}
+
+#[test]
+fn upgrade_moves_declared_packages_to_the_newest_version() {
+    let w = World::new();
+    assert!(forge(&["install", "tool", "--root", &w.root(), "-y"]).status.success());
+    let o = forge(&["upgrade", "--root", &w.root(), "-y"]);
+    assert!(text(&o).contains("nothing to do"), "{}", text(&o));
+    w.publish_tool("1.1");
+    let o = forge(&["upgrade", "--root", &w.root(), "--dry-run"]);
+    assert!(text(&o).contains("tool-1.1"), "{}", text(&o));
+    let o = forge(&["upgrade", "--root", &w.root(), "-y"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let o = forge(&["list", "--root", &w.root()]);
+    assert!(text(&o).contains("tool-1.1"), "{}", text(&o));
+}
+
+#[test]
+fn upgrade_with_nothing_installed_says_so() {
+    let w = World::new();
+    let o = forge(&["upgrade", "--root", &w.root(), "-y"]);
+    assert!(o.status.success() && text(&o).contains("nothing to upgrade"), "{}", text(&o));
+}
+
+#[test]
+fn search_lists_the_newest_version_of_matching_packages() {
+    let w = World::new();
+    w.publish_tool("1.1");
+    let o = forge(&["search", "too", "--root", &w.root()]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains("tool") && text(&o).contains("1.1") && !text(&o).contains("1.0"), "{}", text(&o));
+    let o = forge(&["search", "zzz", "--root", &w.root()]);
+    assert!(text(&o).contains("no package matches"), "{}", text(&o));
+}
