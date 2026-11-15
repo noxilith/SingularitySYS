@@ -150,15 +150,10 @@ pub struct Curl;
 
 impl Http for Curl {
     fn get(&self, url: &str) -> Result<String, KernelError> {
-        let out = Command::new("curl")
-            .args(["-fsSL", "--max-time", "60", url])
-            .stdin(Stdio::null())
-            .output()
-            .map_err(|source| KernelError::Spawn { cmd: format!("curl {url}"), source })?;
-        if !out.status.success() {
-            return Err(KernelError::Fetch(format!("downloading {url} failed ({})", out.status)));
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        // curl if there is one, otherwise BusyBox wget (a fresh system has no curl).
+        use forge_store::Fetch;
+        let body = forge_store::SystemFetch.get(url).map_err(|e| KernelError::Fetch(e.to_string()))?;
+        Ok(String::from_utf8_lossy(&body).into_owned())
     }
 }
 
