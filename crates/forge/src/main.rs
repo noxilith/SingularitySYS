@@ -1492,8 +1492,8 @@ struct KernelBuildArgs {
 
 #[derive(Args)]
 struct KernelInstallArgs {
-    /// The staging directory `forge kernel build` printed
-    staged: PathBuf,
+    /// The staging directory `forge kernel build` printed (default: the kernel you built last)
+    staged: Option<PathBuf>,
     #[arg(long, default_value = "/boot")]
     boot_dir: PathBuf,
     /// The system root the modules go under
@@ -1609,6 +1609,7 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
         }
     };
     let jobs = b.jobs.unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
+    let latest = work.join("latest");
     let staged = if b.host_tools {
         // The tools installed on this machine do the work (needed for --menuconfig).
         let out = b.out.clone().unwrap_or_else(|| work.join(format!("stage-{version}")));
@@ -1641,9 +1642,12 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
         forge_kernel::build_in_store(&spec)?
     };
     println!("built kernel {} in {}", staged.release, staged.dir.display());
+    // A short way back to it: `forge kernel install` with no path takes the kernel built last.
+    let _ = std::fs::remove_file(&latest);
+    let _ = std::os::unix::fs::symlink(&staged.dir, &latest);
     if b.install {
         return kernel_install(KernelInstallArgs {
-            staged: staged.dir,
+            staged: Some(staged.dir),
             boot_dir: "/boot".into(),
             root: "/".into(),
             limine_conf: "/boot/limine.conf".into(),
@@ -1653,15 +1657,34 @@ fn kernel_build(b: KernelBuildArgs) -> Result<()> {
             force: false,
         });
     }
-    println!("install it with: sudo forge kernel install {}", staged.dir.display());
+    println!("install it with:  sudo forge kernel install");
     Ok(())
+}
+
+/// The kernel `forge kernel build` finished last (its `latest` link), also when run through sudo.
+fn latest_staged() -> Result<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(c) = cache_home("kernel") {
+        candidates.push(c.join("latest"));
+    }
+    if let Some(user) = std::env::var_os("SUDO_USER") {
+        candidates.push(PathBuf::from("/home").join(user).join(".cache/forge/kernel/latest"));
+    }
+    candidates
+        .into_iter()
+        .find(|c| c.exists())
+        .context("no kernel has been built yet: run `forge kernel build --auto` first, or give the staging directory")
 }
 
 fn kernel_install(i: KernelInstallArgs) -> Result<()> {
     if !is_root() {
         bail!("installing a kernel needs root");
     }
-    let release = forge_kernel::staged_release(&i.staged)?;
+    let staged = match &i.staged {
+        Some(s) => s.clone(),
+        None => latest_staged()?,
+    };
+    let release = forge_kernel::staged_release(&staged)?;
     let paths = |kernel: Option<String>, initramfs: Option<String>| GenPaths {
         snapshots: i.snapshots.clone(),
         limine_conf: i.limine_conf.clone(),
@@ -1681,7 +1704,7 @@ fn kernel_install(i: KernelInstallArgs) -> Result<()> {
         .context("could not snapshot a generation first (not a Singularity btrfs system? use --no-generation to go on without one)")?;
     }
 
-    let installed = forge_kernel::install_files(&i.staged, &i.boot_dir, &i.root, i.force)?;
+    let installed = forge_kernel::install_files(&staged,&i.boot_dir, &i.root, i.force)?;
     println!("installed {} and its modules", installed.kernel_file);
 
     if i.no_limine {
