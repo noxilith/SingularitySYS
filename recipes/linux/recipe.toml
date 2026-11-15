@@ -11,7 +11,7 @@
 #
 # Result: /boot/vmlinuz-$release, /boot/config-$release, /usr/lib/modules/$release (/lib/modules links to it).
 name        = "linux"
-version     = "7.3.3_r1"
+version     = "7.3.3_r2"
 description = "Linux kernel 7.3 (defconfig base, boot drivers built in, every other driver as a module)"
 license     = "GPL-2.0 WITH Linux-syscall-note"
 libc        = ["musl"]
