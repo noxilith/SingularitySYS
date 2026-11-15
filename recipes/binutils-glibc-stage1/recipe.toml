@@ -1,0 +1,50 @@
+# Stage 1 binutils for glibc: assembler, linker and friends for x86_64-unknown-linux-gnu. Static (linked with the
+# host's glibc, which also has a static libc.a), so they start in a sandbox that holds no libc, and installed under
+# unprefixed names too so a build sees an ordinary native toolchain. The vendor field "unknown" makes the target
+# differ from the host's x86_64-pc-linux-gnu, so gcc and binutils treat this as a cross build with a sysroot.
+name        = "binutils-glibc-stage1"
+version     = "2.43.1"
+description = "GNU binutils targeting x86_64-unknown-linux-gnu (static)"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[[source]]
+url    = "https://ftp.gnu.org/gnu/binutils/binutils-2.43.1.tar.xz"
+# Pinned from the first download (trust on first use); ftp.gnu.org publishes only a PGP signature.
+sha256 = "13f74202a3c4c51118b797a39ea4200d3f6cfbe224da6d1d95bb938480132dfd"
+
+[build]
+configure = '''
+mkdir -p /build/binutils-build
+cd /build/binutils-build
+"$SRC/configure" \
+    --prefix=/usr \
+    --target=x86_64-unknown-linux-gnu \
+    --with-sysroot=/ \
+    --disable-nls --disable-multilib --disable-werror --disable-gprofng \
+    --disable-plugins --disable-shared --enable-static \
+    --enable-deterministic-archives --enable-default-pie --without-zstd \
+    CC='gcc -std=gnu17' LDFLAGS=--static MAKEINFO=true
+'''
+compile = "cd /build/binutils-build && make -j$JOBS MAKEINFO=true"
+install = '''
+cd /build/binutils-build
+make DESTDIR=$DESTDIR MAKEINFO=true install-strip
+T=x86_64-unknown-linux-gnu
+cd "$DESTDIR/usr/bin"
+for f in "$DESTDIR"/usr/$T/bin/*; do
+    name=$(basename "$f")
+    rm -f "$f"
+    ln -s "../../bin/$T-$name" "$f"
+done
+for t in addr2line ar as c++filt elfedit gprof ld ld.bfd nm objcopy objdump ranlib readelf size strings strip; do
+    if [ -e "$T-$t" ]; then ln -sf "$T-$t" "$t"; fi
+done
+rm -rf "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man"
+for f in "$DESTDIR"/usr/bin/$T-*; do
+    if [ "$(readelf -lW "$f" | grep -c INTERP || true)" != 0 ]; then
+        echo "$f is dynamically linked, but this package must be static" >&2
+        exit 1
+    fi
+done
+'''

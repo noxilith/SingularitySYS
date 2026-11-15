@@ -1,0 +1,49 @@
+# Stage 1 glibc: the GNU C library, built by the HOST compiler (nothing in the store can compile for glibc yet;
+# a later stage rebuilds it with the store's own gcc). Merged-/usr layout, like Arch and Fedora: libraries and
+# the dynamic loader live in /usr/lib, and the package ships /lib and /lib64 as symlinks to usr/lib, so the
+# loader path every glibc program asks for (/lib64/ld-linux-x86-64.so.2) exists.
+name        = "glibc-stage1"
+version     = "2.42"
+description = "The GNU C library (stage 1: built by the host compiler)"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[[source]]
+url    = "https://ftpmirror.gnu.org/gnu/glibc/glibc-2.42.tar.xz"
+# Pinned from the first download (trust on first use); the GNU mirror publishes only a PGP signature.
+sha256 = "d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f"
+
+[build]
+configure = '''
+mkdir -p /build/glibc-build
+cd /build/glibc-build
+cat > configparms <<CFG
+slibdir=/usr/lib
+rtlddir=/usr/lib
+sbindir=/usr/bin
+rootsbindir=/usr/bin
+CFG
+"$SRC/configure" \
+    --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib/glibc \
+    --sysconfdir=/etc --localstatedir=/var \
+    --enable-kernel=4.19 --enable-stack-protector=no \
+    --disable-werror --disable-nscd --disable-profile --disable-crypt \
+    --without-gd --without-selinux --with-headers=/usr/include \
+    CFLAGS='-O2 -g1 -pipe' libc_cv_slibdir=/usr/lib
+'''
+compile = "cd /build/glibc-build && make -j$JOBS"
+install = '''
+cd /build/glibc-build
+make install_root=$DESTDIR install
+# Merged /usr: the paths programs and gcc expect, as symlinks.
+ln -s usr/lib "$DESTDIR/lib"
+ln -s usr/lib "$DESTDIR/lib64"
+# The C and POSIX locales are built in; the rest of the locale sources stay in usr/share/i18n for localedef.
+rm -rf "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/locale" "$DESTDIR/var" "$DESTDIR/etc/ld.so.cache"
+for f in "$DESTDIR"/usr/lib/*.so* "$DESTDIR"/usr/lib/gconv/*.so; do
+    [ -f "$f" ] && [ ! -L "$f" ] && strip --strip-debug "$f" 2>/dev/null || true
+done
+test -x "$DESTDIR/usr/lib/ld-linux-x86-64.so.2"
+test -f "$DESTDIR/usr/lib/libc.so.6" && test -f "$DESTDIR/usr/include/stdio.h"
+"$DESTDIR/usr/lib/libc.so.6" | head -n 1 | grep -q "release version 2.42"
+'''

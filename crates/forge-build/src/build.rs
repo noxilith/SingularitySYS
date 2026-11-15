@@ -189,6 +189,11 @@ fn store_tool_mounts(store: &Store, ids: &BTreeSet<StoreId>, tools_dir: &Path) -
         let entry = entry.map_err(io_ctx("reading the tools profile"))?;
         let name = entry.file_name().to_string_lossy().into_owned();
         let ty = entry.file_type().map_err(io_ctx("reading the tools profile"))?;
+        // A package's /etc is system configuration, not a build tool; the sandbox writes its own small /etc
+        // (passwd, group, ...) and cannot do so on top of a read-only mount (glibc ships /etc/rpc).
+        if name == "etc" {
+            continue;
+        }
         if ty.is_symlink() {
             let t = fs::read_link(entry.path()).map_err(io_ctx("reading a tools link"))?;
             links.push((format!("/{name}"), t.to_string_lossy().into_owned()));
