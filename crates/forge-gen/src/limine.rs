@@ -29,12 +29,6 @@ pub fn render(live: &BootInfo, live_subvol: &str, gens: &[Meta]) -> String {
          timeout: 5\n\n",
     );
     entry(&mut out, 1, "Singularity", live, live_subvol, false);
-    // A quiet boot hides what the kernel prints; this entry shows it all, for when something goes wrong.
-    let verbose: Vec<&str> = live.cmdline.split_whitespace().filter(|t| *t != "quiet" && !t.starts_with("loglevel=")).collect();
-    if verbose.len() != live.cmdline.split_whitespace().count() {
-        let loud = BootInfo { cmdline: verbose.join(" "), ..live.clone() };
-        entry(&mut out, 1, "Singularity (verbose boot)", &loud, live_subvol, false);
-    }
     if !gens.is_empty() {
         out.push_str("\n/Generations\n");
         let mut sorted: Vec<&Meta> = gens.iter().collect();

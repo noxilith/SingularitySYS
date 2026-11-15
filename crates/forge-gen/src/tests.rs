@@ -257,12 +257,3 @@ fn unsafe_boot_info_is_rejected_before_anything_changes() {
     assert!(matches!(create(&ctx, "x"), Err(GenError::InvalidBoot(_))));
     assert!(list(&m.ctx(&CopyBackend, "@")).unwrap().is_empty());
 }
-
-#[test]
-fn a_quiet_boot_gets_a_verbose_entry_too() {
-    let quiet = BootInfo { kernel: "vmlinuz-6.2".into(), initramfs: String::new(), cmdline: "root=UUID=abc quiet loglevel=3".into() };
-    let c = crate::limine::render(&quiet, "@", &[]);
-    assert!(c.contains("cmdline: root=UUID=abc quiet loglevel=3 rootflags=subvol=@ rw") || c.contains("quiet loglevel=3"), "{c}");
-    let verbose = c.split("/Singularity (verbose boot)").nth(1).expect("a verbose entry");
-    assert!(verbose.contains("cmdline: root=UUID=abc rootflags=subvol=@ rw") && !verbose.contains("quiet"), "{c}");
-}

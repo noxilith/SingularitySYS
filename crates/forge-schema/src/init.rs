@@ -37,49 +37,83 @@ pub enum Entry {
     Absent,
 }
 
-/// `shutdown [-h|-P|-p|-H|-r] [now|+minutes]`: power off by default; `-r` reboots, `-H` halts.
-/// A thin front end for `openrc-shutdown`, which takes the time as a required argument.
-pub const OPENRC_SHUTDOWN: &str = r#"#!/bin/sh
+/// `reboot`, `halt` and `poweroff` for either init system. Which init is *running* decides (systemd announces itself
+/// with /run/systemd/system), not which one is configured: a machine switched to systemd is still running OpenRC until
+/// its next boot and must be able to reboot into the change.
+pub fn power_script(action: &str) -> String {
+    let (systemctl, openrc) = match action {
+        "reboot" => ("reboot", "-r"),
+        "halt" => ("halt", "-H"),
+        _ => ("poweroff", "-p"),
+    };
+    format!(
+        "#!/bin/sh\n\
+         if [ -d /run/systemd/system ]; then\n\
+         \texec /usr/bin/systemctl {systemctl} \"$@\"\n\
+         fi\n\
+         exec /usr/sbin/openrc-shutdown {openrc} now\n"
+    )
+}
+
+/// `shutdown [-h|-P|-p|-H|-r] [now|+minutes]`: power off by default; `-r` reboots, `-H` halts. A thin front end for
+/// `systemctl` or `openrc-shutdown` (which takes the time as a required argument), whichever init is running.
+pub const SHUTDOWN_SCRIPT: &str = r#"#!/bin/sh
 flag=-p
 when=now
+action=poweroff
 for a in "$@"; do
     case "$a" in
-        -h|-P|-p) flag=-p ;;
-        -H) flag=-H ;;
-        -r) flag=-r ;;
+        -h|-P|-p) flag=-p; action=poweroff ;;
+        -H) flag=-H; action=halt ;;
+        -r) flag=-r; action=reboot ;;
         -*) ;;
         *) when=$a ;;
     esac
 done
-exec /sbin/openrc-shutdown $flag $when
+if [ -d /run/systemd/system ]; then
+    exec /usr/bin/systemctl $action
+fi
+exec /usr/sbin/openrc-shutdown $flag $when
 "#;
 
-/// `reboot` and `halt` under OpenRC (BusyBox's would signal PID 1 in a way openrc-init does not understand).
-pub fn openrc_power(flag: &str) -> String {
-    format!("#!/bin/sh\nexec /sbin/openrc-shutdown {flag} now\n")
+/// The power commands as (name, script).
+pub fn power_commands() -> Vec<(&'static str, String)> {
+    vec![
+        ("reboot", power_script("reboot")),
+        ("halt", power_script("halt")),
+        ("poweroff", power_script("poweroff")),
+        ("shutdown", SHUTDOWN_SCRIPT.to_string()),
+    ]
 }
 
 /// The files that make the system start with `system`: `/sbin/init` (a link in the merged `/usr/sbin`) and the
 /// commands that stop the machine. Packages never install these, so two init systems cannot clash over them.
 pub fn plumbing(system: &str) -> Vec<(&'static str, Entry)> {
-    let file = |content: String| Entry::File { content, mode: 0o755 };
-    match system {
-        "openrc" => vec![
-            ("/usr/sbin/init", Entry::Link("openrc-init".into())),
-            ("/usr/sbin/reboot", file(openrc_power("-r"))),
-            ("/usr/sbin/halt", file(openrc_power("-H"))),
-            ("/usr/sbin/shutdown", file(OPENRC_SHUTDOWN.into())),
-            ("/usr/sbin/poweroff", Entry::Absent),
-        ],
-        "systemd" => vec![
-            ("/usr/sbin/init", Entry::Link("../lib/systemd/systemd".into())),
-            ("/usr/sbin/reboot", Entry::Link("../bin/systemctl".into())),
-            ("/usr/sbin/halt", Entry::Link("../bin/systemctl".into())),
-            ("/usr/sbin/poweroff", Entry::Link("../bin/systemctl".into())),
-            ("/usr/sbin/shutdown", Entry::Link("../bin/systemctl".into())),
-        ],
-        _ => Vec::new(),
-    }
+    let init = match system {
+        "openrc" => "openrc-init",
+        "systemd" => "../lib/systemd/systemd",
+        _ => return Vec::new(),
+    };
+    let mut v = vec![("/usr/sbin/init", Entry::Link(init.into()))];
+    v.extend(power_plumbing());
+    v
+}
+
+/// The power commands alone: the same for both init systems (see [`power_script`]), so they are kept current on every
+/// apply, not only when the init system changes.
+pub fn power_plumbing() -> Vec<(&'static str, Entry)> {
+    power_commands()
+        .into_iter()
+        .map(|(name, content)| {
+            let path: &'static str = match name {
+                "reboot" => "/usr/sbin/reboot",
+                "halt" => "/usr/sbin/halt",
+                "poweroff" => "/usr/sbin/poweroff",
+                _ => "/usr/sbin/shutdown",
+            };
+            (path, Entry::File { content, mode: 0o755 })
+        })
+        .collect()
 }
 
 /// Units enabled on every systemd system: (unit, the target that wants it). Package units are only

@@ -122,7 +122,7 @@ pub fn write_initramfs_tree(root: &Path, busybox: &Path, label: &str) -> Result<
 
 /// The live root's `/etc` and mount points, written into the merged package tree.
 pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Result<(), IsoError> {
-    for d in ["dev", "proc", "sys", "run", "tmp", "mnt", "medium", "root", "home", "var/log", "etc/init.d", "usr/sbin", "usr/bin"] {
+    for d in ["dev", "proc", "sys", "run", "tmp", "mnt", "medium", "root", "home", "var/log", "etc/init.d", "etc/modprobe.d", "usr/sbin", "usr/bin"] {
         fs::create_dir_all(root.join(d)).map_err(io_ctx(format!("creating /{d}")))?;
     }
     fs::set_permissions(root.join("tmp"), fs::Permissions::from_mode(0o1777)).map_err(io_ctx("setting permissions"))?;
@@ -151,6 +151,13 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
             .into(),
     )?;
     put("etc/shells", 0o644, "/bin/sh\n/bin/bash\n".into())?;
+    // Hardware watchdog drivers are not wanted: nothing here feeds them, and some report "watchdog did not stop!" on
+    // every shutdown. (A machine that wants one removes this file.)
+    put(
+        "etc/modprobe.d/blacklist-watchdog.conf",
+        0o644,
+        "# SingularitySYS: no hardware watchdogs by default\nblacklist iTCO_wdt\nblacklist iTCO_vendor_support\nblacklist sp5100_tco\nblacklist wdat_wdt\nblacklist softdog\nblacklist intel_oc_wdt\nblacklist ie6xx_wdt\nblacklist w83627hf_wdt\nblacklist nct6775_wdt\n".into(),
+    )?;
     // Line editing: arrow keys, history, Home/End/Delete on the Linux console and in terminal emulators, and no
     // bracketed-paste escape codes (the console would show them as text).
     put(
@@ -263,19 +270,14 @@ fn write_openrc(root: &Path) -> Result<(), IsoError> {
     let init = root.join("sbin/init");
     let _ = fs::remove_file(&init);
     symlink("openrc-init", &init).map_err(io_ctx("linking /sbin/init"))?;
-    for (name, flag) in [("reboot", "-r"), ("halt", "-H")] {
+    // The power commands work under either init system (the running one decides), so a machine switched to systemd
+    // can still be rebooted from the OpenRC session that is running until that reboot.
+    for (name, script) in forge_schema::power_commands() {
         let p = root.join("sbin").join(name);
         let _ = fs::remove_file(&p);
-        fs::write(&p, forge_schema::openrc_power(flag)).map_err(io_ctx(format!("writing /sbin/{name}")))?;
+        fs::write(&p, script).map_err(io_ctx(format!("writing /sbin/{name}")))?;
         fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).map_err(io_ctx("setting permissions"))?;
     }
-    // `shutdown` powers the machine off (there is no `poweroff`: BusyBox's would signal PID 1 the
-    // wrong way, so its link is removed rather than left lying around).
-    let _ = fs::remove_file(root.join("sbin/poweroff"));
-    let p = root.join("sbin/shutdown");
-    let _ = fs::remove_file(&p);
-    fs::write(&p, forge_schema::OPENRC_SHUTDOWN).map_err(io_ctx("writing /sbin/shutdown"))?;
-    fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).map_err(io_ctx("setting permissions"))?;
     Ok(())
 }
 
@@ -400,8 +402,9 @@ mod openrc_tests {
         // BusyBox's reboot would signal PID 1 in a way openrc-init does not handle.
         let reboot = fs::read_to_string(t.path().join("sbin/reboot")).unwrap();
         assert!(reboot.contains("openrc-shutdown -r now"), "{reboot}");
-        // `shutdown` replaces `poweroff`, and BusyBox's poweroff link is gone.
-        assert!(fs::symlink_metadata(t.path().join("sbin/poweroff")).is_err());
+        // `poweroff` is ours too, and works under either init system.
+        let poweroff = fs::read_to_string(t.path().join("sbin/poweroff")).unwrap();
+        assert!(poweroff.contains("systemctl poweroff") && poweroff.contains("openrc-shutdown -p now"), "{poweroff}");
         let sd = fs::read_to_string(t.path().join("sbin/shutdown")).unwrap();
         assert!(sd.contains("openrc-shutdown $flag $when") && sd.contains("flag=-p"), "{sd}");
         assert_eq!(fs::metadata(t.path().join("sbin/shutdown")).unwrap().permissions().mode() & 0o111, 0o111);

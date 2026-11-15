@@ -47,11 +47,12 @@ impl SystemFetch {
     fn command(url: &str, out: &str) -> Result<Command, StoreError> {
         if in_path("curl") {
             let mut c = Command::new("curl");
-            c.args(["-fSL", "--retry", "2", "--connect-timeout", "20", "-o", out, url]);
+            // Silent (no progress meter: the caller shows its own), but errors are still reported.
+            c.args(["-fsSL", "--retry", "2", "--connect-timeout", "20", "-o", out, url]);
             Ok(c)
         } else if in_path("wget") {
             let mut c = Command::new("wget");
-            c.args(["-O", out, url]);
+            c.args(["-q", "-O", out, url]);
             Ok(c)
         } else {
             Err(fetch_err(url, "neither curl nor wget is installed"))
@@ -74,9 +75,14 @@ impl Fetch for SystemFetch {
 
     fn download(&self, url: &str, dest: &Path) -> Result<(), StoreError> {
         let mut c = Self::command(url, &dest.display().to_string())?;
-        // Archives can be hundreds of megabytes: let the tool show its progress.
-        let status = c.stdin(Stdio::null()).status().map_err(|e| fetch_err(url, e.to_string()))?;
-        if status.success() { Ok(()) } else { Err(fetch_err(url, format!("the download tool exited with {status}"))) }
+        // Quiet: the caller shows progress (forge prints a spinner), and a failure carries the tool's own message.
+        let out = c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).output().map_err(|e| fetch_err(url, e.to_string()))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            Err(fetch_err(url, if said.is_empty() { format!("the download tool exited with {}", out.status) } else { said }))
+        }
     }
 }
 

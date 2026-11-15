@@ -616,8 +616,6 @@ fn image_root() -> TempDir {
             fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
         }
     }
-    fs::write(sbin.join("poweroff"), "busybox").ok();
-    fs::remove_file(sbin.join("poweroff")).unwrap();
     fs::write(r.path().join("etc/resolv.conf"), "nameserver 1.1.1.1\n").unwrap();
     r
 }
@@ -663,7 +661,7 @@ fn switching_to_systemd_swaps_the_packages_the_init_links_and_the_default_units(
     assert!(view(r.path(), "usr/bin/systemd").exists());
     let link = |rel: &str| fs::read_link(r.path().join(rel)).unwrap();
     assert_eq!(link("usr/sbin/init"), Path::new("../lib/systemd/systemd"));
-    assert_eq!(link("usr/sbin/reboot"), Path::new("../bin/systemctl"), "a script became a link");
+    assert!(fs::read_to_string(r.path().join("usr/sbin/reboot")).unwrap().contains("systemctl reboot"), "reboot works under either init");
     assert_eq!(link("etc/systemd/system/multi-user.target.wants/dbus.service"), Path::new("/usr/lib/systemd/system/dbus.service"));
     assert_eq!(link("etc/systemd/system/sockets.target.wants/dbus.socket"), Path::new("/usr/lib/systemd/system/dbus.socket"));
     assert_eq!(link("etc/systemd/system/multi-user.target.wants/sshd.service"), Path::new("/usr/lib/systemd/system/sshd.service"));
@@ -690,7 +688,7 @@ fn switching_back_to_openrc_restores_its_scripts_and_drops_systemd() {
     let reboot = r.path().join("usr/sbin/reboot");
     assert!(reboot.symlink_metadata().unwrap().is_file(), "the link became a script again");
     assert_eq!(fs::metadata(&reboot).unwrap().permissions().mode() & 0o777, 0o755);
-    assert_eq!(fs::read_to_string(&reboot).unwrap(), forge_schema::openrc_power("-r"));
+    assert_eq!(fs::read_to_string(&reboot).unwrap(), forge_schema::power_script("reboot"));
     assert!(!r.path().join("etc/systemd/system/multi-user.target.wants/dbus.service").exists());
     assert!(r.path().join("etc/resolv.conf").symlink_metadata().is_err(), "the stub link is gone, DHCP writes the file again");
     assert!(plan(&init_decl("openrc", &["a"]), r.path()).is_empty());
