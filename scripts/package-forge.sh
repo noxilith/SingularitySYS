@@ -11,7 +11,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 FORGE=${FORGE:-target/debug/forge}
 REPO=${REPO:-repo/tools}
 OUT=${OUT:-packages/tools}
-VERSION=${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
+VERSION=${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)_r$(git rev-list --count HEAD)}
 
 [ -x "$FORGE" ] || fail "build forge first (cargo build), or set FORGE=/path/to/forge"
 . scripts/lib-keys.sh

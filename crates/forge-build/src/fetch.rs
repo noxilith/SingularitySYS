@@ -56,7 +56,7 @@ pub(crate) fn file_name_of(url: &str) -> Result<String, BuildError> {
 fn download(url: &str, dest: &Path) -> Result<(), BuildError> {
     // No curl (a fresh Singularity system has BusyBox only): fall back to BusyBox wget. The download is
     // checked against the pinned checksum afterwards, so the weaker transport is acceptable.
-    let have = |t: &str| std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(t).is_file()));
+    let have = |t: &str| std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| { use std::os::unix::fs::PermissionsExt; d.join(t).metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0) }));
     if !have("curl") && have("wget") {
         let out = Command::new("wget").arg("-O").arg(dest).arg(url).output().map_err(|e| BuildError::Download {
             url: url.to_string(),

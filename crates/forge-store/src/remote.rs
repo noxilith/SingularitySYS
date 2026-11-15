@@ -30,8 +30,13 @@ pub trait Fetch: Send + Sync {
 /// The real thing: `curl` if there is one, otherwise BusyBox `wget`.
 pub struct SystemFetch;
 
+fn is_exec(p: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
 fn in_path(tool: &str) -> bool {
-    std::env::var_os("PATH").map(|p| std::env::split_paths(&p).any(|d| d.join(tool).is_file())).unwrap_or(false)
+    std::env::var_os("PATH").map(|p| std::env::split_paths(&p).any(|d| is_exec(&d.join(tool)))).unwrap_or(false)
 }
 
 fn fetch_err(url: &str, reason: impl Into<String>) -> StoreError {
