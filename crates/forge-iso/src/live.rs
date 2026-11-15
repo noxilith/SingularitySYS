@@ -151,6 +151,19 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
             .into(),
     )?;
     put("etc/shells", 0o644, "/bin/sh\n/bin/bash\n".into())?;
+    // Line editing: arrow keys, history, Home/End/Delete on the Linux console and in terminal emulators, and no
+    // bracketed-paste escape codes (the console would show them as text).
+    put(
+        "etc/inputrc",
+        0o644,
+        "set enable-bracketed-paste off\nset bell-style none\n\
+         \"\\e[A\": previous-history\n\"\\e[B\": next-history\n\"\\e[C\": forward-char\n\"\\e[D\": backward-char\n\
+         \"\\eOA\": previous-history\n\"\\eOB\": next-history\n\"\\eOC\": forward-char\n\"\\eOD\": backward-char\n\
+         \"\\e[1~\": beginning-of-line\n\"\\e[4~\": end-of-line\n\"\\e[H\": beginning-of-line\n\"\\e[F\": end-of-line\n\
+         \"\\e[3~\": delete-char\n\"\\e[5~\": history-search-backward\n\"\\e[6~\": history-search-forward\n\
+         \"\\e[1;5C\": forward-word\n\"\\e[1;5D\": backward-word\n"
+            .into(),
+    )?;
     // glibc looks names up through this file: local files, then DNS for hosts.
     put(
         "etc/nsswitch.conf",
@@ -170,7 +183,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/profile",
         0o644,
-        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
+        "# The system is merged /usr: /bin and /sbin are links into /usr, and forge apply copies packages there.\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nexport PS1='\\u@\\h:\\w\\$ '\nexport INPUTRC=/etc/inputrc\nexport TERM=${TERM:-linux}\nfor f in /etc/profile.d/*.sh; do [ -r \"$f\" ] && . \"$f\"; done\n".into(),
     )?;
     if root.join("sbin/openrc-init").exists() {
         write_openrc(root)?;
