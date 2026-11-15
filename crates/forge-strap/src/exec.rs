@@ -467,6 +467,9 @@ impl Exec<'_> {
             return Err(StrapError::Invalid { what: "hostname", value: self.req.hostname.clone() });
         }
         write_file(&mp.join("etc/hostname"), &format!("{}\n", self.req.hostname))?;
+        // The live system's login banner ("log in as root, partition the disk...") is about installing, not about
+        // the installed system. agetty fills in \n (the hostname) and \l (the terminal).
+        write_file(&mp.join("etc/issue"), "\nSingularitySYS  \\n  (\\l)\n\n")?;
 
         let decl_path = mp.join("etc/forge/system.toml");
         if !decl_path.exists() {
