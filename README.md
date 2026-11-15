@@ -164,14 +164,14 @@ Early and experimental. The full account, including what was **not** verified, i
 
 | | |
 |---|---|
-| ✅ **Verified on real hardware** | live ISO boot (UEFI), installing to disk, OpenRC, wired and Wi-Fi networking, `sudo` and groups, installing packages from the GitHub release, building a kernel with `forge kernel` |
-| 🔄 **In progress** | the move to a glibc-only base. The toolchain, the whole package set and the new install layout are built and unit-tested; the first glibc ISO has **not been booted yet** |
-| ⏳ **Not yet verified** | rolling back after a kernel install, `forge upgrade` of the base on an installed system, the per-user declaration, Bluetooth, other people's hardware |
+| ✅ **Verified on real hardware** | the glibc live ISO (boots into RAM, Wi-Fi, verified HTTPS downloads), installing it to disk with `forge strap` and booting the result, `forge search` against the signed release |
+| 🔄 **In progress** | checking an installed system end to end: `forge install` and `forge upgrade` of the base, rolling back a generation, building a kernel with `forge kernel` on glibc |
+| ⏳ **Not yet verified** | the per-user declaration, Bluetooth, other people's hardware |
 
 <details>
 <summary><b>Roadmap</b></summary>
 
-- A glibc ISO that boots and installs, then a published glibc package repository
+- More packages (an editor, htop, git ...) as they are needed
 - `forge apply user`: per-user package sets
 - Device permissions for the `audio`, `video` and `input` groups
 - Bluetooth, and Wi-Fi in the declaration
