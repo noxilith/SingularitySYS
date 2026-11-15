@@ -18,6 +18,9 @@ pub struct State {
     /// declaration), so an older index is recognized as a rollback.
     #[serde(default)]
     pub repo_serials: std::collections::BTreeMap<String, u64>,
+    /// The init system forge set the machine up for (None: never switched, so the one the image shipped).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub init: Option<String>,
 }
 
 impl State {

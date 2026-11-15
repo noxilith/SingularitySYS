@@ -46,8 +46,6 @@ fn default_init() -> String {
     "openrc".into()
 }
 
-/// The init systems forge knows how to set up.
-pub const INIT_SYSTEMS: &[&str] = &["openrc", "systemd"];
 
 /// `init = "systemd"` (just the name) or the `[init]` table with `system` and `services`.
 fn de_init<'de, D: serde::Deserializer<'de>>(d: D) -> Result<InitSection, D::Error> {
@@ -132,8 +130,8 @@ impl SystemDecl {
         if self.hostname.is_empty() {
             return Err(SchemaError::Invalid("hostname must not be empty".into()));
         }
-        if !INIT_SYSTEMS.contains(&self.init.system.as_str()) {
-            return Err(SchemaError::Invalid(format!("unknown init system `{}` (supported: {})", self.init.system, INIT_SYSTEMS.join(", "))));
+        if !crate::INIT_SYSTEMS.contains(&self.init.system.as_str()) {
+            return Err(SchemaError::Invalid(format!("unknown init system `{}` (supported: {})", self.init.system, crate::INIT_SYSTEMS.join(", "))));
         }
         let mut seen = std::collections::BTreeSet::new();
         for p in &self.packages {

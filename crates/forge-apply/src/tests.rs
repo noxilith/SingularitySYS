@@ -359,16 +359,6 @@ fn two_packages_providing_the_same_file_fail_without_changing_the_profile() {
 }
 
 #[test]
-fn non_openrc_init_defers_keymap_and_services() {
-    let r = root();
-    let d = decl("[init]\nsystem = \"runit\"\nservices = [\"sshd\"]\n");
-    let p = plan(&d, r.path());
-    assert!(p.changes.iter().all(|c| c.section != "keymap" && c.section != "services"));
-    assert!(p.pending.iter().any(|x| x.section == "keymap"));
-    assert!(p.pending.iter().any(|x| x.section == "services"));
-}
-
-#[test]
 fn corrupt_state_file_is_reported_not_ignored() {
     let r = root();
     fs::create_dir_all(r.path().join("var/lib/forge")).unwrap();
@@ -608,4 +598,105 @@ fn the_serial_of_a_remote_repository_is_remembered_under_its_url() {
     apply(&plan).unwrap();
     let state = fs::read_to_string(r.path().join("var/lib/forge/state.toml")).unwrap_or_default();
     assert!(state.contains("https://example.test/repo"), "{state}");
+}
+
+// ---- switching the init system -----------------------------------------------
+
+/// A root the way the image leaves it: OpenRC is the init, with its power scripts, and resolv.conf is a plain file.
+fn image_root() -> TempDir {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let r = root();
+    let sbin = r.path().join("usr/sbin");
+    fs::create_dir_all(&sbin).unwrap();
+    symlink("openrc-init", sbin.join("init")).unwrap();
+    for (path, entry) in forge_schema::plumbing("openrc") {
+        if let forge_schema::Entry::File { content, mode } = entry {
+            let p = r.path().join(path.trim_start_matches('/'));
+            fs::write(&p, content).unwrap();
+            fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
+        }
+    }
+    fs::write(sbin.join("poweroff"), "busybox").ok();
+    fs::remove_file(sbin.join("poweroff")).unwrap();
+    fs::write(r.path().join("etc/resolv.conf"), "nameserver 1.1.1.1\n").unwrap();
+    r
+}
+
+fn publish_all(root: &Path, names: &[&str]) {
+    for n in names {
+        publish_as(root, n, Some(&test_key()));
+    }
+}
+
+fn init_decl(system: &str, packages: &[&str]) -> SystemDecl {
+    let list = packages.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+    decl(&format!("init = \"{system}\"\nrepos = [\"/srv/repo\"]\npackages = [{list}]\nservices = [\"sshd\"]\n"))
+}
+
+fn names_in_profile(r: &Path) -> Vec<String> {
+    let mut v: Vec<_> = system_profile(r).current_packages().unwrap().iter().map(|id| id.name().to_string()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn an_openrc_system_that_stays_openrc_is_not_touched() {
+    let r = image_root();
+    let p = plan(&decl(""), r.path());
+    assert!(p.changes.iter().all(|c| c.section != "init"), "{:?}", p.changes);
+}
+
+#[test]
+fn switching_to_systemd_swaps_the_packages_the_init_links_and_the_default_units() {
+    let r = image_root();
+    publish_all(r.path(), &["openrc", "systemd", "dbus", "a"]);
+    // The image declared OpenRC among its packages.
+    apply(&plan(&pkg_decl(&["openrc", "a"]), r.path())).unwrap();
+    assert_eq!(names_in_profile(r.path()), ["a", "openrc"]);
+
+    let p = plan(&init_decl("systemd", &["openrc", "a"]), r.path());
+    assert!(p.changes.iter().any(|c| c.section == "init"));
+    apply(&p).unwrap();
+
+    assert_eq!(names_in_profile(r.path()), ["a", "dbus", "systemd"], "openrc is gone, systemd and dbus are in");
+    assert!(!view(r.path(), "usr/bin/openrc").exists(), "OpenRC's files were removed from the tree");
+    assert!(view(r.path(), "usr/bin/systemd").exists());
+    let link = |rel: &str| fs::read_link(r.path().join(rel)).unwrap();
+    assert_eq!(link("usr/sbin/init"), Path::new("../lib/systemd/systemd"));
+    assert_eq!(link("usr/sbin/reboot"), Path::new("../bin/systemctl"), "a script became a link");
+    assert_eq!(link("etc/systemd/system/multi-user.target.wants/dbus.service"), Path::new("/usr/lib/systemd/system/dbus.service"));
+    assert_eq!(link("etc/systemd/system/sockets.target.wants/dbus.socket"), Path::new("/usr/lib/systemd/system/dbus.socket"));
+    assert_eq!(link("etc/systemd/system/multi-user.target.wants/sshd.service"), Path::new("/usr/lib/systemd/system/sshd.service"));
+    assert_eq!(link("etc/resolv.conf"), Path::new("/run/systemd/resolve/stub-resolv.conf"));
+    assert_eq!(read(r.path(), "etc/vconsole.conf"), "KEYMAP=us\n");
+    assert!(read(r.path(), "etc/systemd/network/20-wired.network").contains("DHCP=yes"));
+    assert!(read(r.path(), "var/lib/forge/state.toml").contains("init = \"systemd\""));
+
+    // Nothing more to do the second time.
+    assert!(plan(&init_decl("systemd", &["openrc", "a"]), r.path()).is_empty());
+}
+
+#[test]
+fn switching_back_to_openrc_restores_its_scripts_and_drops_systemd() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = image_root();
+    publish_all(r.path(), &["openrc", "systemd", "dbus", "a"]);
+    apply(&plan(&pkg_decl(&["openrc", "a"]), r.path())).unwrap();
+    apply(&plan(&init_decl("systemd", &["a"]), r.path())).unwrap();
+    apply(&plan(&init_decl("openrc", &["a"]), r.path())).unwrap();
+
+    assert_eq!(names_in_profile(r.path()), ["a", "openrc"]);
+    assert_eq!(fs::read_link(r.path().join("usr/sbin/init")).unwrap(), Path::new("openrc-init"));
+    let reboot = r.path().join("usr/sbin/reboot");
+    assert!(reboot.symlink_metadata().unwrap().is_file(), "the link became a script again");
+    assert_eq!(fs::metadata(&reboot).unwrap().permissions().mode() & 0o777, 0o755);
+    assert_eq!(fs::read_to_string(&reboot).unwrap(), forge_schema::openrc_power("-r"));
+    assert!(!r.path().join("etc/systemd/system/multi-user.target.wants/dbus.service").exists());
+    assert!(r.path().join("etc/resolv.conf").symlink_metadata().is_err(), "the stub link is gone, DHCP writes the file again");
+    assert!(plan(&init_decl("openrc", &["a"]), r.path()).is_empty());
+}
+
+#[test]
+fn an_unknown_init_system_never_reaches_the_planner() {
+    assert!(SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\ninit = \"runit\"\n").is_err());
 }

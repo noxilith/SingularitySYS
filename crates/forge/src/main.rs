@@ -978,6 +978,9 @@ fn apply(a: ApplyArgs) -> Result<()> {
     }
     forge_apply::apply(&plan)?;
     println!("applied {} change(s)", plan.changes.len());
+    if plan.changes_init() {
+        println!("the init system changed to `{}`: reboot to start it. The previous generation still boots the old one (Limine menu).", decl.init.system);
+    }
     if a.no_generation {
         println!("note: no generation was created (--no-generation)");
     } else if a.root != Path::new("/") {

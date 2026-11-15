@@ -487,7 +487,7 @@ impl Exec<'_> {
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut decl = format!(
-                "hostname = \"{}\"\nlibc = \"{libc}\"\nrepos = [\"{}\"]\npackages = [{packages}]\n",
+                "hostname = \"{}\"\nlibc = \"{libc}\"\ninit = \"openrc\"\nrepos = [\"{}\"]\npackages = [{packages}]\n",
                 self.req.hostname,
                 forge_schema::DEFAULT_REPO_URL
             );

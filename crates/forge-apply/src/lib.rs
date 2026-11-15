@@ -69,7 +69,7 @@ impl Kind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Op {
-    WriteFile { path: PathBuf, content: String },
+    WriteFile { path: PathBuf, content: String, mode: u32 },
     RemoveFile(PathBuf),
     Symlink { link: PathBuf, target: PathBuf },
     RemoveLink(PathBuf),
@@ -134,6 +134,11 @@ impl Plan {
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.state_write.is_none() && self.profile_switch.is_none()
     }
+
+    /// True when this plan changes which init system the machine boots (it takes effect at the next boot).
+    pub fn changes_init(&self) -> bool {
+        self.changes.iter().any(|c| c.section == "init" && c.summary.starts_with("/usr/sbin/init"))
+    }
 }
 
 /// How `forge apply` should behave.
@@ -184,6 +189,10 @@ struct Planner<'a> {
 
 impl Planner<'_> {
     fn file(&mut self, section: &'static str, abs: &str, content: String) -> Result<(), PlanError> {
+        self.file_mode(section, abs, content, 0o644)
+    }
+
+    fn file_mode(&mut self, section: &'static str, abs: &str, content: String, mode: u32) -> Result<(), PlanError> {
         let path = under(self.root, abs);
         let (kind, note) = match read_opt(&path)? {
             None => (Kind::Add, ""),
@@ -196,9 +205,33 @@ impl Planner<'_> {
             section,
             kind,
             summary: format!("{abs} = {first}{note}"),
-            op: Op::WriteFile { path, content },
+            op: Op::WriteFile { path, content, mode },
         });
         Ok(())
+    }
+
+    /// A file forge owns outside the packages (the init links and power commands): make it match `entry`,
+    /// replacing whatever is there, including a link where a script is wanted and the other way round.
+    fn plumb(&mut self, abs: &str, entry: &forge_schema::Entry) {
+        use forge_schema::Entry;
+        match entry {
+            Entry::Link(target) => self.link("init", abs, target),
+            Entry::Absent => self.unlink("init", abs),
+            Entry::File { content, mode } => {
+                let path = under(self.root, abs);
+                let meta = path.symlink_metadata().ok();
+                let same = meta.as_ref().is_some_and(|m| m.is_file()) && fs::read_to_string(&path).is_ok_and(|c| &c == content);
+                if same && !self.opts.rebuild {
+                    return;
+                }
+                self.changes.push(Change {
+                    section: "init",
+                    kind: if meta.is_some() { Kind::Modify } else { Kind::Add },
+                    summary: format!("{abs} = {}", content.lines().find(|l| !l.starts_with('#') && !l.is_empty()).unwrap_or("")),
+                    op: Op::WriteFile { path, content: content.clone(), mode: *mode },
+                });
+            }
+        }
     }
 
     fn link(&mut self, section: &'static str, abs_link: &str, target: &str) {
@@ -255,8 +288,16 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         check("service", s, &['_', '-', '.'])?;
     }
 
-    let openrc = decl.init.system == "openrc";
+    let system = decl.init.system.as_str();
+    let openrc = system == "openrc";
+    let systemd = system == "systemd";
     let old_state = State::load(root)?;
+    // The machine boots with the init system it was last set up for (the image ships OpenRC). A different one in
+    // the declaration means switching: new packages, the init links, the default units. `--rebuild` redoes it.
+    let switching = match old_state.init.as_deref() {
+        Some(current) => current != system,
+        None => system != "openrc",
+    };
     let mut p = Planner { root, opts, changes: Vec::new() };
 
     p.file("hostname", "/etc/hostname", format!("{}\n", decl.hostname))?;
@@ -272,6 +313,8 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
 
     if openrc {
         p.file("keymap", "/etc/conf.d/keymaps", format!("keymap=\"{}\"\n", decl.keymap))?;
+    } else if systemd {
+        p.file("keymap", "/etc/vconsole.conf", format!("KEYMAP={}\n", decl.keymap))?;
     } else {
         pending.push(Pending {
             section: "keymap",
@@ -320,6 +363,18 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.unlink("services", &format!("/etc/runlevels/default/{s}"));
         }
         new_state.managed_services = declared;
+    } else if systemd {
+        // Units are enabled the way `systemctl enable` does it: a link in the target's `.wants` directory. The
+        // units themselves come with their packages, which are installed first (these changes run after them).
+        let wants = |unit: &str| format!("/etc/systemd/system/multi-user.target.wants/{unit}");
+        for s in &declared {
+            let unit = forge_schema::systemd_unit(s);
+            p.link("init", &wants(&unit), &format!("/usr/lib/systemd/system/{unit}"));
+        }
+        for s in old_state.managed_services.iter().filter(|s| !declared.contains(s)) {
+            p.unlink("init", &wants(&forge_schema::systemd_unit(s)));
+        }
+        new_state.managed_services = declared;
     } else {
         for s in &declared {
             pending.push(Pending {
@@ -335,7 +390,34 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             summary: format!("user `{}`: user management is not implemented yet", u.name),
         });
     }
-    let profile_switch = plan_packages(decl, root, &mut p, &old_state.repo_serials, &mut new_state.repo_serials)?;
+    if switching {
+        for (path, entry) in forge_schema::plumbing(system) {
+            p.plumb(path, &entry);
+        }
+        let stub = "/run/systemd/resolve/stub-resolv.conf";
+        let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
+        if systemd {
+            for (unit, target) in forge_schema::SYSTEMD_BASELINE {
+                p.link("init", &baseline(unit, target), &format!("/usr/lib/systemd/system/{unit}"));
+            }
+            for (path, content) in forge_schema::SYSTEMD_NETWORK_FILES.iter().chain(forge_schema::SYSTEMD_WIFI_FILES.iter()) {
+                p.file("init", path, content.to_string())?;
+            }
+            // resolved keeps /etc/resolv.conf pointing at its stub resolver.
+            p.link("init", "/etc/resolv.conf", stub);
+        } else {
+            for (unit, target) in forge_schema::SYSTEMD_BASELINE {
+                p.unlink("init", &baseline(unit, target));
+            }
+            // Leaving systemd: a resolv.conf that points at its (now gone) stub would break name lookups.
+            if fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t == Path::new(stub)) {
+                p.unlink("init", "/etc/resolv.conf");
+            }
+        }
+        new_state.init = (system != "openrc" || old_state.init.is_some()).then(|| system.to_string());
+    }
+    let package_names = effective_packages(decl, old_state.init.is_some());
+    let profile_switch = plan_packages(&package_names, decl, root, &mut p, &old_state.repo_serials, &mut new_state.repo_serials)?;
 
     // Installs and modifications first, removals last, so a swap never leaves a gap.
     let mut changes = p.changes;
@@ -359,9 +441,27 @@ fn profile_env() -> String {
         .to_string()
 }
 
-/// Resolve the declared packages against the repositories and plan the
+/// The packages to have installed: the declared ones, without the other init systems' packages, plus the chosen
+/// init system's own. (A declaration that lists no packages and keeps OpenRC asks for nothing: the image already has it.)
+fn effective_packages(decl: &SystemDecl, switched_before: bool) -> Vec<String> {
+    let system = decl.init.system.as_str();
+    // The image's own OpenRC is in the declaration already (forge strap writes it); only once forge has switched the
+    // machine (or for another init system) is the init system's package added on top of the declared ones.
+    let add_init = system != "openrc" || switched_before;
+    let foreign = forge_schema::foreign_init_packages(system);
+    let mut names: Vec<String> = decl.packages.iter().filter(|p| !foreign.contains(&p.as_str())).cloned().collect();
+    for p in forge_schema::init_packages(system).iter().filter(|_| add_init) {
+        if !names.iter().any(|n| n == p) {
+            names.push((*p).to_string());
+        }
+    }
+    names
+}
+
+/// Resolve the packages against the repositories and plan the
 /// installs plus the profile switch. Nothing is written here.
 fn plan_packages(
+    names: &[String],
     decl: &SystemDecl,
     root: &Path,
     p: &mut Planner,
@@ -377,7 +477,7 @@ fn plan_packages(
     // Where each missing archive comes from: a file, or a URL to download first.
     let mut sources: std::collections::BTreeMap<StoreId, (PathBuf, Option<String>, String)> = Default::default();
 
-    if !decl.packages.is_empty() {
+    if !names.is_empty() {
         if decl.repos.is_empty() {
             return Err(PlanError::NoRepo);
         }
@@ -414,7 +514,7 @@ fn plan_packages(
                 }
             }
         }
-        for e in forge_store::resolve(&merged, &decl.packages, decl.libc).map_err(store_err)? {
+        for e in forge_store::resolve(&merged, names, decl.libc).map_err(store_err)? {
             let id = e.id().map_err(store_err)?;
             if !store.has(&id) {
                 let (repo, entry) = repos
@@ -463,7 +563,7 @@ fn plan_packages(
     }))
 }
 
-fn write_atomic(path: &Path, content: &str) -> io::Result<()> {
+fn write_atomic(path: &Path, content: &str, mode: u32) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
@@ -471,6 +571,7 @@ fn write_atomic(path: &Path, content: &str) -> io::Result<()> {
     tmp.push(".forge-tmp");
     let tmp = PathBuf::from(tmp);
     fs::write(&tmp, content)?;
+    fs::set_permissions(&tmp, std::os::unix::fs::PermissionsExt::from_mode(mode))?;
     fs::rename(&tmp, path).inspect_err(|_| {
         let _ = fs::remove_file(&tmp);
     })
@@ -485,7 +586,7 @@ fn ignore_missing(r: io::Result<()>) -> io::Result<()> {
 
 fn run(op: &Op) -> io::Result<()> {
     match op {
-        Op::WriteFile { path, content } => write_atomic(path, content),
+        Op::WriteFile { path, content, mode } => write_atomic(path, content, *mode),
         Op::RemoveFile(p) | Op::RemoveLink(p) => ignore_missing(fs::remove_file(p)),
         Op::Symlink { link, target } => {
             if let Some(dir) = link.parent() {
@@ -524,12 +625,13 @@ fn run(op: &Op) -> io::Result<()> {
 /// Carry out a plan, stopping at the first failure. Changes are applied in plan
 /// order, and the bookkeeping state is written last, only if everything worked.
 pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
-    for c in &plan.changes {
-        run(&c.op).map_err(|source| ApplyError {
-            summary: c.summary.clone(),
-            path: c.op.path().to_path_buf(),
-            source,
-        })?;
+    // The init links and units come last: they point into packages, and until those are in the tree a half-done switch
+    // must leave the machine booting the way it did.
+    let step = |c: &Change| -> Result<(), ApplyError> {
+        run(&c.op).map_err(|source| ApplyError { summary: c.summary.clone(), path: c.op.path().to_path_buf(), source })
+    };
+    for c in plan.changes.iter().filter(|c| c.section != "init") {
+        step(c)?;
     }
     if let Some(sw) = &plan.profile_switch {
         let now = std::time::SystemTime::now()
@@ -555,8 +657,11 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
             source: io::Error::other(e.to_string()),
         })?;
     }
+    for c in plan.changes.iter().filter(|c| c.section == "init") {
+        step(c)?;
+    }
     if let Some((path, content)) = &plan.state_write {
-        write_atomic(path, content).map_err(|source| ApplyError {
+        write_atomic(path, content, 0o644).map_err(|source| ApplyError {
             summary: "forge state".into(),
             path: path.clone(),
             source,

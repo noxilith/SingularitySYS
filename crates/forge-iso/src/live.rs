@@ -264,7 +264,7 @@ fn write_openrc(root: &Path) -> Result<(), IsoError> {
     for (name, flag) in [("reboot", "-r"), ("halt", "-H")] {
         let p = root.join("sbin").join(name);
         let _ = fs::remove_file(&p);
-        fs::write(&p, format!("#!/bin/sh\nexec /sbin/openrc-shutdown {flag} now\n")).map_err(io_ctx(format!("writing /sbin/{name}")))?;
+        fs::write(&p, forge_schema::openrc_power(flag)).map_err(io_ctx(format!("writing /sbin/{name}")))?;
         fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).map_err(io_ctx("setting permissions"))?;
     }
     // `shutdown` powers the machine off (there is no `poweroff`: BusyBox's would signal PID 1 the
@@ -272,7 +272,7 @@ fn write_openrc(root: &Path) -> Result<(), IsoError> {
     let _ = fs::remove_file(root.join("sbin/poweroff"));
     let p = root.join("sbin/shutdown");
     let _ = fs::remove_file(&p);
-    fs::write(&p, SHUTDOWN_SCRIPT).map_err(io_ctx("writing /sbin/shutdown"))?;
+    fs::write(&p, forge_schema::OPENRC_SHUTDOWN).map_err(io_ctx("writing /sbin/shutdown"))?;
     fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).map_err(io_ctx("setting permissions"))?;
     Ok(())
 }
@@ -410,22 +410,6 @@ mod openrc_tests {
     }
 }
 
-/// `shutdown [-h|-P|-p|-H|-r] [now|+minutes]`: power off by default; `-r` reboots, `-H` halts.
-/// A thin front end for `openrc-shutdown`, which takes the time as a required argument.
-const SHUTDOWN_SCRIPT: &str = r#"#!/bin/sh
-flag=-p
-when=now
-for a in "$@"; do
-    case "$a" in
-        -h|-P|-p) flag=-p ;;
-        -H) flag=-H ;;
-        -r) flag=-r ;;
-        -*) ;;
-        *) when=$a ;;
-    esac
-done
-exec /sbin/openrc-shutdown $flag $when
-"#;
 
 /// Networking: one OpenRC service (`network`) whose watcher configures every interface as it appears
 /// (wired or Wi-Fi), the script `udhcpc` calls to apply a lease, kernel-module autoloading, and the
