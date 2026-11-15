@@ -42,6 +42,7 @@ a file you can read:
 # /etc/forge/system.toml
 hostname = "nova"
 libc     = "glibc"
+init     = "openrc"          # or "systemd": forge apply installs it and removes the other
 repos    = ["https://github.com/noxilith/SingularitySYS/releases/download/repo-glibc"]
 packages = ["glibc", "coreutils", "openrc", "sudo", "forge", "wpa_supplicant"]
 

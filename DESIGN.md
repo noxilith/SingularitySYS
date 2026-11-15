@@ -777,3 +777,33 @@ packages ship them). `forge build` rejects a package that creates any of them as
 - New packages: `tzdata`, `glibc-locales` (en_US.UTF-8; C.UTF-8 is built in), `libxcrypt` (done).
 - `forge` itself stays a static binary, packaged for glibc.
 - `strap` declares the whole base in `system.toml`, so `forge upgrade` updates everything.
+
+## Choosing the init system: `init = "openrc"` or `init = "systemd"` (implemented, untested on hardware)
+
+OpenRC is the base. One line in `/etc/forge/system.toml` picks the init system, and `forge apply` converges the
+machine to it: `init = "systemd"` installs systemd and dbus, removes OpenRC, and sets the machine up to boot with
+systemd; changing it back reverses all of it. The old `[init] system = ... services = [...]` table still works;
+`services = [...]` may also be a top-level key.
+
+What differs between the two lives in one place, `crates/forge-schema/src/init.rs`:
+
+- **Packages.** `openrc`, or `systemd` + `dbus`. Choosing one removes the other's exclusive package (`dbus` stays
+  only if declared). The packages come from the repository like any other.
+- **Plumbing.** `/usr/sbin/init` (a link, so `/sbin/init` follows it) and `reboot`, `halt`, `poweroff`, `shutdown`
+  are owned by forge, not by any package, so two init systems never fight over them. The kernel command line has
+  no `init=`: it boots `/sbin/init`. Every generation is a snapshot with its own `/sbin/init`, so **rolling back
+  to an earlier generation boots the old init system** (Limine menu). That is the safety net for a switch.
+- **Units and networking.** Under systemd forge enables a baseline (`dbus`, `systemd-networkd`,
+  `systemd-resolved`, `systemd-timesyncd`, `systemd-logind`), writes DHCP network files for wired and wireless
+  interfaces, a `wpa_supplicant@.service` started by a udev rule when a Wi-Fi interface appears (it uses the same
+  `/etc/wpa_supplicant/wpa_supplicant.conf`, so the `wifi` command works unchanged), and links
+  `/etc/resolv.conf` to resolved's stub. Declared `services` become `.wants` links under `multi-user.target`.
+- **Order.** The init links and units are applied *after* the packages are in the tree, so a switch that fails
+  halfway leaves `/sbin/init` pointing at the init system that still exists.
+- **State.** `var/lib/forge/state.toml` remembers which init system forge last set the machine up for; a
+  declaration that matches it changes nothing (an OpenRC image that stays OpenRC is not touched).
+
+systemd 262 is built without PAM, seccomp, ACLs, audit, SELinux, EFI/boot tools and the optional services
+(machined, homed, coredump, oomd, ...). Known gaps: no PAM (so no logind sessions through `login`), no
+`sulogin`-based rescue shell, dbus-daemon's launch helper is not setuid. The kernel gained the options systemd
+wants (cgroup accounting, fanotify, autofs, seccomp) as `linux` 7.3.3_r3.
