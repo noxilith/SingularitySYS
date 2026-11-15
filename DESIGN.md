@@ -651,7 +651,7 @@ repository, `https://github.com/noxilith/SingularitySYS`.
   `distro/keys/`. The binary packages live in a **GitHub Release** called `repo` (git refuses files over 100 MB;
   the firmware archive is 402 MB, the kernel 145 MB; a release asset may be 2 GB). That release is a flat directory:
   `index.toml`, `index.toml.sig` and every archive. Systems use it as
-  `https://github.com/noxilith/SingularitySYS/releases/download/repo` (`forge_schema::DEFAULT_REPO_URL`), which a
+  `https://github.com/noxilith/SingularitySYS/releases/download/repo-glibc` (`forge_schema::DEFAULT_REPO_URL`), which a
   starter `system.toml` from `forge strap` already lists under `repos`.
 - **Trust.** Everything is checked after download, so the transport needs no authentication: the index against the
   keys in `/etc/forge/keys` (the ISO ships the release key there), each archive against the hash in that index, and

@@ -7,11 +7,11 @@
 # What it does:
 #   1. assembles ONE clean repository, repo/release, from the build outputs (the newest version of every
 #      real package, no -stage bootstrap packages), signed with the release key;
-#   2. uploads every archive to the GitHub Release `repo` of $GH_REPO (default noxilith/SingularitySYS), and the
+#   2. uploads every archive to the GitHub Release `repo-glibc` of $GH_REPO (default noxilith/SingularitySYS), and the
 #      index and its signature LAST, so a client never sees an index that names a file not there yet;
 #   3. with PRUNE=1, deletes release assets the new index no longer lists.
 #
-# Systems read it as  https://github.com/noxilith/SingularitySYS/releases/download/repo  (DEFAULT_REPO_URL).
+# Systems read it as  https://github.com/noxilith/SingularitySYS/releases/download/repo-glibc  (DEFAULT_REPO_URL).
 # Needs the GitHub CLI (`gh auth login` first). The release key is keys/release/singularity-release.key:
 # BACK IT UP and never commit it. Whoever holds it can publish packages every Singularity system will trust.
 set -euo pipefail
@@ -21,10 +21,10 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 FORGE=${FORGE:-target/debug/forge}
 GH_REPO=${GH_REPO:-noxilith/SingularitySYS}
-TAG=${TAG:-repo}
+TAG=${TAG:-repo-glibc}
 RELEASE_KEY=${RELEASE_KEY:-keys/release/singularity-release.key}
 DEST=${DEST:-repo/release}
-SOURCES=${SOURCES:-"repo/selfhost-r2 repo/tools repo/kernel-6.12 repo/kernel-ns"}
+SOURCES=${SOURCES:-"repo/glibc-world2"}
 YES=
 [ "${1:-}" = "-y" ] && YES=1
 

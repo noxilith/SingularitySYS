@@ -133,7 +133,7 @@ impl UserDecl {
 /// Where the project's packages are published: a GitHub Release holding `index.toml`, `index.toml.sig`
 /// and every archive as flat files. A new system's declaration starts with this repository, and the
 /// keys that sign it ship in `/etc/forge/keys`.
-pub const DEFAULT_REPO_URL: &str = "https://github.com/noxilith/SingularitySYS/releases/download/repo";
+pub const DEFAULT_REPO_URL: &str = "https://github.com/noxilith/SingularitySYS/releases/download/repo-glibc";
 
 #[cfg(test)]
 mod tests {
