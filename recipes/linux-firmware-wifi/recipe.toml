@@ -17,7 +17,7 @@ sha256 = "a10d1ab5baf2c74ba92e8c7cf313e691696c26bddfa6df00db795e48d70cd4ca"
 
 [build]
 install = '''
-fw="$DESTDIR/lib/firmware"
+fw="$DESTDIR/usr/lib/firmware"
 mkdir -p "$fw"
 for d in intel/iwlwifi ath10k ath11k ath12k ath6k ath9k_htc brcm cypress mediatek mrvl nxp libertas \
          rsi rtlwifi rtw88 rtw89 rtl_nic ti-connectivity atmel mwlwifi mwl8k morsemicro; do

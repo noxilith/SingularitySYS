@@ -1,0 +1,29 @@
+# libxcrypt: crypt(3) and the password hashes (yescrypt, SHA-512, ...). glibc 2.42 no longer carries them
+# (it is built --disable-crypt), and shadow and sudo need crypt(). Built with the glibc-compatible ABI
+# (libcrypt.so.1) so prebuilt programs that expect that soname keep working.
+name        = "libxcrypt"
+version     = "4.4.38"
+description = "Extended crypt library for password hashing"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "perl", "pkgconf"]
+
+[[source]]
+url    = "https://github.com/besser82/libxcrypt/releases/download/v4.4.38/libxcrypt-4.4.38.tar.xz"
+sha256 = "80304b9c306ea799327f01d9a7549bdb28317789182631f1b54f4511b4206dd6"
+
+[build]
+configure = '''
+./configure --prefix=/usr --libdir=/usr/lib --enable-obsolete-api=glibc --enable-hashes=strong,glibc \
+    --disable-werror --disable-dependency-tracking CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make DESTDIR=$DESTDIR install
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc"
+rm -f "$DESTDIR"/usr/lib/*.la
+test -f "$DESTDIR/usr/lib/libcrypt.so.1"
+test -f "$DESTDIR/usr/include/crypt.h"
+'''

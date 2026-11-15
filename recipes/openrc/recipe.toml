@@ -17,7 +17,7 @@ sha256 = "56d6d24c7fd2ca15d1abd1fb82ce5430629a71acb2c3fa12760300243dbd0baa"
 
 [build]
 configure = '''
-CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --libdir=lib --buildtype=release \
+CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --libdir=lib --bindir=bin --sbindir=sbin --buildtype=release \
     -Dpam=false -Dselinux=disabled -Daudit=disabled -Dnewnet=false -Dpkgconfig=false \
     -Dbash-completions=false -Dzsh-completions=false -Dsysvinit=false -Dshell=/bin/sh -Dbranding='"SingularitySYS"'
 '''
@@ -25,7 +25,7 @@ compile = "meson compile -C build -j $JOBS"
 install = '''
 mkdir -p "$DESTDIR/usr/libexec/rc"
 DESTDIR=$DESTDIR meson install -C build
-test -x "$DESTDIR/sbin/openrc-init"
-test -x "$DESTDIR/sbin/openrc-run"
+test -x "$DESTDIR/usr/sbin/openrc-init"
+test -x "$DESTDIR/usr/sbin/openrc-run"
 test -d "$DESTDIR/etc/init.d"
 '''

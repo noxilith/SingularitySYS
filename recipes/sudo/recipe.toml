@@ -11,7 +11,7 @@ license     = "ISC"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "libxcrypt"]
 
 [[source]]
 url    = "https://www.sudo.ws/dist/sudo-1.9.17p2.tar.gz"
