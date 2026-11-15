@@ -4,7 +4,7 @@
 # `poweroff`, `halt` and `shutdown` links are NOT installed by this package: forge apply owns them (it switches
 # them together with the init system), so they can never clash with OpenRC's.
 name        = "systemd"
-version     = "262.2_r2"
+version     = "262.2_r3"
 description = "systemd system and service manager (with udev)"
 license     = "LGPL-2.1-or-later"
 libc        = ["glibc"]

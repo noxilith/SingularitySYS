@@ -1681,6 +1681,9 @@ fn iso_cmd(a: IsoArgs) -> Result<()> {
     let trees = forge_iso::fetch(&a.repo, &trust, &a.packages, libc, &work.join("store"))?;
     let rootfs = work.join("rootfs");
     forge_iso::materialize_into(&work.join("store"), &trees, &rootfs)?;
+    // The initramfs is made of a static BusyBox: a build tool of the image, fetched on its own. The live system has none.
+    let busybox_trees = forge_iso::fetch(&a.repo, &trust, &["busybox".to_string()], libc, &work.join("store"))?;
+    let initramfs_busybox = busybox_trees.iter().map(|t| t.join("usr/bin/busybox")).find(|p| p.is_file()).context("the repository has no busybox package (the initramfs needs it)")?;
 
     let kernel = match a.kernel {
         Some(k) => k,
@@ -1704,6 +1707,7 @@ fn iso_cmd(a: IsoArgs) -> Result<()> {
     }
     let spec = forge_iso::IsoSpec {
         rootfs,
+        initramfs_busybox,
         kernel,
         limine_dir: a.limine_dir,
         work: work.join("build"),

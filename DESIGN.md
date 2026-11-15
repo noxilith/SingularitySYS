@@ -843,3 +843,17 @@ wants (cgroup accounting, fanotify, autofs, seccomp) as `linux` 7.3.3_r3.
   vendor to `/boot/microcode.img`, and every Limine entry (live and generations) loads it as the first extra initrd, so
   the kernel applies it before it mounts anything. It is an ordinary package: `forge upgrade` brings new microcode,
   used from the next boot. The installer does the same for the first boot.
+
+## BusyBox is gone from the system (implemented; untested on hardware)
+
+The installed system and the live ISO have no BusyBox. What it used to provide is GNU/standard now, all packages
+managed by forge: `util-linux` (mount, umount, swapon, losetup, dmesg, findmnt, script, flock, taskset, hwclock,
+fsck, sulogin, kill, more, ...), `shadow` (login, su, nologin), `coreutils` (with hostname), `procps-ng` (ps, top, free,
+pgrep, pkill, uptime, watch, sysctl), `psmisc` (killall, fuser, pstree), `less`, `iputils` (ping), `which`, `bzip2`,
+`pciutils` (lspci), `dosfstools` (mkfs.vfat, for the installer), `e2fsprogs`, and dhcpcd for DHCP (netwatch starts one
+dhcpcd for every interface). `mount`, `umount`, `su` and `ping` are on the setuid allowlist.
+
+BusyBox remains in two places, both *build* tools and neither part of a system: the static `busybox` the live
+initramfs is made of (`forge iso` fetches it on its own, it is not put in the image), and the build sandbox's userland
+(every recipe names `busybox` as a build dependency). Moving the sandbox to GNU tools is a later step (it means
+rebuilding the toolchain's world with them). The power commands' last resort is the kernel's sysrq, not BusyBox.

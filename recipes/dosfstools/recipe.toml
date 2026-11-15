@@ -1,0 +1,23 @@
+# dosfstools: mkfs.fat / mkfs.vfat, fsck.fat (the installer formats the EFI partition with mkfs.vfat).
+name        = "dosfstools"
+version     = "4.2"
+description = "FAT file system tools (mkfs.fat, fsck.fat, fatlabel)"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://github.com/dosfstools/dosfstools/releases/download/v4.2/dosfstools-4.2.tar.gz"
+sha256 = "64926eebf90092dca21b14259a5301b7b98e7b1943e8a201c7d726084809b527"
+
+[build]
+configure = "./configure --prefix=/usr --sbindir=/usr/sbin --enable-compat-symlinks --without-udev --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share"
+test -x "$DESTDIR/usr/sbin/mkfs.fat"
+test -e "$DESTDIR/usr/sbin/mkfs.vfat"
+'''

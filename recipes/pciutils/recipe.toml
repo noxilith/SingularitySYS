@@ -1,0 +1,23 @@
+# pciutils: lspci and setpci, with the PCI id list that comes in the tarball.
+name        = "pciutils"
+version     = "3.13.0"
+description = "lspci and setpci"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://mirrors.edge.kernel.org/pub/software/utils/pciutils/pciutils-3.13.0.tar.gz"
+sha256 = "062edc9f11a061c06d14126591a4f2bc57a6757dedf338e4410321f9eba1a28b"
+
+[build]
+compile = "make -j$JOBS CC=gcc OPT='-O2' PREFIX=/usr ZLIB=no DNS=no SHARED=no HWDB=no IDSDIR=/usr/share/hwdata lspci setpci pci.ids"
+install = '''
+mkdir -p "$DESTDIR/usr/bin" "$DESTDIR/usr/share/hwdata"
+install -m 755 lspci setpci "$DESTDIR/usr/bin/"
+install -m 644 pci.ids "$DESTDIR/usr/share/hwdata/pci.ids"
+strip "$DESTDIR/usr/bin/lspci" "$DESTDIR/usr/bin/setpci"
+test -x "$DESTDIR/usr/bin/lspci"
+'''

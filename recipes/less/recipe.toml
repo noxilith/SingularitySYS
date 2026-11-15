@@ -1,0 +1,22 @@
+# less: the pager.
+name        = "less"
+version     = "668"
+description = "The less pager"
+license     = "GPL-3.0-or-later OR BSD-2-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses"]
+
+[[source]]
+url    = "https://www.greenwoodsoftware.com/less/less-668.tar.gz"
+sha256 = "2819f55564d86d542abbecafd82ff61e819a3eec967faa36cd3e68f1596a44b8"
+
+[build]
+configure = "./configure --prefix=/usr --with-regex=posix LIBS='-lncursesw -ltinfow' CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share"
+test -x "$DESTDIR/usr/bin/less"
+'''

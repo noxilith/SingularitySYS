@@ -1,7 +1,7 @@
 # mkfs.btrfs and btrfs, static. Only what the installer and generations use; no documentation,
 # no udev, no conversion from ext4 (that needs e2fsprogs), no Python bindings.
 name        = "btrfs-progs"
-version     = "6.11"
+version     = "6.11_r1"
 description = "Btrfs tools: mkfs.btrfs, btrfs, btrfstune"
 license     = "GPL-2.0-only"
 libc        = ["glibc"]

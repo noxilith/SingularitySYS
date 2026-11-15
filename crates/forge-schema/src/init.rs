@@ -32,10 +32,11 @@ pub fn foreign_init_packages(system: &str) -> Vec<&'static str> {
 /// them (the declaration lists what *you* chose). The kernel (`linux`, managed with `forge kernel`) and the init
 /// system's packages (see [`init_packages`]) are not in this list.
 pub const BASE_PACKAGES: &[&str] = &[
-    "glibc", "filesystem", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz",
+    "glibc", "filesystem", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz", "bzip2",
     "diffutils", "util-linux", "shadow", "sudo", "kmod", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb",
     "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl",
-    "tzdata", "glibc-locales", "curl", "ca-certificates", "micro", "microcode",
+    "tzdata", "glibc-locales", "curl", "ca-certificates", "micro", "microcode", "procps-ng", "psmisc", "less", "iputils",
+    "which", "pciutils", "dosfstools", "e2fsprogs",
 ];
 
 /// True for a package that is part of the base system (it cannot be removed, and need not be declared).
@@ -56,12 +57,12 @@ pub enum Entry {
 /// with /run/systemd/system), not which one is configured: a machine switched to systemd is still running OpenRC until
 /// its next boot and must be able to reboot into the change. By then OpenRC's own tools are gone (the package was
 /// removed), so when `openrc-shutdown` is missing the running openrc-init is asked directly, through its control
-/// FIFO (which is all `openrc-shutdown` does), and as a last resort BusyBox forces it.
+/// FIFO (which is all `openrc-shutdown` does), and as a last resort the kernel is asked (sysrq: sync, remount read-only, then reboot or power off).
 pub fn power_script(action: &str) -> String {
-    let (word, flag) = match action {
-        "reboot" => ("reboot", "-r"),
-        "halt" => ("halt", "-H"),
-        _ => ("poweroff", "-p"),
+    let (word, flag, key) = match action {
+        "reboot" => ("reboot", "-r", "b"),
+        "halt" => ("halt", "-H", "o"),
+        _ => ("poweroff", "-p", "o"),
     };
     format!(
         "#!/bin/sh\n\
@@ -76,7 +77,9 @@ pub fn power_script(action: &str) -> String {
          \techo {word} > /run/openrc/init.ctl\n\
          \texit 0\n\
          fi\n\
-         exec /usr/bin/busybox {word} -f\n"
+         echo s > /proc/sysrq-trigger\n\
+         echo u > /proc/sysrq-trigger\n\
+         echo {key} > /proc/sysrq-trigger\n"
     )
 }
 
@@ -106,7 +109,9 @@ if [ -p /run/openrc/init.ctl ]; then
     echo $action > /run/openrc/init.ctl
     exit 0
 fi
-exec /usr/bin/busybox $action -f
+echo s > /proc/sysrq-trigger
+echo u > /proc/sysrq-trigger
+case $action in reboot) echo b ;; *) echo o ;; esac > /proc/sysrq-trigger
 "#;
 
 /// The power commands as (name, script).
@@ -222,7 +227,7 @@ mod tests {
             sh.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
             assert!(sh.wait().unwrap().success(), "{name} is not valid shell:\n{script}");
             // With openrc-shutdown gone (OpenRC removed, still running) they talk to the running init.
-            assert!(script.contains("/run/openrc/init.ctl") && script.contains("busybox"), "{name}:\n{script}");
+            assert!(script.contains("/run/openrc/init.ctl") && script.contains("/proc/sysrq-trigger") && !script.contains("busybox"), "{name}:\n{script}");
         }
     }
     #[test]

@@ -226,7 +226,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
          mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp\n\
          chmod 1777 /tmp\n\
          mount -a 2>/dev/null || true\n\
-         hostname -F /etc/hostname\n"
+         hostname \"$(cat /etc/hostname)\"\n"
             .into(),
     )?;
     // The overlay's /bin may only exist if a package provided it; /sbin/init is BusyBox's.
@@ -392,10 +392,9 @@ mod openrc_tests {
         let svc = fs::read_to_string(t.path().join("etc/init.d/network")).unwrap();
         assert!(svc.starts_with("#!/sbin/openrc-run") && svc.contains("netwatch"), "{svc}");
         let watch = fs::read_to_string(t.path().join("usr/libexec/singularity/netwatch")).unwrap();
-        assert!(watch.contains("wpa_supplicant -B") && watch.contains("udhcpc -b -i"), "{watch}");
+        assert!(watch.contains("wpa_supplicant -B") && watch.contains("dhcpcd -b -q") && !watch.contains("udhcpc"), "{watch}");
         assert!(fs::metadata(t.path().join("usr/bin/wifi")).unwrap().permissions().mode() & 0o111 != 0);
         assert!(fs::read_to_string(t.path().join("etc/wpa_supplicant/wpa_supplicant.conf")).unwrap().contains("update_config=1"));
-        assert!(fs::metadata(t.path().join("usr/share/udhcpc/default.script")).unwrap().permissions().mode() & 0o111 != 0);
         assert_eq!(fs::read_link(t.path().join("etc/init.d/agetty.tty1")).unwrap(), Path::new("agetty"));
         let conf = fs::read_to_string(t.path().join("etc/conf.d/agetty.ttyS0")).unwrap();
         assert!(conf.contains("baud=\"115200\"") && conf.contains("-L"), "{conf}");
@@ -422,7 +421,7 @@ mod openrc_tests {
 
 
 /// Networking: one OpenRC service (`network`) whose watcher configures every interface as it appears
-/// (wired or Wi-Fi), the script `udhcpc` calls to apply a lease, kernel-module autoloading, and the
+/// (wired or Wi-Fi), kernel-module autoloading, and the
 /// `wifi` helper. Wi-Fi interfaces appear a second or two after their driver loads (firmware loading is
 /// asynchronous), which is why this is a watcher and not a one-shot start.
 fn write_networking(root: &Path) -> Result<(), IsoError> {
@@ -437,7 +436,6 @@ fn write_networking(root: &Path) -> Result<(), IsoError> {
     put("etc/conf.d/network", 0o644, NETWORK_CONF)?;
     put("usr/libexec/singularity/netwatch", 0o755, NETWATCH)?;
     put("etc/init.d/coldplug", 0o755, COLDPLUG_SERVICE)?;
-    put("usr/share/udhcpc/default.script", 0o755, UDHCPC_SCRIPT)?;
     put("usr/bin/wifi", 0o755, WIFI_COMMAND)?;
     put("etc/wpa_supplicant/wpa_supplicant.conf", 0o600, WPA_CONF)
 }
@@ -466,6 +464,7 @@ start_pre() {
 }
 
 stop_post() {
+	dhcpcd -x >/dev/null 2>&1
 	for p in /run/netwatch/*; do
 		[ -f "$p" ] || continue
 		kill "$(cat "$p")" 2>/dev/null
@@ -499,10 +498,10 @@ while :; do
 					-P "$RUN/wpa.$name" >/dev/null 2>&1
 			fi
 		fi
-		# -b: keep trying in the background; -A 5: retry every 5 seconds (a Wi-Fi link needs a moment).
-		alive "$RUN/dhcp.$name" || udhcpc -b -i "$name" -p "$RUN/dhcp.$name" -A 5 \
-			-s /usr/share/udhcpc/default.script -x "hostname:$(hostname)" >/dev/null 2>&1
 	done
+	# One DHCP client (dhcpcd) looks after every interface, including ones that appear later (a Wi-Fi card whose
+	# firmware loads after boot), and waits for a carrier on its own. Started once; restarted if it ever dies.
+	pgrep -x dhcpcd >/dev/null 2>&1 || dhcpcd -b -q >/dev/null 2>&1
 	sleep 3
 done
 "#;
@@ -603,35 +602,6 @@ case "$1" in
 		exit 1
 		;;
 esac
-"#;
-
-const UDHCPC_SCRIPT: &str = r#"#!/bin/sh
-# Called by udhcpc: $1 is deconfig, bound, renew, nak or leasefail; the lease arrives in the
-# environment (interface, ip, mask, broadcast, router, dns, domain).
-case "$1" in
-	deconfig)
-		ip -4 addr flush dev "$interface"
-		ip link set "$interface" up
-		;;
-	bound|renew)
-		ip -4 addr replace "$ip/${mask:-24}" ${broadcast:+broadcast "$broadcast"} dev "$interface"
-		if [ -n "$router" ]; then
-			metric=0
-			for gw in $router; do
-				metric=$((metric + 1))
-				ip -4 route replace default via "$gw" dev "$interface" metric "$metric"
-			done
-		fi
-		if [ -n "$dns" ]; then
-			tmp=/etc/resolv.conf.$$
-			{
-				[ -n "$domain" ] && echo "search $domain"
-				for server in $dns; do echo "nameserver $server"; done
-			} > "$tmp" && mv "$tmp" /etc/resolv.conf
-		fi
-		;;
-esac
-exit 0
 "#;
 
 /// Groups every system gets, with fixed ids (so a file's group means the same on every install). `wheel`

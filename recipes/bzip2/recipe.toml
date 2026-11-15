@@ -1,0 +1,24 @@
+# bzip2: bzip2 and bunzip2 (tar -j and plenty of tarballs need them).
+name        = "bzip2"
+version     = "1.0.8"
+description = "bzip2 compressor"
+license     = "bzip2-1.0.6"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
+
+[build]
+compile = "make CC=gcc CFLAGS='-O2 -fPIC -D_FILE_OFFSET_BITS=64' bzip2 bzip2recover libbz2.a"
+install = '''
+mkdir -p "$DESTDIR/usr/bin"
+install -m 755 bzip2 bzip2recover "$DESTDIR/usr/bin/"
+ln -sf bzip2 "$DESTDIR/usr/bin/bunzip2"
+ln -sf bzip2 "$DESTDIR/usr/bin/bzcat"
+strip "$DESTDIR/usr/bin/bzip2"
+test -x "$DESTDIR/usr/bin/bzip2"
+'''

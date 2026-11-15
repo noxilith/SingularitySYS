@@ -1,0 +1,25 @@
+# psmisc: killall, fuser, pstree, peekfd.
+name        = "psmisc"
+version     = "23.7"
+description = "killall, fuser, pstree"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses"]
+
+[[source]]
+url    = "https://downloads.sourceforge.net/project/psmisc/psmisc/psmisc-23.7.tar.xz"
+sha256 = "58c55d9c1402474065adae669511c191de374b0871eec781239ab400b907c327"
+
+[build]
+configure = '''
+./configure --prefix=/usr --disable-nls --disable-selinux --disable-apparmor --disable-dependency-tracking \
+    TERMCAP_LIBS='-lncursesw -ltinfow' CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share"
+test -x "$DESTDIR/usr/bin/killall" && test -x "$DESTDIR/usr/bin/fuser"
+'''

@@ -77,6 +77,9 @@ impl Runner for SystemRunner {
 pub struct IsoSpec {
     /// The merged package tree (modified: the live `/etc` is written into it).
     pub rootfs: PathBuf,
+    /// The static BusyBox the initramfs is made of. It is a build tool of the image only: the live system itself has no
+    /// BusyBox (the packages in `rootfs` are GNU).
+    pub initramfs_busybox: PathBuf,
     /// The kernel image to boot.
     pub kernel: PathBuf,
     /// Where Limine's files are (`limine-bios-cd.bin`, `limine-uefi-cd.bin`, `BOOTX64.EFI`).
@@ -103,8 +106,8 @@ fn args(a: &[&str]) -> Vec<String> {
 
 /// Check that everything the build needs is there, before anything is written.
 pub fn check_inputs(spec: &IsoSpec) -> Result<(), IsoError> {
-    let busybox = spec.rootfs.join("usr/bin/busybox");
-    for p in [&spec.kernel, &busybox] {
+    let busybox = &spec.initramfs_busybox;
+    for p in [&spec.kernel, busybox] {
         if !p.is_file() {
             return Err(IsoError::Missing(p.clone()));
         }
@@ -161,7 +164,7 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
 
     // The initramfs.
     let rd = spec.work.join("initramfs");
-    live::write_initramfs_tree(&rd, &spec.rootfs.join("usr/bin/busybox"), &spec.label)?;
+    live::write_initramfs_tree(&rd, &spec.initramfs_busybox, &spec.label)?;
     let img = fs::File::create(boot.join("initramfs.img")).map_err(io_ctx("creating the initramfs"))?;
     let mut gz = flate2::GzBuilder::new().mtime(0).write(img, flate2::Compression::best());
     cpio::write_tree(&mut gz, &rd, &[("console", 0o020600, (5, 1)), ("null", 0o020666, (1, 3))]).map_err(io_ctx("writing the initramfs"))?;
@@ -221,7 +224,7 @@ mod tests {
     fn fixture(t: &Path) -> IsoSpec {
         let root = t.join("root");
         fs::create_dir_all(root.join("usr/bin")).unwrap();
-        fs::write(root.join("usr/bin/busybox"), "ELF").unwrap();
+        fs::write(t.join("busybox"), "ELF").unwrap();
         let lim = t.join("limine");
         fs::create_dir_all(&lim).unwrap();
         for f in LIMINE_FILES {
@@ -230,6 +233,7 @@ mod tests {
         fs::write(t.join("vmlinuz"), "KERNEL").unwrap();
         IsoSpec {
             rootfs: root,
+            initramfs_busybox: t.join("busybox"),
             kernel: t.join("vmlinuz"),
             limine_dir: lim,
             work: t.join("work"),
@@ -293,7 +297,7 @@ mod tests {
         spec.label = "not valid".into();
         assert!(matches!(build(&spec, &mut r), Err(IsoError::Invalid { .. })));
         spec = fixture(t2.path());
-        fs::remove_file(spec.rootfs.join("usr/bin/busybox")).unwrap();
+        fs::remove_file(&spec.initramfs_busybox).unwrap();
         assert!(matches!(build(&spec, &mut r), Err(IsoError::Missing(_))));
     }
 
@@ -316,7 +320,7 @@ mod key_tests {
         let t = tempfile::tempdir().unwrap();
         let root = t.path().join("root");
         fs::create_dir_all(root.join("usr/bin")).unwrap();
-        fs::write(root.join("usr/bin/busybox"), "ELF").unwrap();
+        fs::write(t.path().join("busybox"), "ELF").unwrap();
         let lim = t.path().join("limine");
         fs::create_dir_all(&lim).unwrap();
         for f in LIMINE_FILES {
@@ -332,6 +336,7 @@ mod key_tests {
         }
         let spec = IsoSpec {
             rootfs: root.clone(),
+            initramfs_busybox: t.path().join("busybox"),
             kernel: t.path().join("vmlinuz"),
             limine_dir: lim,
             work: t.path().join("work"),

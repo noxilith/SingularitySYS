@@ -1,5 +1,5 @@
 name        = "coreutils"
-version     = "9.5"
+version     = "9.5_r1"
 description = "GNU core utilities (ls, cp, mv, cat, ...), one static binary with a symlink per command"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -14,7 +14,7 @@ sha256 = "cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a"
 [build]
 configure = '''
 export FORCE_UNSAFE_CONFIGURE=1
-./configure --prefix=/usr --disable-nls --disable-dependency-tracking --enable-single-binary=symlinks --disable-libcap --without-gmp --without-selinux CFLAGS='-O2 -std=gnu17'
+./configure --prefix=/usr --disable-nls --disable-dependency-tracking --enable-single-binary=symlinks --enable-install-program=hostname --disable-libcap --without-gmp --without-selinux CFLAGS='-O2 -std=gnu17'
 '''
 compile   = "make -j$JOBS"
 install   = '''

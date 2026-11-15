@@ -1,10 +1,10 @@
 # Account management for the installer (useradd, groupadd, chpasswd, passwd, ...), without PAM.
-# login, su, newgrp and sg are not installed: BusyBox's login stays the login program.
+# login and su are installed (the login program of the system; su and mount-style setuid come from forge's allowlist).
 # /etc/login.defs is part of the package: chpasswd and useradd read it, and its default
 # password hash would otherwise be DES. It must not set SHA_CRYPT_MIN_ROUNDS alone: shadow then
 # asks for rounds=999999999, which musl refuses, and every password change fails.
 name        = "shadow"
-version     = "4.16.0_r1"
+version     = "4.16.0_r2"
 description = "User and group account tools (useradd, groupadd, chpasswd, passwd)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
@@ -20,17 +20,25 @@ sha256 = "b78e3921a95d53282a38e90628880624736bf6235e36eea50c50835f59a3530b"
 configure = '''
 ./configure --prefix=/usr --sysconfdir=/etc --disable-shared --enable-static --without-libpam \
     --without-selinux --without-acl --without-attr --without-audit --without-libbsd --without-tcb \
-    --without-sssd --without-su --disable-nls --disable-man --disable-account-tools-setuid \
+    --without-sssd --disable-nls --disable-man --disable-account-tools-setuid \
     --disable-dependency-tracking CFLAGS='-O2'
 '''
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
 rm -rf "$DESTDIR/usr/share" "$DESTDIR/etc/pam.d"
-rm -f "$DESTDIR"/usr/bin/{login,su,newgrp,sg} "$DESTDIR"/usr/sbin/nologin "$DESTDIR"/usr/bin/nologin
-# shadow also installs login, groups, getsubids, nologin and libsubid into real /bin, /sbin and /lib, which are
-# symlinks into /usr on the system. None of them is needed here (BusyBox has login, groups and nologin).
-rm -rf "$DESTDIR/bin" "$DESTDIR/sbin" "$DESTDIR/lib"
+# shadow puts login, su, nologin and a few more into real /bin and /sbin, which are symlinks into /usr on the system:
+# move them where they belong, and drop what has no use here (libsubid).
+for d in bin sbin; do
+    if [ -d "$DESTDIR/$d" ]; then
+        mkdir -p "$DESTDIR/usr/$d"
+        for f in "$DESTDIR/$d"/*; do [ -e "$f" ] && mv -f "$f" "$DESTDIR/usr/$d/"; done
+        rmdir "$DESTDIR/$d"
+    fi
+done
+rm -rf "$DESTDIR/lib"
+for b in login su; do test -x "$DESTDIR/usr/bin/$b" || { echo "shadow did not build $b" >&2; exit 1; }; strip "$DESTDIR/usr/bin/$b"; done
+test -x "$DESTDIR/usr/sbin/nologin" || { echo "shadow did not install nologin" >&2; exit 1; }
 cat > "$DESTDIR/etc/login.defs" <<'DEFS'
 # Account defaults used by useradd, groupadd and chpasswd.
 ENCRYPT_METHOD SHA512
@@ -49,6 +57,11 @@ USERGROUPS_ENAB yes
 PASS_MAX_DAYS 99999
 PASS_MIN_DAYS 0
 PASS_WARN_AGE 7
+ENV_PATH PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ENV_SUPATH PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+TTYPERM 0600
+LOGIN_RETRIES 5
+LOGIN_TIMEOUT 60
 DEFS
 for b in useradd groupadd chpasswd passwd usermod; do
     f=$(ls "$DESTDIR"/usr/sbin/$b "$DESTDIR"/usr/bin/$b 2>/dev/null | head -1)
