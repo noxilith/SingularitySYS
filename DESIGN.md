@@ -807,3 +807,25 @@ systemd 262 is built without PAM, seccomp, ACLs, audit, SELinux, EFI/boot tools 
 (machined, homed, coredump, oomd, ...). Known gaps: no PAM (so no logind sessions through `login`), no
 `sulogin`-based rescue shell, dbus-daemon's launch helper is not setuid. The kernel gained the options systemd
 wants (cgroup accounting, fanotify, autofs, seccomp) as `linux` 7.3.3_r3.
+
+## The declaration is what you chose (implemented)
+
+`/etc/forge/system.toml` lists what *you* decided, not what the system needs to run:
+
+- **The base system is implied.** `forge_schema::BASE_PACKAGES` (glibc, busybox, bash, coreutils, util-linux, shadow,
+  sudo, kmod, networking, btrfs-progs, limine, forge, micro, ...) plus the init system's packages are installed and
+  upgraded by `forge apply` whether or not they are declared. `forge remove` refuses them. Systems installed before
+  this change list them in `packages`; that still works (duplicates are ignored), and `forge list` shows only the
+  packages you chose, the dependencies, and a count for the base.
+- **`packages` is readable.** A list, or one multi-line string with names separated by commas or new lines;
+  `forge install` keeps whichever form the file uses and writes the text form with one name per line.
+- **`shell`** names the login shell for root and for users who name none. `bash` is base; any other name is a package
+  that is installed, added to `/etc/shells` and set as the shell. A `[[users]]` entry may name its own `shell`.
+- **Users are managed.** For each `[[users]]` entry apply creates the account (and the groups it names) or adjusts the
+  shell and group memberships, with the shadow tools, after the packages. Passwords are never in the file: a new user
+  has none until `sudo passwd NAME`. Nothing is ever removed.
+- **The starter declaration** `forge strap` writes has every setting people usually want, each commented, an empty
+  package list, and the installer's user.
+- **Boot.** Kernel line `quiet loglevel=3`; to see everything, press `e` at the Limine menu and delete `quiet`.
+  The watchdog drivers are blacklisted (`/etc/modprobe.d/blacklist-watchdog.conf`), and the kernel's RDSEED
+  warning on affected AMD chips is a debug message (the kernel still turns RDSEED off there).

@@ -252,10 +252,11 @@ pub fn package_changes(plan: &Plan) -> PackageChanges {
 
 /// Show what applying `plan` will do: the packages asked for (and removed), their dependencies, then the other
 /// changes. `requested` are the names in the declaration; anything else that gets installed is a dependency.
-pub fn print_plan(plan: &Plan, requested: &[String]) {
+pub fn print_plan(plan: &Plan, requested: &[String], base: &[String]) {
     let u = ui();
     let pk = package_changes(plan);
-    let is_req = |n: &str| requested.iter().any(|r| r == n);
+    let is_base = |n: &str| base.iter().any(|b| b == n) && !requested.iter().any(|r| r == n);
+    let is_req = |n: &str| !is_base(n) && requested.iter().any(|r| r == n);
     let width = pk
         .installed
         .iter()
@@ -286,8 +287,19 @@ pub fn print_plan(plan: &Plan, requested: &[String]) {
             line(Kind::Remove, n, u.dim(v), false);
         }
     }
-    let deps_new: Vec<_> = pk.installed.iter().filter(|(n, _)| !is_req(n)).collect();
-    let deps_up: Vec<_> = pk.upgraded.iter().filter(|(n, _, _)| !is_req(n)).collect();
+    let base_new: Vec<_> = pk.installed.iter().filter(|(n, _)| is_base(n)).collect();
+    let base_up: Vec<_> = pk.upgraded.iter().filter(|(n, _, _)| is_base(n)).collect();
+    if !base_new.is_empty() || !base_up.is_empty() {
+        heading(&format!("Base system ({})", base_new.len() + base_up.len()));
+        for (n, v) in base_new {
+            line(Kind::Add, n, u.dim(v), true);
+        }
+        for (n, old, new) in base_up {
+            show_upgrade(n, old, new, true);
+        }
+    }
+    let deps_new: Vec<_> = pk.installed.iter().filter(|(n, _)| !is_req(n) && !is_base(n)).collect();
+    let deps_up: Vec<_> = pk.upgraded.iter().filter(|(n, _, _)| !is_req(n) && !is_base(n)).collect();
     if !deps_new.is_empty() || !deps_up.is_empty() {
         heading(&format!("Dependencies ({})", deps_new.len() + deps_up.len()));
         for (n, v) in deps_new {

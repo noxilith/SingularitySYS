@@ -1105,7 +1105,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
     }
     let mut requested = decl.packages.clone();
     requested.extend(forge_schema::init_packages(&decl.init.system).iter().map(|s| s.to_string()));
-    ui::print_plan(&plan, &requested);
+    ui::print_plan(&plan, &requested, &base_packages());
     if a.dry_run {
         println!();
         ui::info("dry run: nothing was changed");

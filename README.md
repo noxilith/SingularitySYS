@@ -42,17 +42,25 @@ a file you can read:
 # /etc/forge/system.toml
 hostname = "nova"
 libc     = "glibc"
+timezone = "Europe/Paris"
 init     = "openrc"          # or "systemd": forge apply installs it and removes the other
+shell    = "bash"            # or fish, zsh, ...: installed for you
 repos    = ["https://github.com/noxilith/SingularitySYS/releases/download/repo-glibc"]
-packages = ["glibc", "coreutils", "openrc", "sudo", "forge", "wpa_supplicant"]
+
+# The packages you chose. The base system (shell, networking, forge itself, ...) is always there and not listed.
+packages = """
+  git,
+  htop,
+"""
 
 [[users]]
 name   = "ada"
 groups = ["wheel", "audio", "video"]
 ```
 
-Change the file, run `forge apply`, and the machine converges to it. If you don't like the result, boot the
-previous **generation** from the Limine menu.
+Edit it with `sudo forge edit` (or press Ctrl+H in a shell): when you close the editor the file is checked and the
+machine converges to it, users and groups included. If you don't like the result, boot the previous **generation**
+from the Limine menu.
 
 ## 🚀 Try it
 
