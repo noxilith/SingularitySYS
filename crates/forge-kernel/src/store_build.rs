@@ -54,7 +54,7 @@ fn configure_step(mode: &Mode) -> Result<String, KernelError> {
                 // No configuration of the running kernel: start from the standard one (every driver a module).
                 None => "sh \"$RECIPE_DIR/full-config.sh\" full\n".to_string(),
             };
-            format!("{start}{cc} LSMOD=\"$RECIPE_DIR/lsmod.txt\" localmodconfig\nsh \"$RECIPE_DIR/full-config.sh\" essential\n")
+            format!("{start}yes '' | {cc} LSMOD=\"$RECIPE_DIR/lsmod.txt\" localmodconfig\nsh \"$RECIPE_DIR/full-config.sh\" essential\n")
         }
         Mode::File(_) => format!("cp \"$RECIPE_DIR/base-config\" .config\n{cc} olddefconfig\nsh \"$RECIPE_DIR/full-config.sh\" check\n"),
         Mode::Menu { .. } => {

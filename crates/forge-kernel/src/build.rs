@@ -120,7 +120,9 @@ pub fn build(spec: &BuildSpec, runner: &mut dyn Runner) -> Result<Staged, Kernel
             }
             let lsmod = spec.work.join("lsmod.txt");
             write(&lsmod, &lsmod_file(loaded_modules, keep))?;
-            runner.run(&kmake(spec, &tree, &[&format!("LSMOD={}", lsmod.display()), "localmodconfig"]))?;
+            // localmodconfig asks about every option the base lacks; answer them all with the default.
+            let ask = format!("yes '' | make ARCH=x86_64 CC=\"{}\" LSMOD='{}' localmodconfig", spec.cc, lsmod.display());
+            runner.run(&Cmd::new("sh", &["-c"]).dir(&tree).arg(ask))?;
             // localmodconfig only trims modules; make sure nothing the system needs to boot went with them.
             runner.run(&run_script("essential"))?;
         }
