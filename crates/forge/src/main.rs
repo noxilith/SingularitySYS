@@ -1120,6 +1120,15 @@ fn apply(a: ApplyArgs) -> Result<()> {
     ui::apply_plan(&plan)?;
     println!();
     ui::ok(&format!("applied {} change(s) in {}", plan.changes.len(), ui::duration(started.elapsed())));
+    // The machine must still start its init system: a link that resolves to nothing, or to BusyBox's own init, boots
+    // into "can't run /etc/init.d/rcS". (Run `forge apply` again with the new forge if this fires after an upgrade.)
+    let init_link = a.root.join("usr/sbin/init");
+    if let Ok(target) = std::fs::read_link(&init_link) {
+        let resolved = init_link.parent().map(|d| d.join(&target));
+        if target.to_string_lossy().ends_with("busybox") || resolved.is_some_and(|p| !p.exists()) {
+            ui::warn("/usr/sbin/init does not point at an init system: run `sudo forge apply` again before rebooting");
+        }
+    }
     if a.no_generation {
         ui::info("no generation was created (--no-generation)");
     } else if a.root != Path::new("/") {

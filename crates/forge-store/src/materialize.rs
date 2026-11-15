@@ -87,12 +87,17 @@ pub struct MaterializeOptions {
     pub adopt: bool,
 }
 
-/// Paths forge puts in place when missing but never replaces or removes: configuration (`etc/`), and the kernel
-/// (`boot/` and `usr/lib/modules`), which `forge kernel install` manages. Upgrading or dropping the `linux`
-/// package must never delete the files of the kernel that is running.
+/// Files forge itself writes after the packages (the init link and the power commands, see `forge_schema::plumbing`).
+/// BusyBox ships applet links under the same names (`init`, `reboot`, ...), so a package upgrade must never put them
+/// back: that would make the next boot run BusyBox's init instead of the system's.
+pub const PLUMBING_PATHS: &[&str] = &["usr/sbin/init", "usr/sbin/reboot", "usr/sbin/halt", "usr/sbin/poweroff", "usr/sbin/shutdown"];
+
+/// Paths forge puts in place when missing but never replaces or removes: configuration (`etc/`), the kernel
+/// (`boot/` and `usr/lib/modules`, which `forge kernel install` manages: upgrading or dropping the `linux` package
+/// must never delete the files of the kernel that is running), and the init plumbing above.
 fn is_config(path: &str) -> bool {
     let under = |d: &str| path == d || path.starts_with(&format!("{d}/"));
-    under("etc") || under("boot") || under("usr/lib/modules")
+    under("etc") || under("boot") || under("usr/lib/modules") || PLUMBING_PATHS.contains(&path)
 }
 
 fn exists(p: &Path) -> bool {
@@ -150,7 +155,7 @@ pub fn materialize(
     let new_paths: BTreeSet<&str> = entries.iter().map(|e| e.path.as_str()).collect();
     let mut dirs = Vec::new();
     for e in &old.entries {
-        if new_paths.contains(e.path.as_str()) {
+        if new_paths.contains(e.path.as_str()) || is_config(&e.path) {
             continue;
         }
         let p = root.join(&e.path);
@@ -315,6 +320,36 @@ mod tests {
         let st = fx.run(&[&a2], &st1).unwrap();
         assert_eq!(fs::read_to_string(fx.root.join("etc/a.conf")).unwrap(), "edited");
         assert!(st.entries.iter().all(|e| !e.path.starts_with("etc")), "etc is not tracked, so never removed");
+    }
+
+    #[test]
+    fn a_package_never_puts_back_the_init_link_or_power_commands_forge_replaced() {
+        // BusyBox ships applet links named init, reboot, ...; the system's own init plumbing replaces them. A later
+        // package upgrade (with those entries still in the old state) must leave the plumbing alone, or the next boot
+        // runs BusyBox's init ("can't run /etc/init.d/rcS").
+        let fx = Fx::new();
+        let bb = fx.add("busybox", "1", &[("usr/bin/busybox", "BB"), ("usr/sbin/init", "applet-init"), ("usr/sbin/reboot", "applet-reboot"), ("usr/bin/ls", "ls")]);
+        let st1 = fx.run(&[&bb], &Materialized::default()).unwrap();
+        // Simulates a state written by an older forge, which tracked these paths.
+        let mut old = st1.clone();
+        for p in ["usr/sbin/init", "usr/sbin/reboot"] {
+            old.entries.push(MatEntry { path: p.into(), kind: Kind::File });
+        }
+        for p in ["usr/sbin/init", "usr/sbin/reboot"] {
+            fs::remove_file(fx.root.join(p)).unwrap();
+        }
+        std::os::unix::fs::symlink("../lib/systemd/systemd", fx.root.join("usr/sbin/init")).unwrap();
+        fs::write(fx.root.join("usr/sbin/reboot"), "our script").unwrap();
+
+        let bb2 = fx.add("busybox", "2", &[("usr/bin/busybox", "BB2"), ("usr/sbin/init", "applet-init"), ("usr/sbin/reboot", "applet-reboot"), ("usr/bin/ls", "ls")]);
+        fx.run(&[&bb2], &old).unwrap();
+        assert_eq!(fs::read_link(fx.root.join("usr/sbin/init")).unwrap(), Path::new("../lib/systemd/systemd"));
+        assert_eq!(fs::read_to_string(fx.root.join("usr/sbin/reboot")).unwrap(), "our script");
+        assert_eq!(fs::read_to_string(fx.root.join("usr/bin/busybox")).unwrap(), "BB2", "ordinary files are still upgraded");
+        // Dropping the package removes its files but not the plumbing.
+        fx.run(&[], &old).unwrap();
+        assert!(fx.root.join("usr/sbin/reboot").exists() && fx.root.join("usr/sbin/init").symlink_metadata().is_ok());
+        assert!(!fx.root.join("usr/bin/busybox").exists());
     }
 
     #[test]

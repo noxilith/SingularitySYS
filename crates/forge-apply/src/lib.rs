@@ -417,17 +417,15 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     }
 
     users::plan_users(&mut p, decl)?;
-    // The power commands work under either init system and are kept current on every apply (on a real system, which
-    // has /usr/sbin); the /sbin/init link changes only when the init system does, and then takes effect at the next boot.
-    if !switching && under(root, "/usr/sbin").is_dir() {
-        for (path, entry) in forge_schema::power_plumbing() {
+    // The init link and the power commands are kept right on every apply (on a real system, which has /usr/sbin), not
+    // only when the init system changes: whatever put something else there (an older forge, a package) is corrected.
+    // The link points at the init system the declaration names; it takes effect at the next boot.
+    if under(root, "/usr/sbin").is_dir() {
+        for (path, entry) in forge_schema::plumbing(system) {
             p.plumb(path, &entry);
         }
     }
     if switching {
-        for (path, entry) in forge_schema::plumbing(system) {
-            p.plumb(path, &entry);
-        }
         let stub = "/run/systemd/resolve/stub-resolv.conf";
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
         if systemd {
