@@ -93,9 +93,11 @@ impl Op {
 /// Make the system profile show exactly these packages (after they are installed).
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProfileSwitch {
+    root: PathBuf,
     store_root: PathBuf,
     profile_dir: PathBuf,
     ids: BTreeSet<StoreId>,
+    adopt: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,6 +147,9 @@ pub struct Options {
     pub trust: Trust,
     /// How remote repositories are downloaded from (curl or BusyBox wget; tests substitute a fake).
     pub fetch: FetchHandle,
+    /// Replace files in the system tree that forge did not put there (the first apply over a system that was
+    /// not installed by forge). Off by default: such files are the user's.
+    pub adopt: bool,
 }
 
 fn under(root: &Path, abs: &str) -> PathBuf {
@@ -451,9 +456,11 @@ fn plan_packages(
     }
 
     Ok((target != current).then(|| ProfileSwitch {
+        root: root.to_path_buf(),
         store_root: store.root().to_path_buf(),
         profile_dir: profile.dir().to_path_buf(),
         ids: target,
+        adopt: p.opts.adopt,
     }))
 }
 
@@ -529,13 +536,23 @@ pub fn apply(plan: &Plan) -> Result<(), ApplyError> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        Profile::new(&sw.profile_dir)
-            .switch(&Store::new(&sw.store_root), &sw.ids, now)
-            .map_err(|e| ApplyError {
-                summary: "switch the system profile".into(),
-                path: sw.profile_dir.clone(),
-                source: io::Error::other(e.to_string()),
-            })?;
+        let store = Store::new(&sw.store_root);
+        Profile::new(&sw.profile_dir).switch(&store, &sw.ids, now).map_err(|e| ApplyError {
+            summary: "switch the system profile".into(),
+            path: sw.profile_dir.clone(),
+            source: io::Error::other(e.to_string()),
+        })?;
+        // The system itself: the packages' files copied into the real tree, replacing what the last apply put
+        // there. The profile above is the record of which generation of packages this is.
+        let fail = |what: &str, e: StoreError| ApplyError {
+            summary: format!("{what} the system tree"),
+            path: sw.root.clone(),
+            source: io::Error::other(e.to_string()),
+        };
+        let old = forge_store::Materialized::load(&sw.root).map_err(|e| fail("read the state of", e))?;
+        let state = forge_store::materialize(&store, &sw.ids, &sw.root, &old, &forge_store::MaterializeOptions { adopt: sw.adopt })
+            .map_err(|e| fail("update", e))?;
+        state.save(&sw.root).map_err(|e| fail("record the state of", e))?;
     }
     if let Some((path, content)) = &plan.state_write {
         write_atomic(path, content).map_err(|source| ApplyError {

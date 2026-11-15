@@ -6,7 +6,7 @@
 //! generation first and only then flips `current`, so a profile is never
 //! half-updated and any earlier generation can be restored instantly.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
@@ -152,52 +152,17 @@ impl Profile {
         Ok(Some(id))
     }
 
-    /// One file of a package in the merged tree. A symlink the package ships (`bin -> usr/bin`, `libz.so -> libz.so.1`)
-    /// is recreated as the same symlink, so it resolves in the merged tree; anything else links into the store.
-    fn link_entry(store: &Store, pkg: &StoreId, f: &crate::manifest::FileEntry, dest: &Path) -> Result<(), StoreError> {
-        let target = match (f.kind, f.target.as_deref()) {
-            (Kind::Symlink, Some(t)) => PathBuf::from(t),
-            _ => store.path(pkg).join(&f.path),
-        };
-        symlink(&target, dest).map_err(io_ctx(format!("linking {}", dest.display())))
-    }
-
+    /// The merged tree of `packages` (see [`crate::merge_plan`]) as a farm of links: a symlink a package ships
+    /// (`bin -> usr/bin`, `libz.so -> libz.so.1`) is recreated as the same symlink, so it resolves in the merged
+    /// tree; every other file links into the store.
     fn build_tree(&self, store: &Store, packages: &BTreeSet<StoreId>, tmp: &Path) -> Result<(), StoreError> {
         fs::create_dir_all(tmp).map_err(io_ctx(format!("creating {}", tmp.display())))?;
-        // path -> (owner, kind, is a BusyBox applet link). An applet link is only a fallback: a real package's
-        // file replaces it, and it never replaces a real file.
-        let mut owners: BTreeMap<String, (StoreId, Kind, bool)> = BTreeMap::new();
-        for pkg in packages {
-            let manifest = store.manifest(pkg)?;
-            for f in &manifest.files {
-                let dest = tmp.join(&f.path);
-                let applet = f.kind == Kind::Symlink
-                    && f.target.as_deref().is_some_and(|t| Path::new(t).file_name().is_some_and(|n| n == "busybox"));
-                match (owners.get(&f.path), f.kind) {
-                    // Directories are shared: both packages just need it to exist.
-                    (Some((_, Kind::Dir, _)), Kind::Dir) => {}
-                    (Some(_), _) if applet => {}
-                    (Some((_, _, true)), _) => {
-                        fs::remove_file(&dest).map_err(io_ctx(format!("replacing {}", dest.display())))?;
-                        Self::link_entry(store, pkg, f, &dest)?;
-                        owners.insert(f.path.clone(), (pkg.clone(), f.kind, false));
-                    }
-                    (Some((owner, _, _)), _) => {
-                        return Err(StoreError::Conflict {
-                            path: f.path.clone(),
-                            a: owner.clone(),
-                            b: pkg.clone(),
-                        });
-                    }
-                    (None, Kind::Dir) => {
-                        fs::create_dir(&dest).map_err(io_ctx(format!("creating {}", dest.display())))?;
-                        owners.insert(f.path.clone(), (pkg.clone(), Kind::Dir, false));
-                    }
-                    (None, _) => {
-                        Self::link_entry(store, pkg, f, &dest)?;
-                        owners.insert(f.path.clone(), (pkg.clone(), f.kind, applet));
-                    }
-                }
+        for (path, m) in crate::merge_plan(store, packages)? {
+            let dest = tmp.join(&path);
+            match (m.kind, m.target.as_deref()) {
+                (Kind::Dir, _) => fs::create_dir(&dest).map_err(io_ctx(format!("creating {}", dest.display())))?,
+                (Kind::Symlink, Some(t)) => symlink(t, &dest).map_err(io_ctx(format!("linking {}", dest.display())))?,
+                _ => symlink(store.path(&m.package).join(&path), &dest).map_err(io_ctx(format!("linking {}", dest.display())))?,
             }
         }
         Ok(())

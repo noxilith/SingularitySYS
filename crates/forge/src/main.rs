@@ -107,6 +107,9 @@ struct PkgArgs {
     /// Use repository indexes WITHOUT checking their signatures (insecure)
     #[arg(long)]
     allow_unsigned: bool,
+    /// Replace files in the system tree that forge did not put there
+    #[arg(long)]
+    adopt: bool,
 }
 
 #[derive(Args)]
@@ -126,6 +129,9 @@ struct UpgradeArgs {
     /// Use repository indexes WITHOUT checking their signatures (insecure)
     #[arg(long)]
     allow_unsigned: bool,
+    /// Replace files in the system tree that forge did not put there
+    #[arg(long)]
+    adopt: bool,
 }
 
 #[derive(Args)]
@@ -180,6 +186,9 @@ struct ApplyArgs {
     /// Use repository indexes WITHOUT checking their signatures (insecure)
     #[arg(long)]
     allow_unsigned: bool,
+    /// Replace files in the system tree that forge did not put there (the first apply over a system forge did not install)
+    #[arg(long)]
+    adopt: bool,
 }
 
 #[derive(Args)]
@@ -624,6 +633,7 @@ fn pkg(action: PkgAction) -> Result<()> {
             rebuild: false,
             trust: load_trust(args.keys.clone(), args.allow_unsigned, args.root.join("etc/forge/keys"))?,
             fetch: Default::default(),
+            adopt: args.adopt,
         };
         let decl = SystemDecl::parse(&edited.text).with_context(|| format!("in the edited {}", path.display()))?;
         forge_apply::plan_system(&decl, &args.root, o.clone())
@@ -658,6 +668,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         no_generation: false,
         keys: args.keys,
         allow_unsigned: args.allow_unsigned,
+        adopt: args.adopt,
     })
 }
 
@@ -849,6 +860,7 @@ fn upgrade(a: UpgradeArgs) -> Result<()> {
         no_generation: false,
         keys: a.keys,
         allow_unsigned: a.allow_unsigned,
+        adopt: a.adopt,
     })
 }
 
@@ -928,6 +940,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
         rebuild: a.rebuild,
         trust: load_trust(a.keys, a.allow_unsigned, a.root.join("etc/forge/keys"))?,
         fetch: Default::default(),
+        adopt: a.adopt,
     };
     let plan = forge_apply::plan_system(&decl, &a.root, opts)?;
 

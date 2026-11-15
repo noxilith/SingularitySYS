@@ -35,7 +35,7 @@ fn trust_of(keys: &[&SecretKey]) -> Trust {
 }
 
 fn opts() -> Options {
-    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default() }
+    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false }
 }
 
 fn plan(d: &SystemDecl, r: &Path) -> Plan {
@@ -249,6 +249,11 @@ fn declared_packages_are_installed_and_linked_with_their_dependencies() {
     assert_eq!(store.list().unwrap().len(), 2);
     assert_eq!(fs::read_to_string(view(r.path(), "usr/bin/hello")).unwrap(), "#!/bin/sh\n");
     assert_eq!(fs::read_to_string(view(r.path(), "usr/lib/libfoo.so")).unwrap(), "lib");
+    // The system tree itself holds real copies, not links, and the state records what forge put there.
+    let real = r.path().join("usr/bin/hello");
+    assert_eq!(fs::read_to_string(&real).unwrap(), "#!/bin/sh\n");
+    assert!(!fs::symlink_metadata(&real).unwrap().file_type().is_symlink());
+    assert!(forge_store::Materialized::load(r.path()).unwrap().entries.iter().any(|e| e.path == "usr/bin/hello"));
     assert!(read(r.path(), "etc/profile.d/forge.sh").contains("forge/profiles/system/current/usr/bin"));
     assert!(plan(&pkg_decl(&["hello"]), r.path()).is_empty(), "converged");
 }
@@ -268,6 +273,8 @@ fn removing_a_package_unlinks_it_but_keeps_it_in_the_store_until_gc() {
 
     assert!(!view(r.path(), "usr/bin/b").exists());
     assert!(view(r.path(), "usr/bin/a").exists());
+    assert!(!r.path().join("usr/bin/b").exists(), "the removed package is gone from the real tree too");
+    assert!(r.path().join("usr/bin/a").exists());
     assert_eq!(Store::new(r.path().join("forge/store")).list().unwrap().len(), 2, "still stored");
     assert_eq!(system_profile(r.path()).generations().unwrap().len(), 2, "the old set is a generation");
     assert!(plan(&pkg_decl(&["a"]), r.path()).is_empty());
@@ -534,7 +541,7 @@ fn remote_decl(names: &[&str]) -> SystemDecl {
 
 fn remote_opts(r: &Path) -> (Options, Arc<Served>) {
     let served = Arc::new(Served { dir: r.join("srv/repo"), log: Default::default() });
-    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()) };
+    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false };
     (opts, served)
 }
 

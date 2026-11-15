@@ -63,6 +63,8 @@ fn pkg_add_edits_the_declaration_and_installs_the_package() {
     assert!(o.status.success(), "{}", text(&o));
     assert!(w.decl().contains("packages = [\"tool\"]"), "{}", w.decl());
     assert!(w.installed(), "the package is linked into the system profile: {}", text(&o));
+    let real = w.p("root/usr/bin/tool");
+    assert!(real.is_file() && !fs::symlink_metadata(&real).unwrap().file_type().is_symlink(), "a real copy in the system tree");
     assert!(text(&o).contains("applied"), "{}", text(&o));
 }
 
@@ -74,6 +76,7 @@ fn pkg_remove_unlinks_it_again() {
     assert!(o.status.success(), "{}", text(&o));
     assert!(w.decl().contains("packages = []"), "{}", w.decl());
     assert!(!w.installed());
+    assert!(!w.p("root/usr/bin/tool").exists(), "and gone from the system tree");
 }
 
 #[test]

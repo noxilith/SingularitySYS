@@ -12,6 +12,8 @@ mod archive;
 mod gc;
 mod id;
 mod manifest;
+mod materialize;
+mod merge;
 mod profile;
 mod repo;
 mod remote;
@@ -27,6 +29,8 @@ pub use archive::{PackOptions, Packed, pack_dir, read_manifest};
 pub use gc::{GcReport, roots_from_snapshots};
 pub use id::{StoreId, sha256_hex};
 pub use manifest::{FileEntry, Kind, MANIFEST_PATH, Manifest};
+pub use materialize::{MatEntry, Materialized, MaterializeOptions, SETUID_FILES, STATE_PATH, materialize};
+pub use merge::{Merged, merge_plan};
 pub use profile::{Profile, ProfileGen};
 pub use remote::{Fetch, FetchHandle, RemoteRepo, Repository, SystemFetch, download_to_temp, is_url};
 pub use repo::{Index, IndexEntry, Loaded, LocalRepo, Trust, resolve, version_cmp};
@@ -49,6 +53,8 @@ pub enum StoreError {
     NotInStore(StoreId),
     #[error("{path} is provided by both {a} and {b}")]
     Conflict { path: String, a: StoreId, b: StoreId },
+    #[error("/{path} was not put there by forge and is in the way ({why}); remove it, or adopt it")]
+    Unmanaged { path: String, why: String },
     #[error("generation {0} does not exist")]
     NoSuchGeneration(u32),
     #[error("generation {0} is the current one and cannot be removed")]
