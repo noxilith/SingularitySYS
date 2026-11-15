@@ -283,11 +283,13 @@ pub fn limine_conf(cmdline: &str) -> String {
             "/{name}\n    protocol: linux\n    path: boot():/boot/vmlinuz\n    cmdline: {cmdline}{extra}\n    module_path: boot():/boot/initramfs.img\n"
         )
     };
-    // The rescue entry skips the init system entirely: a shell on the console, to look around
-    // if OpenRC does not come up.
+    // The normal entry boots quietly (only errors and warnings from the kernel, so the first thing on screen is the
+    // system starting); the others show everything the kernel prints, for when something goes wrong. The rescue entry
+    // also skips the init system entirely: a shell on the console, to look around if OpenRC does not come up.
     format!(
-        "timeout: 5\n\n{}\n{}",
-        entry("SingularitySYS live", ""),
+        "timeout: 5\n\n{}\n{}\n{}",
+        entry("SingularitySYS live", " quiet loglevel=3"),
+        entry("SingularitySYS live (verbose boot)", ""),
         entry("SingularitySYS live (rescue shell, no init system)", " init=/bin/sh")
     )
 }
@@ -344,10 +346,10 @@ mod tests {
     fn limine_entry_names_kernel_initramfs_and_cmdline() {
         let c = limine_conf("console=ttyS0");
         assert!(c.contains("path: boot():/boot/vmlinuz"));
-        assert!(c.contains("module_path: boot():/boot/initramfs.img"));
-        assert!(c.contains("cmdline: console=ttyS0\n"));
+        assert!(c.contains("cmdline: console=ttyS0 quiet loglevel=3\n"), "the normal entry boots quietly: {c}");
+        assert!(c.contains("cmdline: console=ttyS0\n"), "a verbose entry shows everything: {c}");
         assert!(c.contains("cmdline: console=ttyS0 init=/bin/sh\n"), "a rescue entry without the init system: {c}");
-        assert_eq!(c.matches("module_path").count(), 2);
+        assert_eq!(c.matches("module_path").count(), 3);
     }
 }
 

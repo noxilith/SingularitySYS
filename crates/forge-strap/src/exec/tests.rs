@@ -287,7 +287,7 @@ fn limine_conf_boots_the_newest_kernel_from_the_new_root() {
     let conf = fs::read_to_string(f.mp().join("boot/limine.conf")).unwrap();
     assert!(conf.contains("path: boot():/vmlinuz-6.10.2"), "6.10 is newer than 6.9: {conf}");
     assert!(conf.contains("module_path: boot():/initramfs-6.10.2.img"));
-    assert!(conf.contains("cmdline: root=UUID=1111-aaaa quiet rootflags=subvol=@ rw"));
+    assert!(conf.contains("cmdline: root=UUID=1111-aaaa quiet loglevel=3 rootflags=subvol=@ rw"));
 }
 
 #[test]
@@ -406,7 +406,7 @@ fn a_kernel_without_an_initramfs_boots_by_partition_uuid() {
     let conf = fs::read_to_string(f.mp().join("boot/limine.conf")).unwrap();
     assert!(!conf.contains("module_path"), "no initramfs to load: {conf}");
     // The kernel cannot resolve root=UUID= by itself, so it must be the partition's own id.
-    assert!(conf.contains("cmdline: root=PARTUUID=1111-aaaa quiet rootflags=subvol=@ rw"), "{conf}");
+    assert!(conf.contains("cmdline: root=PARTUUID=1111-aaaa quiet loglevel=3 rootflags=subvol=@ rw"), "{conf}");
     assert!(r.find("blkid").iter().any(|c| c.to_string().contains("PARTUUID")));
 }
 

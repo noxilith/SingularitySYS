@@ -558,11 +558,17 @@ impl Exec<'_> {
         } else {
             format!("root=UUID={root_uuid}")
         };
+        // A quiet boot: only kernel errors and warnings, so OpenRC is the first thing on screen. The Limine menu
+        // also gets a verbose entry (forge-gen adds it) for when something goes wrong.
+        cmdline.push_str(" quiet loglevel=3");
         let extra = self.req.extra_cmdline.trim();
         if !extra.is_empty() {
             cmdline.push(' ');
             cmdline.push_str(&forge_gen::base_cmdline(extra));
         }
+        // The same option twice (`quiet` asked for as well) is written once.
+        let mut seen = std::collections::BTreeSet::new();
+        cmdline = cmdline.split_whitespace().filter(|t| seen.insert(*t)).collect::<Vec<_>>().join(" ");
         info.cmdline = cmdline;
         info.validate().map_err(|e| StrapError::Invalid { what: "boot entry", value: e.to_string() })?;
         write_file(&boot.join("limine.conf"), &forge_gen::render_limine(&info, "@", &[]))?;
