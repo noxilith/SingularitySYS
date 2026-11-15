@@ -12,7 +12,7 @@ pub const SQUASHFS_PATH: &str = "live/rootfs.squashfs";
 
 /// Applets the initramfs needs, linked to the BusyBox binary.
 pub const INITRAMFS_APPLETS: &[&str] =
-    &["sh", "mount", "umount", "mkdir", "sleep", "switch_root", "echo", "ls", "cat", "dmesg", "losetup", "insmod", "modprobe"];
+    &["sh", "mount", "umount", "mkdir", "sleep", "switch_root", "echo", "cp", "rm", "ls", "cat", "dmesg", "losetup", "insmod", "modprobe"];
 
 /// The initramfs `/init`: find the medium that holds the squashfs, stack a writable
 /// tmpfs over it with overlayfs, and hand over to the live system's init.
@@ -55,22 +55,48 @@ until find_medium; do
     sleep 1
 done
 
-mount -t squashfs -o ro,loop "/medium/{squashfs}" /ro || rescue "cannot mount the system image"
+toram=1
+init=/sbin/init
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        init=*) init=${{arg#init=}} ;;
+        noram|toram=0) toram=0 ;;
+    esac
+done
+
+image="/medium/{squashfs}"
+if [ "$toram" = 1 ]; then
+    # Like HaliadeSYS: the whole system runs from memory, so the USB stick can be pulled out afterwards.
+    # Fall back to reading from the medium when the machine has too little RAM for it.
+    echo "singularity: copying the system into memory (add noram to the kernel line to skip this)"
+    mount -t tmpfs -o mode=0755,size=75% tmpfs /ram
+    if cp "/medium/{squashfs}" /ram/rootfs.squashfs; then
+        image=/ram/rootfs.squashfs
+    else
+        echo "singularity: not enough memory to copy the system, running from the medium instead"
+        rm -f /ram/rootfs.squashfs
+        umount /ram
+    fi
+fi
+
+mount -t squashfs -o ro,loop "$image" /ro || rescue "cannot mount the system image"
+if [ "$image" = /ram/rootfs.squashfs ]; then
+    umount /medium
+    echo "singularity: the system is in memory; the medium can be removed"
+fi
 mount -t tmpfs -o mode=0755 tmpfs /rw
 mkdir -p /rw/upper /rw/work
 mount -t overlay overlay -o lowerdir=/ro,upperdir=/rw/upper,workdir=/rw/work /newroot \
     || rescue "cannot assemble the writable system"
 
 mkdir -p /newroot/medium /newroot/dev /newroot/proc /newroot/sys
-mount --move /medium /newroot/medium
+# The medium is only still mounted when the system runs from it.
+[ -d /medium/live ] && mount --move /medium /newroot/medium
 mount --move /dev /newroot/dev
 mount --move /proc /newroot/proc
 mount --move /sys /newroot/sys
-# `init=` on the kernel command line picks the first process (the rescue entry uses init=/bin/sh).
-init=/sbin/init
-for arg in $(cat /proc/cmdline); do
-    case "$arg" in init=*) init=${{arg#init=}} ;; esac
-done
+# The RAM copy (if any) stays mounted underneath: the squashfs is loop-mounted from it.
+# `init=` on the kernel command line (read above) picks the first process (the rescue entry uses init=/bin/sh).
 exec switch_root /newroot "$init"
 "#,
         squashfs = SQUASHFS_PATH
@@ -79,7 +105,7 @@ exec switch_root /newroot "$init"
 
 /// Populate an initramfs tree: BusyBox, its applet links and `/init`.
 pub fn write_initramfs_tree(root: &Path, busybox: &Path, label: &str) -> Result<(), IsoError> {
-    for d in ["bin", "dev", "proc", "sys", "medium", "ro", "rw", "newroot", "tmp"] {
+    for d in ["bin", "dev", "proc", "sys", "medium", "ram", "ro", "rw", "newroot", "tmp"] {
         fs::create_dir_all(root.join(d)).map_err(io_ctx(format!("creating /{d}")))?;
     }
     let bb = root.join("bin/busybox");
@@ -263,6 +289,8 @@ mod tests {
         assert!(s.starts_with("#!/bin/sh"));
         assert!(s.contains("/medium/live/rootfs.squashfs"));
         assert!(s.contains("mount -t overlay"));
+        assert!(s.contains("mount -t tmpfs -o mode=0755,size=75% tmpfs /ram"), "the system is copied into memory by default");
+        assert!(s.contains("noram|toram=0"), "and the copy can be skipped");
         assert!(s.trim_end().ends_with("exec switch_root /newroot \"$init\""));
         assert!(s.contains("init=/sbin/init"), "the default first process");
         assert!(s.contains("init=*) init=${arg#init=}"), "init= from the command line is honoured");
