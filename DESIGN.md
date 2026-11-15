@@ -829,3 +829,17 @@ wants (cgroup accounting, fanotify, autofs, seccomp) as `linux` 7.3.3_r3.
 - **Boot.** Kernel line `quiet loglevel=3`; to see everything, press `e` at the Limine menu and delete `quiet`.
   The watchdog drivers are blacklisted (`/etc/modprobe.d/blacklist-watchdog.conf`), and the kernel's RDSEED
   warning on affected AMD chips is a debug message (the kernel still turns RDSEED off there).
+
+## `forge doctor`, clock sync, CPU microcode (implemented; untested on hardware)
+
+- **`forge doctor`** reads the system (under `--root`) and reports, with the command to run for each, anything wrong:
+  the init link (missing, dangling, BusyBox's, or not the declared init), the files Limine names, the declaration, the
+  base packages, declared users and shells, enabled services that are not installed, whether the clock is kept in sync,
+  and whether a CPU microcode update is where Limine loads it. Problems that stop the system make it exit non-zero.
+- **Clock.** `chrony` (with an OpenRC service, enabled in the default runlevel) is part of OpenRC's package set and
+  goes away on a switch to systemd, which has `systemd-timesyncd`.
+- **Microcode.** The `microcode` package (in the base) carries AMD's and Intel's updates and early images
+  (`/usr/lib/microcode/early-{amd,intel}.cpio`, plus one with both). `forge apply` copies the one for this CPU's
+  vendor to `/boot/microcode.img`, and every Limine entry (live and generations) loads it as the first extra initrd, so
+  the kernel applies it before it mounts anything. It is an ordinary package: `forge upgrade` brings new microcode,
+  used from the next boot. The installer does the same for the first boot.

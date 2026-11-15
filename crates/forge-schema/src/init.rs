@@ -35,7 +35,7 @@ pub const BASE_PACKAGES: &[&str] = &[
     "glibc", "filesystem", "busybox", "dash", "bash", "coreutils", "findutils", "grep", "sed", "gawk", "tar", "gzip", "xz",
     "diffutils", "util-linux", "shadow", "sudo", "kmod", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb",
     "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl",
-    "tzdata", "glibc-locales", "curl", "ca-certificates", "micro",
+    "tzdata", "glibc-locales", "curl", "ca-certificates", "micro", "microcode",
 ];
 
 /// True for a package that is part of the base system (it cannot be removed, and need not be declared).

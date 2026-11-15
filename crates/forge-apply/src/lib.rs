@@ -81,6 +81,8 @@ enum Op {
     Note(PathBuf),
     /// Run a program (the shadow tools for users and groups, systemd's sysusers and tmpfiles). A best-effort one may fail.
     Run { program: PathBuf, args: Vec<String>, best_effort: bool },
+    /// Copy a file (the CPU microcode image into /boot). An optional one is skipped when the source is not there.
+    CopyFile { from: PathBuf, to: PathBuf, optional: bool },
 }
 
 impl Op {
@@ -90,6 +92,7 @@ impl Op {
             Op::Symlink { link, .. } => link,
             Op::Install { archive, .. } => archive,
             Op::Run { program, .. } => program,
+            Op::CopyFile { to, .. } => to,
         }
     }
 }
@@ -124,7 +127,7 @@ impl Change {
     /// Changes that must come after the packages are in the tree: the init links and units, and users (whose
     /// shells and tools come from packages).
     fn is_late(&self) -> bool {
-        self.section == "init" || self.section == "users" || self.section == "shell"
+        self.section == "init" || self.section == "users" || self.section == "shell" || self.section == "boot"
     }
 
     /// True when applying this change downloads an archive.
@@ -455,6 +458,22 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     }
     let package_names = effective_packages(decl, old_state.init.is_some(), &p.opts.base);
     let profile_switch = plan_packages(&package_names, decl, root, &mut p, &old_state.repo_serials, &mut new_state.repo_serials)?;
+    // CPU microcode: the package's early image for this machine's CPU is kept in /boot as microcode.img, which every
+    // Limine entry loads first. Copied after the package (it may have just been installed or updated); the next
+    // generation rewrites limine.conf, which is when the entries start naming it.
+    if package_names.iter().any(|n| n == "microcode") && under(root, "/boot").is_dir() {
+        let src = forge_gen::microcode_image_path(root);
+        let dest = under(root, "/boot/microcode.img");
+        let same = matches!((fs::read(&src), fs::read(&dest)), (Ok(a), Ok(b)) if a == b);
+        if (src.is_file() && !same) || profile_switch.is_some() {
+            p.changes.push(Change {
+                section: "boot",
+                kind: if dest.exists() { Kind::Modify } else { Kind::Add },
+                summary: "/boot/microcode.img (CPU microcode, loaded before the kernel starts)".into(),
+                op: Op::CopyFile { from: src, to: dest, optional: true },
+            });
+        }
+    }
     // systemd's own users (journal, network, ...) and dbus's runtime directories are created at boot, but doing it
     // now means the first boot starts with them in place (a dbus that races its user at first boot is not a good
     // first impression). Best effort: the units order themselves after these at boot anyway.
@@ -669,6 +688,18 @@ fn run(op: &Op) -> io::Result<()> {
             Ok(())
         }
         Op::Note(_) => Ok(()),
+        Op::CopyFile { from, to, optional } => {
+            if !from.is_file() && *optional {
+                return Ok(());
+            }
+            let mut tmp = to.as_os_str().to_owned();
+            tmp.push(".forge-new");
+            let tmp = PathBuf::from(tmp);
+            fs::copy(from, &tmp)?;
+            fs::rename(&tmp, to).inspect_err(|_| {
+                let _ = fs::remove_file(&tmp);
+            })
+        }
         Op::Run { program, args, best_effort } => {
             let out = std::process::Command::new(program).args(args).stdin(std::process::Stdio::null()).output();
             match out {

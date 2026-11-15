@@ -112,3 +112,19 @@ fn an_invalid_declaration_is_a_problem() {
     let o = doctor(&r, "");
     assert!(!o.status.success() && text(&o).contains("is not valid"), "{}", text(&o));
 }
+
+#[test]
+fn a_microcode_image_that_is_not_in_boot_or_not_loaded_is_a_warning() {
+    let (_t, r) = healthy();
+    fs::create_dir_all(r.join("usr/lib/microcode")).unwrap();
+    fs::write(r.join("usr/lib/microcode/early.cpio"), "IMG").unwrap();
+    fs::write(r.join("usr/lib/microcode/early-amd.cpio"), "IMG").unwrap();
+    fs::write(r.join("usr/lib/microcode/early-intel.cpio"), "IMG").unwrap();
+    let o = doctor(&r, "");
+    assert!(o.status.success() && text(&o).contains("microcode.img is missing or old"), "{}", text(&o));
+    fs::write(r.join("boot/microcode.img"), "IMG").unwrap();
+    assert!(text(&doctor(&r, "")).contains("no Limine entry loads it"));
+    let conf = fs::read_to_string(r.join("boot/limine.conf")).unwrap() + "    module_path: boot():/microcode.img\n";
+    fs::write(r.join("boot/limine.conf"), conf).unwrap();
+    assert!(text(&doctor(&r, "")).contains("loaded at boot"));
+}

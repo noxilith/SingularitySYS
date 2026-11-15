@@ -560,7 +560,14 @@ impl Exec<'_> {
         cmdline = cmdline.split_whitespace().filter(|t| seen.insert(*t)).collect::<Vec<_>>().join(" ");
         info.cmdline = cmdline;
         info.validate().map_err(|e| StrapError::Invalid { what: "boot entry", value: e.to_string() })?;
-        write_file(&boot.join("limine.conf"), &forge_gen::render_limine(&info, "@", &[]))?;
+        // The CPU microcode image (when the microcode package is part of the install) goes next to the kernel and is
+        // loaded by every entry.
+        let mp = self.mp().to_path_buf();
+        let early = match forge_gen::install_microcode_image(&mp, &boot) {
+            Ok(true) => vec![forge_gen::MICROCODE_IMAGE.to_string()],
+            _ => Vec::new(),
+        };
+        write_file(&boot.join("limine.conf"), &forge_gen::render_limine(&info, "@", &[], &early))?;
         self.boot_info = Some(info);
         Ok(())
     }

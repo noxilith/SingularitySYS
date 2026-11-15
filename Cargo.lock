@@ -352,6 +352,7 @@ dependencies = [
 name = "forge-apply"
 version = "0.1.0"
 dependencies = [
+ "forge-gen",
  "forge-schema",
  "forge-store",
  "serde",

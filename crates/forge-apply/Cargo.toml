@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+forge-gen.workspace = true
 forge-schema.workspace = true
 forge-store.workspace = true
 serde.workspace = true

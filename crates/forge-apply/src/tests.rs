@@ -736,3 +736,27 @@ fn switching_back_to_openrc_restores_its_scripts_and_drops_systemd() {
 fn an_unknown_init_system_never_reaches_the_planner() {
     assert!(SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\ninit = \"runit\"\n").is_err());
 }
+
+// ---- CPU microcode ------------------------------------------------------------
+
+#[test]
+fn the_microcode_image_is_copied_to_boot_and_again_only_when_it_changes() {
+    unsafe { std::env::set_var("FORGE_CPU_VENDOR", "AuthenticAMD") };
+    let r = root();
+    fs::create_dir_all(r.path().join("boot")).unwrap();
+    fs::create_dir_all(r.path().join("usr/lib/microcode")).unwrap();
+    fs::write(r.path().join("usr/lib/microcode/early-amd.cpio"), "ONE").unwrap();
+    fs::write(r.path().join("usr/lib/microcode/early-intel.cpio"), "INTEL").unwrap();
+    publish_all(r.path(), &["microcode"]);
+    let d = pkg_decl(&["microcode"]);
+    let p = plan(&d, r.path());
+    assert!(p.changes.iter().any(|c| c.section == "boot" && c.summary.contains("microcode.img")), "{:?}", p.changes);
+    apply(&p).unwrap();
+    assert_eq!(fs::read_to_string(r.path().join("boot/microcode.img")).unwrap(), "ONE", "the image for this CPU's vendor");
+    assert!(plan(&d, r.path()).is_empty(), "nothing to do the second time");
+    fs::write(r.path().join("usr/lib/microcode/early-amd.cpio"), "TWO").unwrap();
+    let p = plan(&d, r.path());
+    assert!(p.changes.iter().any(|c| c.section == "boot"), "a changed image is copied again");
+    apply(&p).unwrap();
+    assert_eq!(fs::read_to_string(r.path().join("boot/microcode.img")).unwrap(), "TWO");
+}

@@ -75,6 +75,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
 
     init_link(&mut r, root, &system);
     limine(&mut r, root);
+    microcode(&mut r, root);
     if root == Path::new("/") {
         running_kernel(&mut r);
     }
@@ -152,6 +153,27 @@ fn limine(r: &mut Report, root: &Path) {
         r.ok(G, format!("Limine lists {entries} entries and every kernel file they name is there"));
     } else {
         r.fail(G, format!("Limine names files that are not in /boot: {}", missing.into_iter().collect::<Vec<_>>().join(", ")), "sudo forge kernel install, or pick another entry at boot");
+    }
+}
+
+/// The CPU microcode update must be where the boot loader hands it to the kernel.
+fn microcode(r: &mut Report, root: &Path) {
+    const G: &str = "Boot";
+    let src = forge_gen::microcode_image_path(root);
+    if !src.is_file() {
+        return; // the package is not installed (or not an installed system)
+    }
+    let dest = under(root, "/boot/microcode.img");
+    let same = matches!((fs::read(&src), fs::read(&dest)), (Ok(a), Ok(b)) if a == b);
+    if !same {
+        r.warn(G, "a CPU microcode update is installed but /boot/microcode.img is missing or old", "sudo forge apply");
+        return;
+    }
+    let conf = fs::read_to_string(under(root, "/boot/limine.conf")).unwrap_or_default();
+    if conf.contains("microcode.img") {
+        r.ok(G, "the CPU microcode update is loaded at boot");
+    } else {
+        r.warn(G, "the CPU microcode image is in /boot but no Limine entry loads it", "sudo forge gen create \"microcode\"");
     }
 }
 

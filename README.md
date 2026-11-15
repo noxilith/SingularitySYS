@@ -136,6 +136,7 @@ from the Limine menu.
 | `forge install NAME…` · `forge remove NAME…` | Add or remove packages in the declaration, then apply it |
 | `forge upgrade` | Move every declared package to the newest version in the repositories |
 | `forge list` · `forge search [TERM]` | What is installed · what the repositories offer |
+| `forge doctor` | Check the system over (init link, boot entries, base packages, users, services, clock, microcode) and say what to run about any problem |
 | `sudo forge edit` | Open `/etc/forge/system.toml` in your editor (micro by default); when you close it, it is checked and applied |
 | `forge apply` | Converge the machine to `/etc/forge/system.toml` (`--dry-run` shows the plan) |
 | `forge gen` | List, create and roll back generations |

@@ -20,14 +20,20 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+mod microcode;
+pub use microcode::{cpu_vendor, image_path as microcode_image_path, install_image as install_microcode_image};
 pub use backend::{Backend, BtrfsCli, CopyBackend};
 pub use meta::{BootInfo, Meta, base_cmdline, booted_subvol, with_root_subvol};
 pub use time::format_utc;
 
-/// Render `limine.conf` (used by the installer for the very first boot menu).
-pub fn render_limine(live: &BootInfo, live_subvol: &str, gens: &[Meta]) -> String {
-    limine::render(live, live_subvol, gens)
+/// Render `limine.conf` (used by the installer for the very first boot menu). `early` are extra initrds that every
+/// entry loads first (the CPU microcode image), as file names in the boot directory.
+pub fn render_limine(live: &BootInfo, live_subvol: &str, gens: &[Meta], early: &[String]) -> String {
+    limine::render(live, live_subvol, gens, early)
 }
+
+/// The name of the CPU microcode image forge keeps in the boot directory.
+pub const MICROCODE_IMAGE: &str = "microcode.img";
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenError {
@@ -301,7 +307,9 @@ pub fn rewrite_limine(ctx: &Ctx) -> Result<(), GenError> {
     promote(ctx)?;
     let live_subvol = if ctx.rollback_state()? == Rollback::Staged { "@.next" } else { "@" };
     let gens = list(ctx)?;
-    let conf = limine::render(&ctx.boot, live_subvol, &gens);
+    // The CPU microcode image, when one is installed next to limine.conf, is loaded by every entry.
+    let early: Vec<String> = ctx.limine_conf.parent().filter(|d| d.join(MICROCODE_IMAGE).is_file()).map(|_| vec![MICROCODE_IMAGE.to_string()]).unwrap_or_default();
+    let conf = limine::render(&ctx.boot, live_subvol, &gens, &early);
     write_atomic(&ctx.limine_conf, &conf)
 }
 
