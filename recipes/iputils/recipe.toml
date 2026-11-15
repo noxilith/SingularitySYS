@@ -17,8 +17,8 @@ configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
 CC=gcc meson setup build --prefix=/usr --bindir=bin --sbindir=sbin --buildtype=release -DBUILD_MANS=false -DBUILD_HTML_MANS=false \
     -DUSE_CAP=false -DUSE_IDN=false -DUSE_GETTEXT=false -DNO_SETCAP_OR_SUID=true -DSKIP_TESTS=true -DBUILD_ARPING=true \
-    -DBUILD_PING=true -DBUILD_TRACEPATH=true -DBUILD_CLOCKDIFF=false -DBUILD_RARPD=false -DBUILD_RDISC=false \
-    -DBUILD_TFTPD=false -DBUILD_TRACEROUTE6=false -DBUILD_NINFOD=false
+    -DBUILD_PING=true -DBUILD_TRACEPATH=true -DBUILD_CLOCKDIFF=false
+
 '''
 compile = "meson compile -C build -j $JOBS"
 install = '''
