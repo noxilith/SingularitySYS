@@ -4,7 +4,7 @@
 # password hash would otherwise be DES. It must not set SHA_CRYPT_MIN_ROUNDS alone: shadow then
 # asks for rounds=999999999, which musl refuses, and every password change fails.
 name        = "shadow"
-version     = "4.16.0_r2"
+version     = "4.16.0_r3"
 description = "User and group account tools (useradd, groupadd, chpasswd, passwd)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
@@ -37,6 +37,8 @@ for d in bin sbin; do
     fi
 done
 rm -rf "$DESTDIR/lib"
+# coreutils has `groups`.
+rm -f "$DESTDIR/usr/bin/groups"
 for b in login su; do test -x "$DESTDIR/usr/bin/$b" || { echo "shadow did not build $b" >&2; exit 1; }; strip "$DESTDIR/usr/bin/$b"; done
 test -x "$DESTDIR/usr/sbin/nologin" || { echo "shadow did not install nologin" >&2; exit 1; }
 cat > "$DESTDIR/etc/login.defs" <<'DEFS'
