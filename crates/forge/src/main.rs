@@ -1627,6 +1627,9 @@ struct IsoArgs {
     /// Package repository to take the system from (repeatable)
     #[arg(long, required = true)]
     repo: Vec<PathBuf>,
+    /// A picture (JPEG or PNG) for the boot menu: behind the live image's menu, and on installed systems too
+    #[arg(long)]
+    wallpaper: Option<PathBuf>,
     /// Packages in the live system; their dependencies come along
     #[arg(long = "package", default_values_t = default_iso_packages())]
     packages: Vec<String>,
@@ -1710,9 +1713,15 @@ fn iso_cmd(a: IsoArgs) -> Result<()> {
         }
         trusted_keys.sort();
     }
+    if let Some(w) = &a.wallpaper {
+        if !w.is_file() {
+            bail!("the wallpaper {} does not exist", w.display());
+        }
+    }
     let spec = forge_iso::IsoSpec {
         rootfs,
         initramfs_busybox,
+        wallpaper: a.wallpaper.clone(),
         kernel,
         limine_dir: a.limine_dir,
         work: work.join("build"),

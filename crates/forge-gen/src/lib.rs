@@ -14,6 +14,7 @@
 mod backend;
 mod limine;
 mod meta;
+mod theme;
 mod time;
 
 use std::fs;
@@ -23,13 +24,27 @@ use std::path::{Path, PathBuf};
 mod microcode;
 pub use microcode::{cpu_vendor, image_path as microcode_image_path, install_image as install_microcode_image};
 pub use backend::{Backend, BtrfsCli, CopyBackend};
+pub use limine::Extras;
+pub use theme::limine_theme;
 pub use meta::{BootInfo, Meta, base_cmdline, booted_subvol, with_root_subvol};
 pub use time::format_utc;
 
 /// Render `limine.conf` (used by the installer for the very first boot menu). `early` are extra initrds that every
 /// entry loads first (the CPU microcode image), as file names in the boot directory.
-pub fn render_limine(live: &BootInfo, live_subvol: &str, gens: &[Meta], early: &[String]) -> String {
-    limine::render(live, live_subvol, gens, early)
+pub fn render_limine(live: &BootInfo, live_subvol: &str, gens: &[Meta], extras: &Extras) -> String {
+    limine::render(live, live_subvol, gens, extras)
+}
+
+/// The file name of the wallpaper in the boot directory (the picture the installer copies there, if the image has one).
+pub const WALLPAPER_IMAGE: &str = "wallpaper.jpg";
+
+/// What lives next to `limine.conf` that every entry should use: the microcode image and the wallpaper, when present.
+pub fn extras_in(boot_dir: &Path) -> Extras {
+    let has = |n: &str| boot_dir.join(n).is_file();
+    Extras {
+        early: if has(MICROCODE_IMAGE) { vec![MICROCODE_IMAGE.to_string()] } else { Vec::new() },
+        wallpaper: [WALLPAPER_IMAGE, "wallpaper.png"].into_iter().find(|n| has(n)).map(String::from),
+    }
 }
 
 /// The name of the CPU microcode image forge keeps in the boot directory.
@@ -307,9 +322,9 @@ pub fn rewrite_limine(ctx: &Ctx) -> Result<(), GenError> {
     promote(ctx)?;
     let live_subvol = if ctx.rollback_state()? == Rollback::Staged { "@.next" } else { "@" };
     let gens = list(ctx)?;
-    // The CPU microcode image, when one is installed next to limine.conf, is loaded by every entry.
-    let early: Vec<String> = ctx.limine_conf.parent().filter(|d| d.join(MICROCODE_IMAGE).is_file()).map(|_| vec![MICROCODE_IMAGE.to_string()]).unwrap_or_default();
-    let conf = limine::render(&ctx.boot, live_subvol, &gens, &early);
+    // The CPU microcode image and the wallpaper, when installed next to limine.conf, are used by every entry.
+    let extras = ctx.limine_conf.parent().map(extras_in).unwrap_or_default();
+    let conf = limine::render(&ctx.boot, live_subvol, &gens, &extras);
     write_atomic(&ctx.limine_conf, &conf)
 }
 

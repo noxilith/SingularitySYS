@@ -39,7 +39,10 @@ echo "==== assembling the ISO"
 [ -e "$ISO" ] && fail "$ISO exists; move it away first"
 ISO_WORK=${ISO_WORK:-$OUT/iso-work}
 [ -e "$ISO_WORK" ] && fail "$ISO_WORK exists from an earlier run; use another ISO_WORK"
-"$FORGE" iso "${TRUST[@]}" --repo "$REPO" --trusted-keys distro/keys --out "$ISO" --work-dir "$ISO_WORK" 2>&1 \
+WALLPAPER=()
+# A picture for the boot menu, if there is one at distro/boot/wallpaper.{jpg,png} (not in git: pictures are not ours to ship).
+for w in distro/boot/wallpaper.jpg distro/boot/wallpaper.png; do [ -f "$w" ] && { WALLPAPER=(--wallpaper "$w"); break; }; done
+"$FORGE" iso "${TRUST[@]}" "${WALLPAPER[@]}" --repo "$REPO" --trusted-keys distro/keys --out "$ISO" --work-dir "$ISO_WORK" 2>&1 \
     | grep -v 'no version information available'
 xorriso -indev "$ISO" -find / -maxdepth 3 2>/dev/null | grep -E "vmlinuz|initramfs|rootfs.squashfs|limine|BOOTX64" || true
 echo "PASS: $ISO"

@@ -404,6 +404,7 @@ name = "forge-iso"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "forge-gen",
  "forge-schema",
  "forge-store",
  "tempfile",

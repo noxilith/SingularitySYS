@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 forge-store.workspace = true
+forge-gen.workspace = true
 forge-schema.workspace = true
 flate2.workspace = true
 thiserror.workspace = true

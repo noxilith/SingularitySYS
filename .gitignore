@@ -5,3 +5,4 @@
 /keys
 *.iso
 /singularity-live.iso.work
+/distro/boot/

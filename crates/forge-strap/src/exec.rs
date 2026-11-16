@@ -574,11 +574,16 @@ impl Exec<'_> {
         // The CPU microcode image (when the microcode package is part of the install) goes next to the kernel and is
         // loaded by every entry.
         let mp = self.mp().to_path_buf();
-        let early = match forge_gen::install_microcode_image(&mp, &boot) {
-            Ok(true) => vec![forge_gen::MICROCODE_IMAGE.to_string()],
-            _ => Vec::new(),
-        };
-        write_file(&boot.join("limine.conf"), &forge_gen::render_limine(&info, "@", &[], &early))?;
+        let _ = forge_gen::install_microcode_image(&mp, &boot);
+        // The picture behind the menu, if the image has one (a failure to copy it is not worth stopping for).
+        for name in ["wallpaper.jpg", "wallpaper.png"] {
+            let src = mp.join("usr/share/singularity").join(name);
+            if src.is_file() {
+                let _ = fs::copy(&src, boot.join(name));
+                break;
+            }
+        }
+        write_file(&boot.join("limine.conf"), &forge_gen::render_limine(&info, "@", &[], &forge_gen::extras_in(&boot)))?;
         self.boot_info = Some(info);
         Ok(())
     }

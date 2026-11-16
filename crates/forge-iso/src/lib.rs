@@ -80,6 +80,9 @@ pub struct IsoSpec {
     /// The static BusyBox the initramfs is made of. It is a build tool of the image only: the live system itself has no
     /// BusyBox (the packages in `rootfs` are GNU).
     pub initramfs_busybox: PathBuf,
+    /// A picture for the boot menu (JPEG or PNG): shown behind the Limine menu of the image, and copied into the live system
+    /// so the installer can put it on the installed machine's boot partition too.
+    pub wallpaper: Option<PathBuf>,
     /// The kernel image to boot.
     pub kernel: PathBuf,
     /// Where Limine's files are (`limine-bios-cd.bin`, `limine-uefi-cd.bin`, `BOOTX64.EFI`).
@@ -147,6 +150,14 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
     live::write_live_root(&spec.rootfs, &spec.hostname, hash.trim())?;
     let keys_dir = spec.rootfs.join("etc/forge/keys");
     fs::create_dir_all(&keys_dir).map_err(io_ctx("creating /etc/forge/keys"))?;
+    // The wallpaper goes into the live system (for the installer) and next to the image's Limine configuration.
+    let wallpaper_name = spec.wallpaper.as_ref().map(|w| if w.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) { "wallpaper.png" } else { "wallpaper.jpg" });
+    if let (Some(w), Some(name)) = (&spec.wallpaper, wallpaper_name) {
+        let share = spec.rootfs.join("usr/share/singularity");
+        fs::create_dir_all(&share).map_err(io_ctx("creating /usr/share/singularity"))?;
+        fs::copy(w, share.join(name)).map_err(io_ctx(format!("copying {}", w.display())))?;
+        fs::copy(w, limine_out.join(name)).map_err(io_ctx("copying the wallpaper"))?;
+    }
     for key in &spec.trusted_keys {
         let name = key.file_name().ok_or_else(|| IsoError::Invalid { what: "trusted key", value: key.display().to_string() })?;
         fs::copy(key, keys_dir.join(name)).map_err(io_ctx(format!("copying {}", key.display())))?;
@@ -176,7 +187,7 @@ pub fn build(spec: &IsoSpec, runner: &mut dyn Runner) -> Result<(), IsoError> {
         fs::copy(spec.limine_dir.join(f), limine_out.join(f)).map_err(io_ctx(format!("copying {f}")))?;
     }
     fs::copy(spec.limine_dir.join("BOOTX64.EFI"), iso_root.join("EFI/BOOT/BOOTX64.EFI")).map_err(io_ctx("copying BOOTX64.EFI"))?;
-    fs::write(limine_out.join("limine.conf"), limine_conf(&spec.cmdline)).map_err(io_ctx("writing limine.conf"))?;
+    fs::write(limine_out.join("limine.conf"), limine_conf(&spec.cmdline, wallpaper_name)).map_err(io_ctx("writing limine.conf"))?;
 
     // The image, then Limine's BIOS stage into its boot sector.
     runner.run(
@@ -234,6 +245,7 @@ mod tests {
         IsoSpec {
             rootfs: root,
             initramfs_busybox: t.join("busybox"),
+            wallpaper: None,
             kernel: t.join("vmlinuz"),
             limine_dir: lim,
             work: t.join("work"),
@@ -337,6 +349,7 @@ mod key_tests {
         let spec = IsoSpec {
             rootfs: root.clone(),
             initramfs_busybox: t.path().join("busybox"),
+            wallpaper: None,
             kernel: t.path().join("vmlinuz"),
             limine_dir: lim,
             work: t.path().join("work"),
