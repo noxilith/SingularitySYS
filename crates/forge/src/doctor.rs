@@ -151,7 +151,8 @@ fn limine(r: &mut Report, root: &Path) {
         }
         for key in ["path:", "module_path:"] {
             if let Some(rest) = line.strip_prefix(key) {
-                if let Some(file) = rest.trim().strip_prefix("boot():/") {
+                // With Secure Boot a path carries its hash: `boot():/vmlinuz#<blake2b>`.
+                if let Some(file) = rest.trim().strip_prefix("boot():/").map(|f| f.split_once('#').map_or(f, |(name, _)| name)) {
                     if !boot.join(file).exists() {
                         missing.insert(file.to_string());
                     }
@@ -203,6 +204,10 @@ fn defaults(r: &mut Report, root: &Path, decl: Option<&forge_schema::SystemDecl>
 /// The boot loader on the boot partition should be the one in the limine package.
 fn limine_current(r: &mut Report, root: &Path) {
     const G: &str = "Boot";
+    // With Secure Boot the loader on the boot partition is the signed one (not the package's copy): that is the point.
+    if under(root, "/etc/forge/secureboot/enabled").is_file() {
+        return;
+    }
     for (installed, packaged) in [("/boot/EFI/BOOT/BOOTX64.EFI", "/usr/share/limine/BOOTX64.EFI"), ("/boot/limine-bios.sys", "/usr/share/limine/limine-bios.sys")] {
         let (a, b) = (under(root, installed), under(root, packaged));
         if !a.is_file() || !b.is_file() {

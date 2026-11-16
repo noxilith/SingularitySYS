@@ -150,3 +150,20 @@ fn an_old_boot_loader_is_a_warning() {
     fs::write(r.join("boot/EFI/BOOT/BOOTX64.EFI"), "NEW").unwrap();
     assert!(text(&doctor(&r, "")).contains("is the one in the limine package"));
 }
+
+#[test]
+fn pinned_secure_boot_paths_and_the_signed_loader_are_not_problems() {
+    let (_t, r) = healthy();
+    let hash = "ab".repeat(64);
+    fs::write(r.join("boot/limine.conf"), format!("timeout: 5\n/Singularity\n    protocol: linux\n    path: boot():/vmlinuz-1#{hash}\n    cmdline: root=x\n")).unwrap();
+    // A signed loader differs from the package's copy by design.
+    for d in ["boot/EFI/BOOT", "usr/share/limine", "etc/forge/secureboot"] {
+        fs::create_dir_all(r.join(d)).unwrap();
+    }
+    fs::write(r.join("boot/EFI/BOOT/BOOTX64.EFI"), "signed").unwrap();
+    fs::write(r.join("usr/share/limine/BOOTX64.EFI"), "plain").unwrap();
+    fs::write(r.join("etc/forge/secureboot/enabled"), "").unwrap();
+    let t = text(&doctor(&r, ""));
+    assert!(!t.contains("not in /boot") && !t.contains("older than the limine package"), "{t}");
+    assert!(t.contains("every kernel file they name is there"), "{t}");
+}
