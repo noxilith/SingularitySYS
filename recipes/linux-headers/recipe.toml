@@ -12,7 +12,8 @@ license     = "GPL-2.0 WITH Linux-syscall-note"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz"

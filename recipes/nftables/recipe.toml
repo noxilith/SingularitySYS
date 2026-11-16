@@ -7,7 +7,9 @@ license     = "GPL-2.0-only"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libmnl", "libnftnl", "bison", "flex", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libmnl", "libnftnl", "bison",
+         "flex"]
 
 [[source]]
 url    = "https://www.netfilter.org/pub/nftables/nftables-1.1.7.tar.xz"

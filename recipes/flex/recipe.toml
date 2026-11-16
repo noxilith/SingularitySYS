@@ -5,7 +5,8 @@ license     = "BSD-2-Clause-flex"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "m4"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "m4"]
 run   = ["m4"]
 
 [[source]]

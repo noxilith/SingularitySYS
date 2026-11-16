@@ -60,6 +60,26 @@ set enable-bracketed-paste off\nset bell-style none\n\
 
 /// Hardware watchdog drivers are not wanted: nothing here feeds them, and some report "watchdog did not stop!" on every
 /// shutdown. (kmod reads /usr/lib/modprobe.d; a machine that wants one overrides it in /etc/modprobe.d.)
+const GPU_LOAD: &str = r#"#!/bin/sh
+# managed by forge: load a graphics driver only if its firmware is installed. A driver that takes the screen over from
+# the firmware framebuffer and then finds no firmware leaves the display black, so without the firmware package the
+# machine keeps the plain framebuffer and boots with a usable screen.
+#   gpu-load DRIVER FIRMWARE-DIRECTORY
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin; export PATH
+driver=$1 dir=$2
+if [ -n "$(ls -A "/usr/lib/firmware/$dir" 2>/dev/null)" ]; then
+	exec modprobe --ignore-install "$driver"
+fi
+echo "gpu: $driver is not loaded: its firmware is not installed (add the linux-firmware-* package for this card to /etc/forge/system.toml)" >&2
+exit 0
+"#;
+
+const GPU_MODPROBE: &str = "# managed by forge: graphics drivers load only when their firmware is installed (see /usr/libexec/singularity/gpu-load)\n\
+install amdgpu /usr/libexec/singularity/gpu-load amdgpu amdgpu\n\
+install radeon /usr/libexec/singularity/gpu-load radeon radeon\n\
+install nouveau /usr/libexec/singularity/gpu-load nouveau nvidia\n\
+install xe /usr/libexec/singularity/gpu-load xe xe\n";
+
 const PROTOCOLS: &str = "# Internet protocols (what `ss`, `ip` and other tools print instead of numbers). Starting point: edit freely.\n\
 ip\t0\tIP\nicmp\t1\tICMP\nigmp\t2\tIGMP\nipip\t4\tIPIP\ntcp\t6\tTCP\nudp\t17\tUDP\nipv6\t41\tIPv6\ngre\t47\tGRE\nesp\t50\tIPSEC-ESP\nah\t51\tIPSEC-AH\n\
 ipv6-icmp\t58\tIPv6-ICMP\nsctp\t132\tSCTP\n";
@@ -276,6 +296,8 @@ pub fn managed(init: &str) -> Vec<Managed> {
         file("/etc/inputrc", INPUTRC, 0o644, Own::Always),
         file("/usr/lib/modprobe.d/singularity-watchdog.conf", WATCHDOG, 0o644, Own::Always),
         file("/etc/wpa_supplicant/wpa_supplicant.conf", WPA_CONF, 0o600, Own::IfMissing),
+        file("/usr/libexec/singularity/gpu-load", GPU_LOAD, 0o755, Own::Always),
+        file("/usr/lib/modprobe.d/singularity-gpu.conf", GPU_MODPROBE, 0o644, Own::Always),
         file("/etc/protocols", PROTOCOLS, 0o644, Own::IfMissing),
         file("/etc/services", SERVICES, 0o644, Own::IfMissing),
     ];

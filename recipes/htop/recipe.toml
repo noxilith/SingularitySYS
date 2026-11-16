@@ -6,7 +6,8 @@ license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf"]
 
 [[source]]
 url    = "https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz"

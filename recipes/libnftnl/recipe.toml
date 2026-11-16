@@ -6,7 +6,8 @@ license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libmnl"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libmnl"]
 
 [[source]]
 url    = "https://www.netfilter.org/pub/libnftnl/libnftnl-1.3.2.tar.xz"

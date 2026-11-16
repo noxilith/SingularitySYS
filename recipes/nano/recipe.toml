@@ -6,7 +6,8 @@ license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf"]
 
 [[source]]
 url    = "https://www.nano-editor.org/dist/v8/nano-8.7.tar.xz"

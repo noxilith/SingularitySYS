@@ -34,7 +34,7 @@ pub use merge::{Merged, merge_plan};
 pub use profile::{Profile, ProfileGen};
 pub use remote::{Fetch, FetchHandle, RemoteRepo, Repository, SystemFetch, download_to_temp, is_url};
 pub use repo::{Index, IndexEntry, Loaded, LocalRepo, Trust, resolve, version_cmp};
-pub use sign::{Keyring, PublicKey, SecretKey, SigFile, load_public_key, load_secret_key, public_key_file_text, write_key_pair};
+pub use sign::{REVOKED_FILE, revoke_in_dir, revoked_file_text, revoked_ids, valid_key_id, Keyring, PublicKey, SecretKey, SigFile, load_public_key, load_secret_key, public_key_file_text, write_key_pair};
 pub use store::{Store, remove_tree};
 
 #[derive(Debug, thiserror::Error)]

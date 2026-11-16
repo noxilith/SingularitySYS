@@ -8,7 +8,8 @@ license     = "LGPL-2.1-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://ftpmirror.gnu.org/gnu/glibc/glibc-2.42.tar.xz"

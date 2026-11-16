@@ -454,7 +454,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
         if systemd {
             for (unit, target) in forge_schema::SYSTEMD_BASELINE {
-                p.link("init", &baseline(unit, target), &format!("/usr/lib/systemd/system/{unit}"));
+                p.link("init", &baseline(unit, target), &forge_schema::systemd_unit_file(unit));
             }
             for (path, content) in forge_schema::SYSTEMD_NETWORK_FILES.iter().chain(forge_schema::SYSTEMD_WIFI_FILES.iter()) {
                 p.file("init", path, content.to_string())?;
@@ -524,14 +524,60 @@ fn profile_env() -> String {
 /// Keys a repository announces (its `trust` list) are trusted from now on: the index was verified with a key already
 /// in the keyring, so what it vouches for is vouched for by a key we trust. This is how the project moves to a new
 /// signing key without reinstalling anyone.
+/// Keys the repository's index says to stop trusting (a leaked signing key): delete their files and record them, so a
+/// later image or index that still carries the key cannot bring it back. The key that signed the index is never
+/// revoked by it, and an entry that is not a key id is ignored.
+fn revoke_keys(p: &mut Planner, root: &Path, revoke: &[String], signed_by: Option<&str>) {
+    let dir = under(root, "/etc/forge/keys");
+    let already = forge_store::revoked_ids(&dir);
+    let mut ids = already.clone();
+    let mut fresh = Vec::new();
+    for id in revoke {
+        if !forge_store::valid_key_id(id) || Some(id.as_str()) == signed_by || ids.contains(id) {
+            continue;
+        }
+        ids.insert(id.clone());
+        fresh.push(id.clone());
+    }
+    // A revoked key whose file is still there (an older image) goes too, even when the list already names it.
+    let leftovers: Vec<(String, PathBuf)> = fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|f| f.extension().is_some_and(|x| x == "pub"))
+        .filter_map(|f| {
+            let id = forge_store::load_public_key(&f).ok()?.id();
+            (ids.contains(&id) && (fresh.contains(&id) || already.contains(&id))).then_some((id, f))
+        })
+        .collect();
+    for (id, path) in leftovers {
+        p.changes.push(Change {
+            section: "keys",
+            kind: Kind::Remove,
+            summary: format!("/etc/forge/keys/{id}.pub (a signing key the repository revoked: it is no longer trusted)"),
+            op: Op::RemoveFile(path),
+        });
+    }
+    if !fresh.is_empty() {
+        p.changes.push(Change {
+            section: "keys",
+            kind: if already.is_empty() && !dir.join(forge_store::REVOKED_FILE).exists() { Kind::Add } else { Kind::Modify },
+            summary: format!("/etc/forge/keys/{} (revoked: {})", forge_store::REVOKED_FILE, fresh.iter().map(|i| &i[..12]).collect::<Vec<_>>().join(", ")),
+            op: Op::WriteFile { path: dir.join(forge_store::REVOKED_FILE), content: forge_store::revoked_file_text(&ids), mode: 0o644 },
+        });
+    }
+}
+
 fn announce_keys(p: &mut Planner, root: &Path, announced: &[String]) {
     let dir = under(root, "/etc/forge/keys");
     let known: BTreeSet<String> = forge_store::Keyring::load_dir(&dir).map(|k| k.ids().into_iter().collect()).unwrap_or_default();
+    let revoked = forge_store::revoked_ids(&dir);
     for hex in announced {
         let Ok(key) = forge_store::PublicKey::from_hex(hex) else { continue };
         let id = key.id();
         let summary = format!("/etc/forge/keys/{id}.pub (a new signing key, announced by the repository's current key)");
-        if known.contains(&id) || p.changes.iter().any(|c| c.summary == summary) {
+        if known.contains(&id) || revoked.contains(&id) || p.changes.iter().any(|c| c.summary == summary) {
             continue;
         }
         p.changes.push(Change {
@@ -550,9 +596,15 @@ pub fn running_init(root: &Path) -> Option<&'static str> {
     if root != Path::new("/") {
         return None;
     }
+    // PID 1 is usually just called `init` (it was started through /sbin/init), so go by what each init system leaves:
+    // systemd announces itself with /run/systemd/system, OpenRC keeps its state in /run/openrc.
+    if Path::new("/run/systemd/system").is_dir() {
+        return Some("systemd");
+    }
     match fs::read_to_string("/proc/1/comm").ok()?.trim() {
         "systemd" => Some("systemd"),
         "openrc-init" => Some("openrc"),
+        _ if Path::new("/run/openrc").is_dir() => Some("openrc"),
         _ => None,
     }
 }
@@ -626,6 +678,7 @@ fn plan_packages(
                 }
                 new_serials.insert(r.clone(), seen.max(loaded.index.serial));
                 announce_keys(p, root, &loaded.index.trust);
+                revoke_keys(p, root, &loaded.index.revoke, loaded.signed_by.as_deref());
             }
             repos.push((repo, loaded.index));
         }
@@ -650,6 +703,13 @@ fn plan_packages(
             }
             target.insert(id);
         }
+    }
+
+    // The kernel is not part of the declaration: it comes with the image (or from `forge kernel`), and apply never
+    // replaces its files. Its record stays in the profile unless a different `linux` package is declared; unlinking
+    // it would only make the first apply of every new system announce "remove linux" and mean nothing.
+    if !target.iter().any(|id| id.name() == "linux") {
+        target.extend(current.iter().filter(|id| id.name() == "linux").cloned());
     }
 
     for id in &target {

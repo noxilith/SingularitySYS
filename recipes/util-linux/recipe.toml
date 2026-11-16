@@ -8,7 +8,8 @@ license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "zlib", "libxcrypt", "bash"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "zlib", "libxcrypt"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.2.tar.xz"

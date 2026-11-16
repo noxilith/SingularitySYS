@@ -9,7 +9,8 @@ license     = "LGPL-3.0-or-later OR GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib", "pkgconf"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib", "pkgconf"]
 
 [[source]]
 url    = "https://sourceware.org/elfutils/ftp/0.197/elfutils-0.197.tar.bz2"

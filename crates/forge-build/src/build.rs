@@ -201,6 +201,16 @@ fn store_tool_mounts(store: &Store, ids: &BTreeSet<StoreId>, tools_dir: &Path) -
             binds.push(Bind { src: entry.path(), dst: Path::new("/").join(&name), writable: false });
         }
     }
+    // Merged /usr: packages install under /usr only, so /bin and /sbin (where /bin/sh must be found) are links the
+    // sandbox makes itself unless a package (`filesystem`, an old BusyBox) already provides them.
+    let have = |links: &[(String, String)], binds: &[Bind], name: &str| {
+        links.iter().any(|(l, _)| l == name) || binds.iter().any(|b| b.dst == Path::new(name))
+    };
+    for (name, target) in [("/bin", "usr/bin"), ("/sbin", "usr/sbin")] {
+        if !have(&links, &binds, name) {
+            links.push((name.to_string(), target.to_string()));
+        }
+    }
     // The profile's symlinks point at absolute store paths, so the store has
     // to be visible at the same path.
     binds.push(Bind { src: store.root().to_path_buf(), dst: store.root().to_path_buf(), writable: false });

@@ -12,7 +12,7 @@
 //! where the keyring comes from: that is the trust root and must arrive over a
 //! channel you trust (for example baked into the installation image).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -255,6 +255,55 @@ pub enum VerifyError {
     Invalid,
 }
 
+/// The file in a keyring directory that lists revoked key ids, one per line. A revoked key is never trusted again, even
+/// if its `.pub` file reappears (an old image, an old index that still announces it).
+pub const REVOKED_FILE: &str = "revoked";
+
+/// A key id as written in the revoked file and in an index's `revoke` list: 64 lowercase hex digits.
+pub fn valid_key_id(id: &str) -> bool {
+    id.len() == 64 && id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// The revoked key ids recorded in `dir` (none when there is no file).
+pub fn revoked_ids(dir: &Path) -> BTreeSet<String> {
+    fs::read_to_string(dir.join(REVOKED_FILE))
+        .map(|t| t.lines().map(str::trim).filter(|l| valid_key_id(l)).map(String::from).collect())
+        .unwrap_or_default()
+}
+
+/// The text of the revoked file for these ids.
+pub fn revoked_file_text(ids: &BTreeSet<String>) -> String {
+    let mut s = String::from("# Revoked signing keys (one id per line). forge never trusts these again.\n");
+    for id in ids {
+        s.push_str(id);
+        s.push('\n');
+    }
+    s
+}
+
+/// Revoke `id` in the keyring directory `dir`: record it and delete its `.pub` file. Returns whether anything changed.
+pub fn revoke_in_dir(dir: &Path, id: &str) -> Result<bool, StoreError> {
+    if !valid_key_id(id) {
+        return Err(StoreError::Invalid { what: "key id", value: id.to_string() });
+    }
+    let mut ids = revoked_ids(dir);
+    let added = ids.insert(id.to_string());
+    if added {
+        fs::create_dir_all(dir).map_err(io_ctx(format!("creating {}", dir.display())))?;
+        fs::write(dir.join(REVOKED_FILE), revoked_file_text(&ids)).map_err(io_ctx("writing the revoked key list"))?;
+    }
+    let mut removed = false;
+    if let Ok(rd) = fs::read_dir(dir) {
+        for p in rd.filter_map(Result::ok).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "pub")) {
+            if load_public_key(&p).is_ok_and(|k| k.id() == id) {
+                fs::remove_file(&p).map_err(io_ctx(format!("removing {}", p.display())))?;
+                removed = true;
+            }
+        }
+    }
+    Ok(added || removed)
+}
+
 /// A directory of trusted public keys.
 #[derive(Debug, Clone, Default)]
 pub struct Keyring {
@@ -266,7 +315,7 @@ impl Keyring {
         Keyring::default()
     }
 
-    /// Load every `*.pub` file in `dir`. A missing directory is an empty
+    /// Load every `*.pub` file in `dir` except the revoked keys (see [`REVOKED_FILE`]). A missing directory is an empty
     /// keyring (nothing is trusted). A `*.pub` file that does not parse is an
     /// error: silently skipping it would quietly shrink what is trusted.
     pub fn load_dir(dir: &Path) -> Result<Self, StoreError> {
@@ -276,6 +325,7 @@ impl Keyring {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(ring),
             Err(e) => return Err(io_ctx(format!("reading {}", dir.display()))(e)),
         };
+        let revoked = revoked_ids(dir);
         let mut paths: Vec<PathBuf> = rd
             .filter_map(Result::ok)
             .map(|e| e.path())
@@ -283,7 +333,10 @@ impl Keyring {
             .collect();
         paths.sort();
         for p in paths {
-            ring.insert(load_public_key(&p)?);
+            let key = load_public_key(&p)?;
+            if !revoked.contains(&key.id()) {
+                ring.insert(key);
+            }
         }
         Ok(ring)
     }

@@ -56,6 +56,11 @@ pub struct Index {
     /// trust add these to their keyring, so the repository can move to a new signing key without a reinstall.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trust: Vec<String>,
+    /// Ids of keys that must no longer be trusted (a leaked signing key): clients that verified this index with a key
+    /// they trust delete these from their keyring and never trust them again. The key that signed the index is never
+    /// revoked by it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revoke: Vec<String>,
 }
 
 fn safe_file_name(n: &str) -> bool {
@@ -345,13 +350,16 @@ impl LocalRepo {
     /// would otherwise start counting again, and clients (which refuse an index older than one they saw) would
     /// reject it as a rollback.
     pub fn sign_at_least(&self, signer: &SecretKey, min_serial: u64) -> Result<(), StoreError> {
-        self.sign_announcing(signer, min_serial, &[])
+        self.sign_announcing(signer, min_serial, &[], &[])
     }
 
     /// Like [`LocalRepo::sign_at_least`], also announcing `trust` (public keys): clients that trust `signer` will start
     /// trusting them too. This is how the repository moves to a new key: publish once signed with the old key while
     /// announcing the new one, and sign with the new key afterwards.
-    pub fn sign_announcing(&self, signer: &SecretKey, min_serial: u64, trust: &[crate::PublicKey]) -> Result<(), StoreError> {
+    pub fn sign_announcing(&self, signer: &SecretKey, min_serial: u64, trust: &[crate::PublicKey], revoke: &[String]) -> Result<(), StoreError> {
+        if let Some(own) = revoke.iter().find(|id| **id == signer.public().id()) {
+            return Err(StoreError::Invalid { what: "revoked key (it is the signing key)", value: own.clone() });
+        }
         let mut index = self.index_unverified()?;
         index.serial = (index.serial + 1).max(min_serial);
         for k in trust {
@@ -359,6 +367,15 @@ impl LocalRepo {
             if !index.trust.contains(&hex) {
                 index.trust.push(hex);
             }
+        }
+        for id in revoke {
+            if !crate::sign::valid_key_id(id) {
+                return Err(StoreError::Invalid { what: "key id", value: id.clone() });
+            }
+            if !index.revoke.contains(id) {
+                index.revoke.push(id.clone());
+            }
+            index.trust.retain(|t| crate::PublicKey::from_hex(t).map_or(true, |k| k.id() != *id));
         }
         self.save(&index, Some(signer))
     }

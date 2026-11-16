@@ -11,13 +11,15 @@
 #
 # Result: /boot/vmlinuz-$release, /boot/config-$release, /usr/lib/modules/$release (/lib/modules links to it).
 name        = "linux"
-version     = "7.3.3_r5"
+version     = "7.3.3_r6"
 description = "Linux kernel 7.3 (defconfig base, boot drivers built in, every other driver as a module)"
 license     = "GPL-2.0 WITH Linux-syscall-note"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4", "zlib", "pkgconf", "bash", "openssl", "kmod"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "bc", "perl", "libelf", "flex", "bison", "m4",
+         "zlib", "pkgconf", "openssl", "kmod"]
 
 [[source]]
 url    = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.3.tar.xz"

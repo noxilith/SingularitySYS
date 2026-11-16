@@ -8,7 +8,8 @@ license     = "BSD-2-Clause AND SSH-OpenSSH"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "openssl", "zlib", "libxcrypt", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "openssl", "zlib", "libxcrypt"]
 
 [[source]]
 url    = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.6p2.tar.gz"

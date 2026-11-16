@@ -163,7 +163,17 @@ pub const SYSTEMD_BASELINE: &[(&str, &str)] = &[
     ("systemd-resolved.service", "multi-user.target"),
     ("systemd-timesyncd.service", "sysinit.target"),
     ("systemd-logind.service", "multi-user.target"),
+    ("serial-getty@ttyS0.service", "getty.target"),
 ];
+
+/// The unit file a baseline entry links to: an instance such as `serial-getty@ttyS0.service` is made from the template
+/// `serial-getty@.service`.
+pub fn systemd_unit_file(unit: &str) -> String {
+    match unit.split_once('@') {
+        Some((name, _)) => format!("/usr/lib/systemd/system/{name}@.service"),
+        None => format!("/usr/lib/systemd/system/{unit}"),
+    }
+}
 
 /// `foo` and `foo.service` both name the unit `foo.service`; `foo.socket` and the like are kept as written.
 pub fn systemd_unit(name: &str) -> String {
@@ -233,6 +243,6 @@ mod tests {
     #[test]
     fn unit_names() {
         assert_eq!(systemd_unit("sshd"), "sshd.service");
-        assert_eq!(systemd_unit("dbus.socket"), "dbus.socket");
+        assert_eq!(systemd_unit("foo.socket"), "foo.socket");
     }
 }

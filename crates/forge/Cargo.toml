@@ -21,6 +21,7 @@ forge-kernel.workspace = true
 clap.workspace = true
 rpassword.workspace = true
 anyhow.workspace = true
+nix.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

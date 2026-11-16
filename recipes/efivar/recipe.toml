@@ -7,7 +7,8 @@ license     = "LGPL-2.1-only"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
 
 [[source]]
 url    = "https://github.com/rhboot/efivar/archive/refs/tags/39.tar.gz"

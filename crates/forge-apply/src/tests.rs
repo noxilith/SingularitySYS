@@ -827,7 +827,7 @@ fn a_new_signing_key_announced_by_the_current_one_is_trusted_from_then_on() {
     let new = SecretKey::from_seed([42; 32]);
     publish_as(r.path(), "a", Some(&old));
     let repo = LocalRepo::new(r.path().join("srv/repo"));
-    repo.sign_announcing(&old, 0, &[new.public()]).unwrap();
+    repo.sign_announcing(&old, 0, &[new.public()], &[]).unwrap();
     let keys = r.path().join("etc/forge/keys");
     fs::create_dir_all(&keys).unwrap();
     fs::write(keys.join("old.pub"), forge_store::public_key_file_text(&old.public())).unwrap();
@@ -851,9 +851,53 @@ fn keys_announced_by_an_unsigned_repository_are_ignored() {
     let r = root();
     let stranger = SecretKey::from_seed([77; 32]);
     publish_as(r.path(), "a", None);
-    LocalRepo::new(r.path().join("srv/repo")).sign_announcing(&stranger, 0, &[SecretKey::from_seed([5; 32]).public()]).unwrap();
+    LocalRepo::new(r.path().join("srv/repo")).sign_announcing(&stranger, 0, &[SecretKey::from_seed([5; 32]).public()], &[]).unwrap();
     // Signed by a key nobody trusts: refused outright, so nothing it announces can matter.
     assert!(plan_system(&pkg_decl(&["a"]), r.path(), opts()).is_err());
+}
+
+// ---- revoking a signing key -----------------------------------------------------------
+
+#[test]
+fn a_revoked_key_is_deleted_remembered_and_cannot_be_announced_back() {
+    let r = root();
+    let good = test_key();
+    let leaked = SecretKey::from_seed([66; 32]);
+    publish_as(r.path(), "a", Some(&good));
+    let repo = LocalRepo::new(r.path().join("srv/repo"));
+    let keys = r.path().join("etc/forge/keys");
+    fs::create_dir_all(&keys).unwrap();
+    fs::write(keys.join("good.pub"), forge_store::public_key_file_text(&good.public())).unwrap();
+    fs::write(keys.join("leaked.pub"), forge_store::public_key_file_text(&leaked.public())).unwrap();
+    let leaked_id = leaked.public().id();
+    repo.sign_announcing(&good, 0, &[], &[leaked_id.clone()]).unwrap();
+    let with_ring = || {
+        let mut o = opts();
+        o.trust = Trust::Require(Keyring::load_dir(&keys).unwrap());
+        o
+    };
+    let p = plan_system(&pkg_decl(&["a"]), r.path(), with_ring()).unwrap();
+    assert!(p.changes.iter().any(|c| c.section == "keys" && c.kind == Kind::Remove && c.summary.contains(&leaked_id)), "{:?}", p.changes);
+    apply(&p).unwrap();
+    assert!(!keys.join("leaked.pub").exists() && keys.join("good.pub").exists());
+    assert!(forge_store::revoked_ids(&keys).contains(&leaked_id));
+    assert!(!Keyring::load_dir(&keys).unwrap().ids().contains(&leaked_id), "no longer trusted");
+    // Even if the file comes back (an old image) or an old index announces it, it stays out.
+    fs::write(keys.join("leaked.pub"), forge_store::public_key_file_text(&leaked.public())).unwrap();
+    assert!(!Keyring::load_dir(&keys).unwrap().ids().contains(&leaked_id));
+    repo.sign_announcing(&good, 0, &[leaked.public()], &[]).unwrap();
+    let again = plan_system(&pkg_decl(&["a"]), r.path(), with_ring()).unwrap();
+    assert!(again.changes.iter().all(|c| !c.summary.contains("a new signing key")), "{:?}", again.changes);
+}
+
+#[test]
+fn an_index_cannot_revoke_the_key_that_signed_it() {
+    let r = root();
+    let good = test_key();
+    publish_as(r.path(), "a", Some(&good));
+    let repo = LocalRepo::new(r.path().join("srv/repo"));
+    assert!(repo.sign_announcing(&good, 0, &[], &[good.public().id()]).is_err(), "refused when signing");
+    assert!(repo.sign_announcing(&good, 0, &[], &["not-a-key-id".into()]).is_err());
 }
 
 // ---- the init system that is running keeps its packages until the reboot -------------------
@@ -891,4 +935,15 @@ fn the_firewall_forwards_and_services_come_from_the_declaration() {
     for p in ["etc/nftables.conf", "etc/runlevels/default/nftables", "etc/init.d/zram", "etc/init.d/forge-maintenance"] {
         assert!(r.path().join(p).symlink_metadata().is_err(), "{p} should be gone");
     }
+}
+
+#[test]
+fn the_kernel_package_stays_when_the_declaration_does_not_list_it() {
+    let r = root();
+    publish_all(r.path(), &["linux", "a"]);
+    apply(&plan(&pkg_decl(&["linux", "a"]), r.path())).unwrap();
+    // The same system, declared without the kernel (a new system's first declaration): nothing to remove.
+    let p = plan(&pkg_decl(&["a"]), r.path());
+    assert!(p.changes.iter().all(|c| c.kind != Kind::Remove), "{:?}", p.changes);
+    assert!(p.is_empty());
 }

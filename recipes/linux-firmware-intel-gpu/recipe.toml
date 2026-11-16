@@ -1,0 +1,30 @@
+# Firmware for Intel graphics (i915 and xe drivers)
+# Separate from the base on purpose: these are large, and only a machine with this hardware needs them. The kernel
+# loads the matching driver (amdgpu, radeon, i915, xe, nouveau) only when its firmware package is installed (see
+# /usr/libexec/singularity/gpu-load), because a graphics driver that takes the screen over from the firmware
+# framebuffer and then finds no firmware leaves the display black. List the package in the declaration.
+name        = "linux-firmware-intel-gpu"
+version     = "20261019_r1"
+description = "Firmware for Intel graphics (i915 and xe drivers)"
+license     = "Redistributable firmware (see /usr/share/licenses/linux-firmware-intel-gpu)"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20261019.tar.xz"
+sha256 = "a10d1ab5baf2c74ba92e8c7cf313e691696c26bddfa6df00db795e48d70cd4ca"
+
+[build]
+install = '''
+fw="$DESTDIR/usr/lib/firmware"
+mkdir -p "$fw"
+for d in i915 xe; do
+    if [ -e "$d" ]; then cp -R "$d" "$fw/$d"; fi
+done
+mkdir -p "$DESTDIR/usr/share/licenses/linux-firmware-intel-gpu"
+cp -R LICENSE LICENSES "$DESTDIR/usr/share/licenses/linux-firmware-intel-gpu/" 2>/dev/null || true
+test -d "$fw/i915"
+'''

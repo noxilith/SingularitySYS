@@ -33,7 +33,7 @@ use crate::{StoreError, StoreId, io_ctx};
 /// Programs that must be setuid root. The store never holds a setuid bit, so the bit is set on the copies in
 /// the tree. Nothing outside this list is ever made setuid, and a symlink is refused (the bit would land on
 /// whatever it points to).
-pub const SETUID_FILES: &[&str] = &["usr/bin/sudo", "usr/bin/passwd", "usr/bin/su", "usr/bin/mount", "usr/bin/umount", "usr/bin/ping"];
+pub const SETUID_FILES: &[&str] = &["usr/bin/sudo", "usr/bin/passwd", "usr/bin/su", "usr/bin/mount", "usr/bin/umount", "usr/bin/ping", "usr/libexec/dbus-daemon-launch-helper"];
 
 /// Where the state file lives, relative to the root.
 pub const STATE_PATH: &str = "var/lib/forge/materialized.toml";
@@ -125,7 +125,12 @@ pub fn materialize(
                 match fs::symlink_metadata(&dest) {
                     Ok(meta) if meta.is_dir() => {}
                     Ok(_) => return Err(unmanaged(path, "a file or link is in the way of a directory")),
-                    Err(_) => fs::create_dir(&dest).map_err(io_ctx(format!("creating {}", dest.display())))?,
+                    Err(_) => {
+                        fs::create_dir(&dest).map_err(io_ctx(format!("creating {}", dest.display())))?;
+                        // Exactly the package's mode, whatever the umask of whoever runs forge (a root login has 077).
+                        let mode = if m.mode & 0o777 == 0 { 0o755 } else { m.mode & 0o777 };
+                        fs::set_permissions(&dest, fs::Permissions::from_mode(mode)).map_err(io_ctx(format!("setting the mode of {}", dest.display())))?;
+                    }
                 }
                 if tracked {
                     entries.push(MatEntry { path: path.clone(), kind: Kind::Dir });

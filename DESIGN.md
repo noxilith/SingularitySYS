@@ -904,3 +904,63 @@ Limine, and enrolling keys).
 
 QEMU 11.1.3 (headless, KVM, no network back end) is a package (`recipes/qemu`, with `glib`, `pixman`, `libffi`,
 `pcre2`); `scripts/qemu-boot.sh ISO` boots an image with the serial console on stdout.
+
+## Booting systemd in QEMU found five bugs (fixed 2026-11-15)
+
+Installing the ISO to a virtual disk, switching to `init = "systemd"` and rebooting (QEMU, serial console) showed what the
+hardware screenshots only hinted at:
+
+1. **`forge apply` made directories mode 0700.** The installed system's login umask is 077 (`shadow`'s `UMASK`), forge
+   inherited it, and `/usr/lib/systemd` was created unreadable for anyone but root, so `systemd-networkd`, `-resolved` and
+   `-timesyncd` (which run as their own users) died with "Failed to execute ...: Permission denied". forge now sets
+   umask 022 at start, and `materialize` sets each directory's mode from the package.
+2. **The running init was not recognised.** PID 1 reports itself as `init`, so the "keep the running init system's
+   packages until the reboot" rule never applied and OpenRC's tools were removed while OpenRC was still running (`reboot`
+   did nothing). `running_init` now goes by `/run/systemd/system` and `/run/openrc`.
+3. **dbus could not start** (`dbus was compiled without systemd support`): the unit used socket activation. dbus is now
+   built against libsystemd (systemd does not need dbus to build), `dbus-daemon-launch-helper` is setuid, and
+   `timedatectl`/`hostnamectl` can activate their services.
+4. **zram and the maintenance loop failed under systemd**: its PATH has no `/usr/sbin`. The scripts set their own PATH.
+5. **No login on the serial console** under systemd (OpenRC has `agetty.ttyS0`): the baseline now enables
+   `serial-getty@ttyS0` (templates link to `name@.service`).
+
+## GPU firmware is separate packages; drivers wait for it (implemented)
+
+`linux-firmware-amdgpu` (amdgpu + radeon), `linux-firmware-intel-gpu` (i915 + xe) and `linux-firmware-nvidia` (nouveau's
+GSP firmware) come from the same linux-firmware release as `linux-firmware-wifi`, each with its own license directory.
+They are big (110, 32 and 154 MB) and not in the base: list the one for your card in the declaration (or let your
+desktop environment package depend on it). The kernel now builds amdgpu, radeon, nouveau and xe as modules, but a driver
+that takes the screen over from the firmware framebuffer and then finds no firmware leaves it black, so
+`/etc/modprobe.d`-style `install` rules (`/usr/lib/modprobe.d/singularity-gpu.conf`, a managed file) route each load
+through `/usr/libexec/singularity/gpu-load`, which loads the driver only if its firmware directory is installed.
+i915 stays built in.
+
+## musl is gone
+
+The musl-only recipes (`musl`, `musl-stage0`, `binutils-stage1`, `gcc-stage1`) and the scripts that only bootstrapped
+musl (`bootstrap-base.sh`, `bootstrap-toolchain.sh`, `bootstrap-selfhost.sh`, `build-tools.sh`) are deleted; the glibc
+bootstrap is `scripts/bootstrap-glibc.sh`, then `scripts/build-glibc-world.sh`. The shared stage-0 recipes still carry a
+dormant musl override; the schema still knows the `libc` field. The old musl package repository (release `repo`) is
+untouched on GitHub.
+
+## The build sandbox has no BusyBox (implemented)
+
+Recipes used to name `busybox` as the build userland. They now name GNU tools instead (`bash`, `dash` for `/bin/sh`,
+`coreutils`, `sed`, `grep`, `gawk`, `findutils`, `diffutils`, `tar`, `gzip`, `xz`, `bzip2`, `which`), and the sandbox
+creates the `/bin` and `/sbin` links of merged `/usr` itself when no package does. Packages already built keep their ids
+(nothing is rebuilt by this); the next build of each recipe uses the new userland. BusyBox remains only as the
+initramfs's source (`forge iso`) and in the host-built stage-0 recipes. Not every recipe has been rebuilt with it: the
+ones tried are listed in the commit.
+
+## Revoking a signing key (implemented)
+
+Rotation (an index announcing new keys) already existed; revocation is its counterpart for a key that leaked.
+The signed index carries `revoke = [KEY-ID, ...]`; `forge repo assemble --revoke-key ID|FILE.pub` (or
+`REVOKE_KEYS=... scripts/publish-release.sh`) adds entries. A system that verified the index with a key it trusts deletes
+those keys from `/etc/forge/keys` and records them in `/etc/forge/keys/revoked`, which the keyring loader honours: a
+revoked key is never trusted again even if its file reappears or an old index announces it. The key that signed an index
+cannot be revoked by it (assembling such an index is refused, and clients ignore the entry), and `forge key trust` refuses
+a revoked key. `forge key revoke ID|FILE.pub --dir /etc/forge/keys` does the same by hand on one machine.
+Procedure for a leak: publish one release signed with a key that systems already trust (the new key, announced earlier
+with `NEXT_KEYS`), revoking the leaked one with `REVOKE_KEYS`; keep `REVOKE_KEYS` in every later release for machines
+that were off. Limit: a leaked key can also be used to revoke good ones, so keep the key you sign with offline-safe.

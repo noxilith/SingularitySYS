@@ -8,7 +8,8 @@ license     = "GPL-2.0-only"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "bison"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "bison"]
 
 [[source]]
 url    = "https://chrony-project.org/releases/chrony-4.9.tar.gz"

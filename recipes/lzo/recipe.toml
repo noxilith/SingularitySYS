@@ -5,7 +5,8 @@ license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
 
 [[source]]
 url    = "https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz"

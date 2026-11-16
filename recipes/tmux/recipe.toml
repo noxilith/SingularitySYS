@@ -6,7 +6,8 @@ license     = "ISC"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "libevent", "ncurses", "pkgconf", "bison", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "libevent", "ncurses", "pkgconf", "bison"]
 
 [[source]]
 url    = "https://github.com/tmux/tmux/releases/download/3.8/tmux-3.8.tar.gz"

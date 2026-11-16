@@ -10,7 +10,8 @@ license     = "Redistributable firmware (see /usr/share/licenses/microcode)"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which"]
 
 # The first source is unpacked as the source tree: linux-firmware, for amd-ucode.
 [[source]]

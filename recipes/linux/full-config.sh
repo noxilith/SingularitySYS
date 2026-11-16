@@ -88,15 +88,15 @@ esac
 # ---- full ---------------------------------------------------------------------------------------
 # Compatibility with hardware nobody has tried yet: every driver the kernel has, as a MODULE. The list of
 # candidates comes from allmodconfig (generated out of tree, before the real configuration exists), minus
-# tests, samples and debugging aids, and minus the big GPU drivers that cannot work without megabytes of
-# firmware (amdgpu, radeon, nouveau, xe: loading one without its firmware blanks the screen, because it
-# takes the display over from the firmware framebuffer first). The graphics the live system needs is the
-# firmware's framebuffer (simpledrm) and i915, which is built in.
+# tests, samples and debugging aids. The big GPU drivers (amdgpu, radeon, nouveau, xe) are modules too, but loading
+# one without its firmware blanks the screen (it takes the display over from the firmware framebuffer first), so the
+# system loads them only when the firmware package is installed (see gpu-load, a managed file). The graphics the live
+# system needs is the firmware's framebuffer (simpledrm) and i915, which is built in.
 mkdir -p "$tmp/allcfg"
 make O="$tmp/allcfg" ARCH=x86_64 CC="$cc" allmodconfig >/dev/null
 grep '^CONFIG_.*=m$' "$tmp/allcfg/.config" | sed -e 's/^CONFIG_//' -e 's/=m$//' |
     grep -v -E '(KUNIT|_TEST$|_TEST_|^TEST_|SELFTEST|SAMPLE|TORTURE|^LKDTM|_DEBUG|^WW_MUTEX)' |
-    grep -v -E '^(DRM_AMDGPU|DRM_RADEON|DRM_NOUVEAU|DRM_XE|DRM_VKMS|HSA_AMD|IKHEADERS)' > "$tmp/allmods.txt"
+    grep -v -E '^(DRM_VKMS|IKHEADERS)' > "$tmp/allmods.txt"
 wc -l < "$tmp/allmods.txt"
 kmake defconfig kvm_guest.config
 essential_settings
@@ -163,7 +163,7 @@ for o in CFG80211 MAC80211; do grep -q "^CONFIG_$o=y" .config || missing="$missi
 if [ -n "$missing" ]; then echo "Wi-Fi options that did not survive olddefconfig:$missing" >&2; exit 1; fi
 # The firewall needs the nf_tables families, and swap in memory needs zram (see above); the build must not go on without.
 missing=
-for o in NF_TABLES_INET NF_TABLES_IPV4 NF_TABLES_IPV6 NFT_NAT NFT_CT NFT_MASQ NFT_REDIR NFT_REJECT NFT_LIMIT ZRAM; do
+for o in NF_TABLES_INET NF_TABLES_IPV4 NF_TABLES_IPV6 NFT_NAT NFT_CT NFT_MASQ NFT_REDIR NFT_REJECT NFT_LIMIT ZRAM DRM_AMDGPU DRM_RADEON DRM_NOUVEAU DRM_XE; do
     grep -q "^CONFIG_$o=[ym]" .config || missing="$missing $o"
 done
 if [ -n "$missing" ]; then echo "firewall/swap options that did not survive olddefconfig:$missing" >&2; exit 1; fi

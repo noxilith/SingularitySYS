@@ -7,7 +7,8 @@ license     = "BSD-3-Clause"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libnl", "openssl"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libnl", "openssl"]
 
 [[source]]
 url    = "https://w1.fi/releases/wpa_supplicant-2.12.tar.gz"

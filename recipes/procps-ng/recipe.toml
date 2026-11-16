@@ -7,7 +7,8 @@ license     = "GPL-2.0-or-later AND LGPL-2.1-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf"]
 
 [[source]]
 url    = "https://downloads.sourceforge.net/project/procps-ng/Production/procps-ng-4.0.5.tar.xz"

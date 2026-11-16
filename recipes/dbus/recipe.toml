@@ -1,13 +1,16 @@
 # The D-Bus message bus: systemd's tools (loginctl, timedatectl, hostnamectl, ...) and most desktop software talk
-# to it. Built without systemd support so that the two are not circular; systemd finds the bus at run time.
+# to it. Built against libsystemd (systemd does not need dbus to build, so they are not circular): the bus can activate
+# systemd's own services (timedated, hostnamed, ...) and takes its sockets from systemd.
 name        = "dbus"
-version     = "1.16.2_r5"
+version     = "1.16.2_r6"
 description = "D-Bus message bus system"
 license     = "AFL-2.1 OR GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "expat"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson",
+         "expat", "systemd"]
 
 [[source]]
 url    = "https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz"
@@ -16,7 +19,7 @@ sha256 = "0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2"
 [build]
 configure = '''
 CC=gcc meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=lib --bindir=bin --sbindir=sbin \
-    --buildtype=release -Dsystemd=disabled -Dselinux=disabled -Dapparmor=disabled -Dlibaudit=disabled \
+    --buildtype=release -Dsystemd=enabled -Dsystemd_system_unitdir=/usr/lib/systemd/system -Dsystemd_user_unitdir=/usr/lib/systemd/user -Dselinux=disabled -Dapparmor=disabled -Dlibaudit=disabled \
     -Dx11_autolaunch=disabled -Dxml_docs=disabled -Ddoxygen_docs=disabled -Dducktype_docs=disabled \
     -Dqt_help=disabled -Dmodular_tests=disabled -Dasserts=false -Druntime_dir=/run
 '''
@@ -24,8 +27,9 @@ compile = "meson compile -C build -j $JOBS"
 install = '''
 DESTDIR=$DESTDIR meson install -C build
 rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/run" "$DESTDIR/var/run"
-# Units, the bus user and the runtime directories for systemd (dbus is built without systemd support, so its
-# build installs none of them).
+# Our own units (with the bus user and runtime directories created right before the bus starts) and the sysusers and
+# tmpfiles entries; they replace the ones the build installed.
+rm -f "$DESTDIR/usr/lib/systemd/system/dbus.service" "$DESTDIR/usr/lib/systemd/system/dbus.socket"
 mkdir -p "$DESTDIR/usr/lib/systemd/system" "$DESTDIR/usr/lib/sysusers.d" "$DESTDIR/usr/lib/tmpfiles.d"
 cat > "$DESTDIR/usr/lib/systemd/system/dbus.socket" <<'UNIT'
 [Unit]

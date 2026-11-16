@@ -13,7 +13,8 @@ libc        = ["glibc"]
 
 [depends]
 # glibc builds against the glibc that is already there (its helper programs link with it), so it names itself.
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "python", "bison", "gawk", "sed", "grep"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "python", "bison"]
 
 [[source]]
 url    = "https://ftpmirror.gnu.org/gnu/glibc/glibc-2.42.tar.xz"

@@ -12,7 +12,8 @@ license     = "GPL-3.0-or-later WITH GCC-exception-3.1"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib"]
 run   = ["binutils", "glibc", "linux-headers"]
 
 # $SRC is the first source: gcc itself.

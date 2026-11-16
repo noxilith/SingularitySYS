@@ -6,7 +6,8 @@ license     = "BSD-3-Clause"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "python"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "python"]
 run   = ["python"]
 
 [[source]]

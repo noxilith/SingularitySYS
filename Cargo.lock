@@ -342,6 +342,7 @@ dependencies = [
  "forge-schema",
  "forge-store",
  "forge-strap",
+ "nix",
  "rpassword",
  "tar",
  "tempfile",

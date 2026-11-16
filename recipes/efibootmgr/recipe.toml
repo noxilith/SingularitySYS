@@ -7,7 +7,8 @@ license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
 
 [depends]
-build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "efivar"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "efivar"]
 
 [[source]]
 url    = "https://github.com/rhboot/efibootmgr/archive/refs/tags/18.tar.gz"

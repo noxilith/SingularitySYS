@@ -652,6 +652,10 @@ fn build_cmd(a: BuildArgs) -> Result<()> {
 }
 
 fn main() -> ExitCode {
+    // The login umask on an installed system is 077 (private home files). What forge creates in /usr, /etc and the boot
+    // files must be readable by everyone: services that run as their own user (networkd, resolved) could not even
+    // reach their programs in a directory forge made with 0700.
+    nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o022));
     // The sandbox helper reports the build's own exit status, so it bypasses
     // the normal error handling below.
     let cli = Cli::parse();
@@ -1503,6 +1507,14 @@ enum KeyAction {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+    /// Stop trusting a key for good: delete it from the keyring and remember it, so it cannot come back
+    Revoke {
+        /// The key's 64-digit id (see `forge key list`), or its `.pub` file
+        key: String,
+        /// The keyring (default: ~/.config/forge/keys; the system's is /etc/forge/keys)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     /// Trust a public key by adding it to a keyring
     Trust {
         /// The NAME.pub file to trust
@@ -1511,6 +1523,14 @@ enum KeyAction {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+}
+
+/// A key named on the command line: its 64-digit id, or the `.pub` file to read the id from.
+fn key_id_arg(arg: &str) -> Result<String> {
+    if forge_store::valid_key_id(arg) {
+        return Ok(arg.to_string());
+    }
+    Ok(forge_store::load_public_key(Path::new(arg)).with_context(|| format!("`{arg}` is neither a key id (64 hex digits) nor a readable .pub file"))?.id())
 }
 
 fn key_cmd(a: KeyArgs) -> Result<()> {
@@ -1539,12 +1559,28 @@ fn key_cmd(a: KeyArgs) -> Result<()> {
                 println!("{id}");
             }
         }
+        KeyAction::Revoke { key, dir } => {
+            let dir = match dir {
+                Some(d) => d,
+                None => user_dir("keys")?,
+            };
+            let id = key_id_arg(&key)?;
+            if forge_store::revoke_in_dir(&dir, &id)? {
+                println!("revoked {id}");
+            } else {
+                println!("already revoked");
+            }
+            println!("keyring: {}", dir.display());
+        }
         KeyAction::Trust { file, dir } => {
             let dir = match dir {
                 Some(d) => d,
                 None => user_dir("keys")?,
             };
             let key = forge_store::load_public_key(&file)?;
+            if forge_store::revoked_ids(&dir).contains(&key.id()) {
+                bail!("key {} was revoked in {}: it is not trusted again (a leaked key stays revoked)", key.id(), dir.display());
+            }
             std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
             let dest = dir.join(format!("{}.pub", &key.id()[..16]));
             let text = std::fs::read_to_string(&file)?;
@@ -1598,6 +1634,11 @@ enum RepoAction {
         /// a new signing key (publish with the old key announcing the new one; sign with the new key afterwards)
         #[arg(long = "trust-key")]
         trust_key: Vec<PathBuf>,
+        /// A signing key to stop trusting (its 64-digit id, or its `.pub` file): systems that trust KEY delete it from
+        /// their keyring and never trust it again. Use it when a signing key has leaked: publish with a key that is still
+        /// good, announcing the new one (--trust-key) and revoking the old one.
+        #[arg(long = "revoke-key")]
+        revoke_key: Vec<String>,
     },
     /// Check a repository's signature against the trusted keys
     Verify {
@@ -1616,7 +1657,7 @@ fn repo_cmd(a: RepoArgs) -> Result<()> {
             repo_handle.sign(&signer)?;
             println!("signed {} with key {}", repo.display(), signer.public().id());
         }
-        RepoAction::Assemble { dest, from, key, skip, min_serial, trust_key } => {
+        RepoAction::Assemble { dest, from, key, skip, min_serial, trust_key, revoke_key } => {
             if dest.exists() {
                 bail!("{} already exists; remove it or choose another name", dest.display());
             }
@@ -1649,8 +1690,9 @@ fn repo_cmd(a: RepoArgs) -> Result<()> {
                 target.publish(path, Some(&signer)).with_context(|| format!("adding {} {}", e.name, e.version))?;
                 println!("  {} {}", e.name, e.version);
             }
+            let revoke_key: Vec<String> = revoke_key.iter().map(|a| key_id_arg(a)).collect::<Result<_>>()?;
             let announced: Vec<forge_store::PublicKey> = trust_key.iter().map(|f| forge_store::load_public_key(f)).collect::<Result<_, _>>()?;
-            target.sign_announcing(&signer, min_serial, &announced)?;
+            target.sign_announcing(&signer, min_serial, &announced, &revoke_key)?;
             // Run-time dependencies are exact builds: every one must have come along.
             let index = target.load(&forge_store::Trust::AllowUnsigned)?.index;
             let mut missing = Vec::new();

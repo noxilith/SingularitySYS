@@ -7,6 +7,7 @@ use crate::system::SystemDecl;
 
 const ZRAM: &str = r#"#!/bin/sh
 # managed by forge: compressed swap in memory, half the size of the RAM (it holds about twice that after compression)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin; export PATH
 case "$1" in
 start)
 	grep -q '^/dev/zram' /proc/swaps 2>/dev/null && exit 0
@@ -29,6 +30,7 @@ esac
 
 const MAINTENANCE_LOOP: &str = r#"#!/bin/sh
 # managed by forge: look once an hour for routine work that is due (forge keeps track of when each task last ran)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin; export PATH
 while :; do
 	forge maintenance run --due
 	sleep 3600
@@ -172,7 +174,7 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
             openrc: OPENRC_SSHD.into(),
             systemd: unit(
                 "OpenSSH server",
-                "After=network.target\n\n[Service]\nExecStartPre=/bin/sh -c 'mkdir -p /var/empty; getent passwd sshd >/dev/null || useradd --system --home-dir /var/empty --shell /usr/sbin/nologin sshd; ssh-keygen -A; /usr/sbin/sshd -t'\nExecStart=/usr/sbin/sshd -D\nRestart=on-failure\n",
+                "After=network.target\n\n[Service]\nExecStartPre=/bin/sh -c 'PATH=/usr/sbin:/usr/bin:$PATH; mkdir -p /var/empty; getent passwd sshd >/dev/null || useradd --system --home-dir /var/empty --shell /usr/sbin/nologin sshd; ssh-keygen -A; /usr/sbin/sshd -t'\nExecStart=/usr/sbin/sshd -D\nRestart=on-failure\n",
             ),
         },
     ];
@@ -268,6 +270,16 @@ mod tests {
         match &find(v, p).unwrap().entry {
             Entry::File { content, .. } => content.clone(),
             other => panic!("{p}: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_scripts_find_the_system_programs_whatever_the_init_systems_path_is() {
+        for m in managed_for(&decl("")) {
+            if m.path == "/usr/libexec/singularity/zram" || m.path == "/usr/libexec/singularity/maintenance-loop" {
+                let Entry::File { content, .. } = &m.entry else { panic!() };
+                assert!(content.contains("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"), "{}", m.path);
+            }
         }
     }
 
