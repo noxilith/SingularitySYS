@@ -818,6 +818,22 @@ fn the_limine_files_on_the_boot_partition_follow_the_package() {
     assert!(q.changes.iter().all(|c| c.section != "boot"));
 }
 
+#[test]
+fn with_secure_boot_the_signed_loader_is_never_replaced_by_the_packages_copy() {
+    let r = root();
+    fs::create_dir_all(r.path().join("boot/EFI/BOOT")).unwrap();
+    fs::create_dir_all(r.path().join("usr/share/limine")).unwrap();
+    fs::create_dir_all(r.path().join("etc/forge/secureboot")).unwrap();
+    fs::write(r.path().join("etc/forge/secureboot/enabled"), "").unwrap();
+    fs::write(r.path().join("boot/EFI/BOOT/BOOTX64.EFI"), "SIGNED").unwrap();
+    fs::write(r.path().join("usr/share/limine/BOOTX64.EFI"), "NEW").unwrap();
+    publish_all(r.path(), &["limine"]);
+    let p = plan(&pkg_decl(&["limine"]), r.path());
+    assert!(p.changes.iter().all(|c| !c.summary.contains("the Limine boot loader")), "no plain copy: {:?}", p.changes);
+    apply(&p).unwrap();
+    assert_eq!(fs::read_to_string(r.path().join("boot/EFI/BOOT/BOOTX64.EFI")).unwrap(), "SIGNED");
+}
+
 // ---- moving to a new signing key ------------------------------------------------------
 
 #[test]

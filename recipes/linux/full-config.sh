@@ -41,7 +41,9 @@ essential_settings() {
     $c -d DEBUG_INFO -d DEBUG_INFO_DWARF4 -d DEBUG_INFO_DWARF5 -d DEBUG_INFO_BTF -e DEBUG_INFO_NONE
     # New compilers warn about things old kernels predate; warnings must not fail the build.
     $c -d WERROR
-    $c --set-str LOCALVERSION "" -d LOCALVERSION_AUTO
+    # KCFG_LOCALVERSION makes the release name unique per kernel build (7.3.3-r7): two builds of the same kernel then
+    # have different files in /boot and different module directories, so a generation can really boot the old one.
+    $c --set-str LOCALVERSION "${KCFG_LOCALVERSION:-}" -d LOCALVERSION_AUTO
 }
 
 # The framebuffer console depends on options only visible after DRM_FBDEV_EMULATION is on, so it is

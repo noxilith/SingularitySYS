@@ -11,7 +11,7 @@
 #
 # Result: /boot/vmlinuz-$release, /boot/config-$release, /usr/lib/modules/$release (/lib/modules links to it).
 name        = "linux"
-version     = "7.3.3_r6"
+version     = "7.3.3_r7"
 description = "Linux kernel 7.3 (defconfig base, boot drivers built in, every other driver as a module)"
 license     = "GPL-2.0 WITH Linux-syscall-note"
 libc        = ["glibc"]
@@ -27,7 +27,8 @@ sha256 = "79c66dde66cd96877fcde8f7d36aec946b1f423d2b97b5a7b1751b75c764f3d1"
 
 [build]
 configure = '''
-sh "$RECIPE_DIR/full-config.sh" full
+# The release name carries the recipe revision (7.3.3_r7 -> 7.3.3-r7): bump it with the version.
+KCFG_LOCALVERSION=-r7 sh "$RECIPE_DIR/full-config.sh" full
 '''
 compile = "sh \"$RECIPE_DIR/kernel-build.sh\" compile"
 install = "sh \"$RECIPE_DIR/kernel-build.sh\" install"

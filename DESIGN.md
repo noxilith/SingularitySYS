@@ -964,3 +964,34 @@ a revoked key. `forge key revoke ID|FILE.pub --dir /etc/forge/keys` does the sam
 Procedure for a leak: publish one release signed with a key that systems already trust (the new key, announced earlier
 with `NEXT_KEYS`), revoking the leaked one with `REVOKE_KEYS`; keep `REVOKE_KEYS` in every later release for machines
 that were off. Limit: a leaked key can also be used to revoke good ones, so keep the key you sign with offline-safe.
+
+## Secure Boot with your own key (implemented; verified against QEMU's secure UEFI firmware, not on hardware)
+
+`sudo forge secureboot setup` (UEFI only) makes an RSA-2048 key and a self-signed certificate in
+`/etc/forge/secureboot` (`sb.key` is the secret; back it up), then
+- rewrites `limine.conf` so every file the boot loader reads (kernels, initramfs, the microcode image, the wallpaper) carries
+  its BLAKE2b hash (`path: boot():/vmlinuz-7.3.3#<hash>`; with Secure Boot Limine reads nothing it has no hash for),
+- takes the package's `BOOTX64.EFI`, writes the hash of `limine.conf` into it (`limine enroll-config`: the loader refuses
+  any other configuration) and signs it (Authenticode, in `crates/forge-secureboot`: no outside tools, no one else's key),
+- writes `db.auth`, `KEK.auth`, `PK.auth`, `db.esl` and `singularity.cer` to `/boot/EFI/forge-secureboot` for the firmware's
+  own "enroll key" menu.
+`sudo forge secureboot enroll` writes the key to the firmware as database key, key-exchange key and platform key (one key
+for all three) through efivarfs; the firmware only accepts it in setup mode (clear its Secure Boot keys in the firmware
+settings first). `forge secureboot status`, `refresh` and `disable` exist too, and `forge doctor` checks the signed setup.
+From then on forge keeps it current: `rewrite_limine` (every generation, kernel install, rollback) pins the files, builds a
+loader for the new config hash, and moves config and loader into place one right after the other; `forge apply` never puts
+the package's unsigned loader over the signed one and runs `forge secureboot refresh` when packages change.
+
+Verified in QEMU (edk2 secure firmware, UEFI install with `forge strap --uefi`): the signed loader boots with Secure
+Boot off (setup mode), `enroll` makes the firmware leave setup mode, the next boot reports "Secure boot enabled",
+`forge gen create` re-signs and the machine still boots, a kernel with one flipped byte is refused by the loader, and the
+package's unsigned loader is refused by the firmware (both recovered by restoring the file from the live ISO).
+OpenSSL independently verifies the Authenticode PKCS#7 and the variable signatures.
+
+Limits, plainly: this protects the boot chain of a powered-off machine (loader, config, kernel, microcode). Kernel modules
+and the root filesystem are not signed or measured, and the kernel is not built with lockdown (it would refuse unsigned
+modules). The key is on the disk; anyone with root can sign their own boot files, and a stolen `sb.key` defeats it.
+Config and loader are replaced by two renames, so power loss between them leaves a machine whose loader does not match
+its menu (boot it from the live ISO and run `forge secureboot refresh`). Not tried: real firmware (some vendors' setup
+mode needs a firmware menu step; that is what the `.auth` files are for), the installer integration (`forge strap`
+does not set it up for you), BIOS machines (not applicable).

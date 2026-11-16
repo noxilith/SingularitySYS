@@ -77,6 +77,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
     limine(&mut r, root);
     limine_current(&mut r, root);
     microcode(&mut r, root);
+    secureboot(&mut r, root);
     defaults(&mut r, root, decl.as_ref(), &system);
     if root == Path::new("/") {
         running_kernel(&mut r);
@@ -200,6 +201,34 @@ fn limine_current(r: &mut Report, root: &Path) {
         } else {
             r.warn(G, format!("{installed} is older than the limine package"), "sudo forge apply");
         }
+    }
+}
+
+/// Secure Boot, when forge has set it up: the boot loader must carry the signature and the config hash that match the
+/// files on the boot partition, or the next boot (with Secure Boot on) would stop.
+fn secureboot(r: &mut Report, root: &Path) {
+    const G: &str = "Boot";
+    let mut setup = forge_secureboot::BootSetup::default();
+    setup.dir = under(root, "/etc/forge/secureboot");
+    setup.boot = under(root, "/boot");
+    if !setup.is_enabled() {
+        return;
+    }
+    let s = setup.status();
+    if !s.loader_signed {
+        r.fail(G, "Secure Boot is set up but the boot loader is not signed with your key: the next boot would stop", "sudo forge secureboot refresh");
+        return;
+    }
+    let conf = fs::read_to_string(setup.boot.join("limine.conf")).unwrap_or_default();
+    if !conf.contains('#') || !conf.contains("vmlinuz") {
+        r.fail(G, "Secure Boot is set up but the boot menu does not pin the kernel by hash", "sudo forge secureboot refresh");
+        return;
+    }
+    match s.secure_boot {
+        Some(true) => r.ok(G, "Secure Boot is on: the boot loader is signed with your key and the menu pins every boot file"),
+        Some(false) if s.setup_mode == Some(true) => r.warn(G, "Secure Boot is set up, but the firmware does not trust the key yet", "sudo forge secureboot enroll"),
+        Some(false) => r.warn(G, "Secure Boot is set up but switched off in the firmware settings", "switch Secure Boot on in the firmware settings"),
+        None => r.ok(G, "the boot loader is signed with your key and the menu pins every boot file"),
     }
 }
 

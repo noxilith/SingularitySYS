@@ -37,6 +37,20 @@ pub(crate) fn plan(p: &mut Planner, limine_installed: bool, packages_changing: b
         None if bios_dest.exists() => "bios".into(),
         None => return,
     };
+    // Secure Boot set up: the loader on the boot partition is the signed one, with the hash of limine.conf inside. The
+    // package's copy must never be put over it; instead, whenever packages change, `forge secureboot refresh` makes the
+    // signed loader from the package's new copy and pins the boot files again.
+    if firmware == "uefi" && under(p.root, "/etc/forge/secureboot/enabled").is_file() {
+        if packages_changing && p.root == std::path::Path::new("/") {
+            p.changes.push(Change {
+                section: "boot",
+                kind: Kind::Modify,
+                summary: "the signed boot loader and the pinned boot menu (Secure Boot)".into(),
+                op: Op::Run { program: under(p.root, "/usr/bin/forge"), args: vec!["secureboot".into(), "refresh".into()], best_effort: false },
+            });
+        }
+        return;
+    }
     if firmware == "uefi" {
         files.push((share.join("BOOTX64.EFI"), uefi_dest));
     } else {

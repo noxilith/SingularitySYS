@@ -156,6 +156,7 @@ from the Limine menu.
 | `sudo forge edit` | Open `/etc/forge/system.toml` in your editor (micro by default); when you close it, it is checked and applied |
 | `forge apply` | Converge the machine to `/etc/forge/system.toml` (`--dry-run` shows the plan) |
 | `forge gen` | List, create, prune and roll back generations |
+| `forge secureboot setup \| enroll \| status` | Secure Boot with a key of your own: forge signs the boot loader and pins the kernel and menu by hash (UEFI only) |
 | `forge maintenance status \| run` | Trim, scrub, prune generations, clean the store (also runs by itself in the background) |
 | `forge kernel list \| build \| install` | Find, build and install kernels |
 | `forge strap ROOT BOOT` | Install onto partitions you made (from the live ISO) |
@@ -200,7 +201,6 @@ Early and experimental. The full account, including what was **not** verified, i
 <summary><b>Roadmap</b></summary>
 
 - More packages as they are needed
-- Secure Boot with your own key: forge signs Limine and pins the kernel and limine.conf by hash (you enroll the key in the firmware once)
 - `forge apply user`: per-user package sets
 - Device permissions for the `audio`, `video` and `input` groups
 - Bluetooth, and Wi-Fi in the declaration

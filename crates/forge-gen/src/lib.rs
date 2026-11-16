@@ -44,6 +44,7 @@ pub fn extras_in(boot_dir: &Path) -> Extras {
     Extras {
         early: if has(MICROCODE_IMAGE) { vec![MICROCODE_IMAGE.to_string()] } else { Vec::new() },
         wallpaper: [WALLPAPER_IMAGE, "wallpaper.png"].into_iter().find(|n| has(n)).map(String::from),
+        pins: Default::default(),
     }
 }
 
@@ -54,6 +55,8 @@ pub const MICROCODE_IMAGE: &str = "microcode.img";
 pub enum GenError {
     #[error("{context}: {source}")]
     Io { context: String, source: io::Error },
+    #[error("Secure Boot: {0}")]
+    SecureBoot(String),
     #[error("no generation {0}")]
     NoSuchGeneration(u32),
     #[error("generation {id} is {why} and cannot be removed")]
@@ -338,15 +341,45 @@ pub fn prune(ctx: &Ctx, keep: usize) -> Result<Removed, GenError> {
 
 /// Regenerate `limine.conf`. Also completes a staged rollback if we are
 /// running on `@.next`.
+/// BLAKE2b-512 hashes of the boot files the menu can name (kernels, initramfs images, microcode, the wallpaper), for
+/// Secure Boot: the loader reads only files it has a hash for.
+fn secure_pins(boot_dir: &Path) -> Result<std::collections::BTreeMap<String, String>, GenError> {
+    let mut pins = std::collections::BTreeMap::new();
+    let rd = fs::read_dir(boot_dir).map_err(io_err(format!("reading {}", boot_dir.display())))?;
+    for e in rd.filter_map(Result::ok) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let wanted = name.starts_with("vmlinuz-") || name.starts_with("initramfs-") || name == MICROCODE_IMAGE || name.starts_with("wallpaper.");
+        if wanted && e.path().is_file() {
+            let hash = forge_secureboot::blake2b_file(&e.path()).map_err(|e| GenError::SecureBoot(e.to_string()))?;
+            pins.insert(name, hash);
+        }
+    }
+    Ok(pins)
+}
+
 pub fn rewrite_limine(ctx: &Ctx) -> Result<(), GenError> {
     ctx.boot.validate()?;
     promote(ctx)?;
     let live_subvol = if ctx.rollback_state()? == Rollback::Staged { "@.next" } else { "@" };
     let gens = list(ctx)?;
     // The CPU microcode image and the wallpaper, when installed next to limine.conf, are used by every entry.
-    let extras = ctx.limine_conf.parent().map(extras_in).unwrap_or_default();
+    let boot_dir = ctx.limine_conf.parent();
+    let mut extras = boot_dir.map(extras_in).unwrap_or_default();
+    let secure = boot_dir.map(forge_secureboot::BootSetup::for_boot).filter(|s| s.is_enabled());
+    if let (Some(dir), Some(_)) = (boot_dir, &secure) {
+        extras.pins = secure_pins(dir)?;
+    }
     let conf = limine::render(&ctx.boot, live_subvol, &gens, &extras);
-    write_atomic(&ctx.limine_conf, &conf)
+    let Some(setup) = secure else {
+        return write_atomic(&ctx.limine_conf, &conf);
+    };
+    // Secure Boot: the signed loader has the hash of limine.conf inside it, so the two change together. Both are
+    // prepared first and then moved into place one right after the other.
+    let new_conf = ctx.limine_conf.with_extension("conf.new");
+    fs::write(&new_conf, &conf).map_err(io_err(format!("writing {}", new_conf.display())))?;
+    let loader = setup.prepare_loader(&forge_secureboot::blake2b_hex(conf.as_bytes())).map_err(|e| GenError::SecureBoot(e.to_string()))?;
+    fs::rename(&new_conf, &ctx.limine_conf).map_err(io_err(format!("replacing {}", ctx.limine_conf.display())))?;
+    setup.commit_loader(&loader).map_err(|e| GenError::SecureBoot(e.to_string()))
 }
 
 // ---- rollback ------------------------------------------------------------

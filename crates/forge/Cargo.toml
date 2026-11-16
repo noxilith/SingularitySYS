@@ -18,6 +18,7 @@ forge-store.workspace = true
 forge-build.workspace = true
 forge-iso.workspace = true
 forge-kernel.workspace = true
+forge-secureboot = { path = "../forge-secureboot" }
 clap.workspace = true
 rpassword.workspace = true
 anyhow.workspace = true

@@ -60,6 +60,8 @@ enum Cmd {
     Apply(ApplyArgs),
     /// Manage generations (read-only snapshots with their own boot entries)
     Gen(GenArgs),
+    /// Secure Boot with a key of your own: forge signs the boot loader and pins what it may load
+    Secureboot(SecurebootArgs),
     /// Routine maintenance: trim the SSD, scrub btrfs, prune old generations, clean the store
     Maintenance(MaintenanceArgs),
     /// Switch init system (not implemented yet)
@@ -694,6 +696,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Apply(a) => apply(a),
         Cmd::Gen(a) => gen_cmd(a),
         Cmd::Maintenance(a) => maintenance_cmd(a),
+        Cmd::Secureboot(a) => secureboot_cmd(a),
         Cmd::SwapInit => todo_cmd("swap-init"),
         Cmd::Kernel(a) => kernel_cmd(a),
         Cmd::Build(a) => build_cmd(a),
@@ -1358,6 +1361,112 @@ fn maintenance_cmd(a: MaintenanceArgs) -> Result<()> {
             maintenance::run(due, &tasks, keep, state)
         }
     }
+}
+
+#[derive(Args)]
+struct SecurebootArgs {
+    #[command(subcommand)]
+    action: SecurebootAction,
+}
+
+#[derive(Subcommand)]
+enum SecurebootAction {
+    /// What is set up and what the firmware says
+    Status,
+    /// Make a key, sign the boot loader, pin the kernel and menu by hash, and write the files for the firmware
+    Setup,
+    /// Tell the firmware to trust the key (only possible while the firmware is in setup mode)
+    Enroll,
+    /// Sign the boot loader again and pin the boot files again (done by forge itself after kernel and package changes)
+    Refresh,
+    /// Go back to an unsigned boot loader and a menu without hashes (turn Secure Boot off in the firmware first)
+    Disable,
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Rewrite limine.conf (which, with Secure Boot set up, pins the files and signs the loader).
+fn rewrite_menu() -> Result<()> {
+    with_gen_ctx(&GenPaths::defaults(), true, |ctx| {
+        forge_gen::rewrite_limine(ctx)?;
+        Ok(())
+    })
+}
+
+fn secureboot_cmd(a: SecurebootArgs) -> Result<()> {
+    let setup = forge_secureboot::BootSetup::default();
+    if let SecurebootAction::Status = a.action {
+        let s = setup.status();
+        let yn = |b: bool| if b { "yes" } else { "no" };
+        let fw = |v: Option<bool>, on: &str, off: &str| match v {
+            Some(true) => on.to_string(),
+            Some(false) => off.to_string(),
+            None => "unknown".to_string(),
+        };
+        ui::heading("Secure Boot");
+        println!("  started through UEFI:        {}", yn(s.uefi));
+        println!("  signing key made by forge:   {}", yn(s.key));
+        println!("  set up (menu pinned):        {}", yn(s.enabled));
+        println!("  boot loader signed by it:    {}", yn(s.loader_signed));
+        println!("  firmware in setup mode:      {}", fw(s.setup_mode, "yes (it accepts a new key: forge secureboot enroll)", "no"));
+        println!("  Secure Boot active now:      {}", fw(s.secure_boot, "yes", "no"));
+        if !s.uefi {
+            ui::info("this machine started in BIOS mode: Secure Boot needs UEFI");
+        } else if !s.key {
+            ui::next("sudo forge secureboot setup");
+        } else if s.secure_boot != Some(true) {
+            ui::next("sudo forge secureboot enroll  (or enroll the files in /boot/EFI/forge-secureboot from the firmware menu), then switch Secure Boot on");
+        }
+        return Ok(());
+    }
+    if !is_root() {
+        bail!("this needs root: sudo forge secureboot ...");
+    }
+    if !setup.efivars.is_dir() && !matches!(a.action, SecurebootAction::Refresh | SecurebootAction::Disable) {
+        bail!("{}", forge_secureboot::Error::NoEfi);
+    }
+    match a.action {
+        SecurebootAction::Status => unreachable!(),
+        SecurebootAction::Setup => {
+            let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
+            let (_, made) = setup.ensure_identity(host.trim())?;
+            if made {
+                ui::ok(&format!("made the signing key in {} (sb.key is secret: back it up, and never share it)", setup.dir.display()));
+            }
+            std::fs::write(setup.marker(), "Secure Boot is set up: forge pins the boot files and signs the loader.\n")?;
+            rewrite_menu().context("could not write the pinned menu and the signed boot loader")?;
+            ui::ok("the boot menu now names every file with its hash, and the boot loader is signed");
+            let dir = setup.export(unix_now())?;
+            ui::ok(&format!("wrote the files for the firmware menu to {}", dir.display()));
+            println!();
+            ui::info("Reboot once and check that the machine starts (Secure Boot can still be off: the signed loader works either way).");
+            ui::next("then `sudo forge secureboot enroll` while the firmware is in setup mode, and switch Secure Boot on");
+        }
+        SecurebootAction::Enroll => {
+            if !setup.is_enabled() {
+                bail!("run `sudo forge secureboot setup` first");
+            }
+            setup.enroll(unix_now())?;
+            ui::ok("the firmware now trusts the key (database, key-exchange key and platform key)");
+            ui::next("reboot, open the firmware settings and make sure Secure Boot is on; then `forge secureboot status` should say it is active");
+        }
+        SecurebootAction::Refresh => {
+            if !setup.is_enabled() {
+                bail!("Secure Boot is not set up (sudo forge secureboot setup)");
+            }
+            rewrite_menu()?;
+            ui::ok("boot files pinned again and the boot loader signed again");
+        }
+        SecurebootAction::Disable => {
+            let _ = std::fs::remove_file(setup.marker());
+            rewrite_menu()?;
+            std::fs::copy(&setup.loader_source, setup.loader()).context("restoring the unsigned boot loader")?;
+            ui::ok("back to an unsigned boot loader and a menu without hashes (the key stays in the firmware until you clear it there)");
+        }
+    }
+    Ok(())
 }
 
 fn to_libc(l: &LibcArg) -> forge_schema::Libc {
