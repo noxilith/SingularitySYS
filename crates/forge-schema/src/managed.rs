@@ -60,6 +60,20 @@ set enable-bracketed-paste off\nset bell-style none\n\
 
 /// Hardware watchdog drivers are not wanted: nothing here feeds them, and some report "watchdog did not stop!" on every
 /// shutdown. (kmod reads /usr/lib/modprobe.d; a machine that wants one overrides it in /etc/modprobe.d.)
+const PROTOCOLS: &str = "# Internet protocols (what `ss`, `ip` and other tools print instead of numbers). Starting point: edit freely.\n\
+ip\t0\tIP\nicmp\t1\tICMP\nigmp\t2\tIGMP\nipip\t4\tIPIP\ntcp\t6\tTCP\nudp\t17\tUDP\nipv6\t41\tIPv6\ngre\t47\tGRE\nesp\t50\tIPSEC-ESP\nah\t51\tIPSEC-AH\n\
+ipv6-icmp\t58\tIPv6-ICMP\nsctp\t132\tSCTP\n";
+
+const SERVICES: &str = "# Well-known ports (names for the numbers). Starting point: edit freely.\n\
+ftp\t21/tcp\nssh\t22/tcp\ntelnet\t23/tcp\nsmtp\t25/tcp\ndomain\t53/tcp\ndomain\t53/udp\nbootps\t67/udp\nbootpc\t68/udp\ntftp\t69/udp\n\
+http\t80/tcp\npop3\t110/tcp\nntp\t123/udp\nimap\t143/tcp\nsnmp\t161/udp\nldap\t389/tcp\nhttps\t443/tcp\nsmtps\t465/tcp\n\
+submission\t587/tcp\nimaps\t993/tcp\npop3s\t995/tcp\n";
+
+/// `/etc/hosts`: this machine's own names.
+pub fn hosts_file(hostname: &str) -> String {
+    format!("# Names of this machine. Starting point: edit freely.\n127.0.0.1\tlocalhost\n::1\t\tlocalhost ip6-localhost\n127.0.1.1\t{hostname}\n")
+}
+
 const WATCHDOG: &str = "# managed by forge: no hardware watchdogs by default\nblacklist iTCO_wdt\nblacklist iTCO_vendor_support\nblacklist sp5100_tco\nblacklist wdat_wdt\nblacklist softdog\nblacklist intel_oc_wdt\nblacklist ie6xx_wdt\nblacklist w83627hf_wdt\nblacklist nct6775_wdt\n";
 
 
@@ -262,6 +276,8 @@ pub fn managed(init: &str) -> Vec<Managed> {
         file("/etc/inputrc", INPUTRC, 0o644, Own::Always),
         file("/usr/lib/modprobe.d/singularity-watchdog.conf", WATCHDOG, 0o644, Own::Always),
         file("/etc/wpa_supplicant/wpa_supplicant.conf", WPA_CONF, 0o600, Own::IfMissing),
+        file("/etc/protocols", PROTOCOLS, 0o644, Own::IfMissing),
+        file("/etc/services", SERVICES, 0o644, Own::IfMissing),
     ];
     if init == "openrc" {
         v.push(file("/etc/init.d/network", NETWORK_SERVICE, 0o755, Own::Always));

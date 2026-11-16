@@ -105,6 +105,14 @@ essential_settings
 # menus, advanced netfilter, camera/TV/radio media menus, USB4/Thunderbolt). Switch those on; they only
 # make options visible, the drivers behind them are still modules.
 grep -E '^CONFIG_([A-Z0-9_]+_TOPLEVEL|NETFILTER_ADVANCED|MEDIA_[A-Z_]+_SUPPORT|USB4)=y$' "$tmp/allcfg/.config" >> .config
+# nf_tables' address families (inet, ip, ip6, arp, netdev) are yes/no switches: allmodconfig has them on, but the module
+# list above holds only modules, and without them no `table inet` can be created, so the firewall cannot load.
+# They only appear once NF_TABLES is a module and the advanced menu is visible.
+kmake olddefconfig >/dev/null
+$c -m NF_TABLES
+kmake olddefconfig >/dev/null
+for o in NF_TABLES_INET NF_TABLES_IPV4 NF_TABLES_IPV6 NF_TABLES_ARP NF_TABLES_NETDEV; do $c -e $o; done
+kmake olddefconfig >/dev/null
 # Everything from that list which the base configuration does not already decide, as modules. A module
 # that depends on another one the base lacks is dropped by olddefconfig, so repeat: each round enables
 # what the previous round made visible.
@@ -136,6 +144,8 @@ for o in $wifi_gates; do $c -e $o; done
 for o in $wifi_drivers; do $c -m $o; done
 # These two are plain yes/no choices inside the Broadcom driver.
 for o in BRCMFMAC_USB BRCMFMAC_PCIE; do $c -e $o; done
+# zram: the compression algorithms are yes/no switches inside the module (zstd compresses best; swap uses it when present).
+for o in ZRAM_BACKEND_ZSTD ZRAM_BACKEND_LZ4 ZRAM_BACKEND_LZO; do $c -e $o; done
 fbcon
 kmake olddefconfig
 check_essential
@@ -151,3 +161,9 @@ for o in IWLWIFI IWLMVM ATH9K ATH10K_PCI ATH11K_PCI RTW88_8822CE RTW89_8852AE MT
 done
 for o in CFG80211 MAC80211; do grep -q "^CONFIG_$o=y" .config || missing="$missing $o"; done
 if [ -n "$missing" ]; then echo "Wi-Fi options that did not survive olddefconfig:$missing" >&2; exit 1; fi
+# The firewall needs the nf_tables families, and swap in memory needs zram (see above); the build must not go on without.
+missing=
+for o in NF_TABLES_INET NF_TABLES_IPV4 NF_TABLES_IPV6 NFT_NAT NFT_CT NFT_MASQ NFT_REDIR NFT_REJECT NFT_LIMIT ZRAM; do
+    grep -q "^CONFIG_$o=[ym]" .config || missing="$missing $o"
+done
+if [ -n "$missing" ]; then echo "firewall/swap options that did not survive olddefconfig:$missing" >&2; exit 1; fi

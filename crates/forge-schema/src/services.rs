@@ -141,6 +141,7 @@ fn systemd_nftables(forwarding: bool) -> String {
 pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
     let init = decl.init.system.as_str();
     let mut v = managed(init);
+    v.push(file("/etc/hosts", &crate::managed::hosts_file(&decl.hostname), 0o644, Own::IfMissing));
     let ssh = decl.packages.iter().any(|p| p == "openssh");
     let forwarding = decl.firewall.enable && !decl.firewall.forward.is_empty();
 

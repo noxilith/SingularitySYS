@@ -90,8 +90,20 @@ pub fn run(only_due: bool, names: &[String], keep: u32, state_file: &Path) -> Re
     let mut failed = Vec::new();
     for task in TASKS {
         let wanted = names.is_empty() || names.iter().any(|n| n == task.name);
-        if !wanted || (only_due && due_in(&state, task, t) > 0) {
+        if !wanted {
             continue;
+        }
+        if only_due {
+            // A new system has nothing to catch up on: the first look starts each task's clock instead of scrubbing the
+            // disk during the first boot.
+            if !state.contains_key(task.name) {
+                state.insert(task.name.to_string(), t);
+                save(state_file, &state);
+                continue;
+            }
+            if due_in(&state, task, t) > 0 {
+                continue;
+            }
         }
         println!("maintenance: {} — {}", task.name, task.what);
         if run_task(task.name, keep) {
@@ -138,6 +150,15 @@ mod tests {
         s.insert(task.name.to_string(), 1_000_000);
         assert_eq!(due_in(&s, task, 1_000_000 + DAY), 6 * DAY);
         assert_eq!(due_in(&s, task, 1_000_000 + 8 * DAY), 0);
+    }
+
+    #[test]
+    fn the_hourly_check_on_a_new_system_starts_the_clocks_and_runs_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let file = d.path().join("state");
+        run(true, &[], 5, &file).unwrap();
+        let s = parse_state(&std::fs::read_to_string(&file).unwrap());
+        assert_eq!(s.len(), TASKS.len(), "every task has a start time: {s:?}");
     }
 
     #[test]

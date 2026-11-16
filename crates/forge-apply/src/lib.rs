@@ -1,4 +1,4 @@
-//! `forge apply`: co    if let Some(src) = forge_gen::microcode_image_path(root).filter(|_| package_names.iter().any(|n| n == "microcode") && under(root, "/boot").is_dir()) {verge the machine to the system declaration.
+//! `forge apply`: converge the machine to the system declaration.
 //!
 //! Applying is two phases. [`plan_system`] reads the declaration and the
 //! current state of the machine (under a root directory) and returns a
