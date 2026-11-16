@@ -1004,3 +1004,43 @@ to the older kernel's files instead of replacing them. `sudo forge kernel update
 package like a kernel you built yourself (generation snapshot first, then Limine); a generation from the menu boots the
 old kernel with the old modules. Verified in QEMU: install from the previous ISO (kernel 7.3.3), update to 7.3.3-r7, the
 menu offers both, the new one boots and loads modules. Kernels built before this keep the plain name `7.3.3`.
+
+## Updates happen when the owner runs `forge upgrade`, never by themselves (implemented 2026-11-16)
+
+Nothing updates automatically and nothing notifies. Before this change `forge upgrade` was just `forge apply`, and every
+apply (including `forge install` and `forge edit`) resolved each package to the newest version in the repository, so
+installing one program upgraded the system. Now `Options.upgrade` is set only by `forge upgrade`: otherwise resolution
+prefers the installed version of each package (`forge_store::resolve_preferring`) and only packages that are not installed
+get the newest. If a new package needs a different build of a library than the installed one (a result with two builds
+of one name), apply stops with "run `sudo forge upgrade` first" instead of upgrading. The kernel was already separate
+(`forge kernel update`). Maintenance only prunes, trims, scrubs and cleans the store; it never touches installed versions.
+
+## Languages: locales, keyboard layouts, man pages (implemented)
+
+- **Locales.** `glibc-locales` now carries 85 UTF-8 locales (96 MB compressed, 213 MB installed), compiled with glibc's
+  `localedef` from its own sources (`recipes/glibc-locales`). `locale = "de_DE.UTF-8"` in the declaration works as written;
+  `forge doctor` warns when the declared locale or keymap is not installed.
+- **Keyboard layouts.** The `keymap` setting loaded nothing before: there was no `loadkeys`. The `kbd` package (base) provides
+  it with the console keymaps and fonts.
+- **Man pages.** `mandoc` (the `man`, `apropos`, `whatis`, `makewhatis` commands) and the Linux `man-pages` project (sections
+  2, 3, 4, 5, 7) are in the base. About thirty base recipes used to delete `usr/share/man`; they now keep the man pages
+  (`find ... ! -name man` instead of removing `usr/share`) and were rebuilt with a revision bump. Libraries were left alone
+  so that nothing pinned to them had to be rebuilt (so the pages of ncurses, zlib, xz and similar are missing), except
+  util-linux, whose dependents (e2fsprogs, btrfs-progs, systemd, dbus) were rebuilt with it. `forge apply` rebuilds the
+  `apropos` index (`makewhatis`) when packages change. mandoc's own pages are installed as `mandoc_man(7)` and so on, so they
+  cannot collide with the Linux man-pages.
+- **More packages in the repository** (not in the base): `vim`, `strace`, `lsof`, `file`, `tree`, `patch`, `zip`, and
+  `libarchive` (which provides `unzip`, `bsdtar`, `bsdcpio`).
+
+## Signed ISOs (implemented)
+
+`forge key sign FILE --key release.key` writes `FILE.sig` (an ed25519 signature over a domain-separated SHA-256 of the
+file, so an ISO signature can never pass as a repository-index signature) and `forge key verify FILE [--pub KEY.pub |
+--dir KEYRING]` checks it; on a SingularitySYS system the release key is already in `/etc/forge/keys`, so a bare
+`forge key verify singularity-live.iso` works.
+
+## License
+
+The project is GPL-3.0-or-later (it was MIT OR Apache-2.0). `LICENSE` is the GPL text, forge ships it in
+`/usr/share/licenses/forge`, and the README explains that the packages on the ISO keep their own licenses and that the
+source of each is the upstream tarball and checksum named in its recipe.

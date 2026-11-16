@@ -229,6 +229,7 @@ fn edit_cmd(a: EditArgs) -> Result<()> {
         no_generation: false,
         keys: a.keys,
         allow_unsigned: a.allow_unsigned,
+        upgrade: false,
         adopt: a.adopt,
     })
 }
@@ -310,6 +311,9 @@ struct ApplyArgs {
     /// Replace files in the system tree that forge did not put there (the first apply over a system forge did not install)
     #[arg(long)]
     adopt: bool,
+    /// Set by `forge upgrade` only: move installed packages to the newest versions (apply and install never do)
+    #[arg(skip)]
+    upgrade: bool,
 }
 
 #[derive(Args)]
@@ -781,6 +785,7 @@ fn pkg(action: PkgAction) -> Result<()> {
             trust: load_trust(args.keys.clone(), args.allow_unsigned, args.root.join("etc/forge/keys"))?,
             fetch: Default::default(),
             adopt: args.adopt,
+            upgrade: false,
             base: base_packages(),
         };
         let decl = SystemDecl::parse(&edited.text).with_context(|| format!("in the edited {}", path.display()))?;
@@ -816,6 +821,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         no_generation: false,
         keys: args.keys,
         allow_unsigned: args.allow_unsigned,
+        upgrade: false,
         adopt: args.adopt,
     })
 }
@@ -1011,6 +1017,7 @@ fn upgrade(a: UpgradeArgs) -> Result<()> {
         no_generation: false,
         keys: a.keys,
         allow_unsigned: a.allow_unsigned,
+        upgrade: true,
         adopt: a.adopt,
     })
 }
@@ -1109,6 +1116,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
         trust: load_trust(a.keys, a.allow_unsigned, a.root.join("etc/forge/keys"))?,
         fetch: Default::default(),
         adopt: a.adopt,
+        upgrade: a.upgrade,
         base: base_packages(),
     };
     let plan = forge_apply::plan_system(&decl, &a.root, opts)?;

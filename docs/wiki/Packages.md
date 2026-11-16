@@ -19,12 +19,15 @@ machine.
 
 ## What is available
 
-The base system is implied (glibc, bash and dash, GNU coreutils and friends, util-linux, shadow, sudo, kmod, iproute2,
-dhcpcd, wpa_supplicant, btrfs-progs, Limine, nftables, curl, the micro editor, ...). Packages you can add include:
+The base system is implied (glibc, bash and dash, GNU coreutils and friends, util-linux, shadow, sudo, kmod, iproute2, kbd,
+dhcpcd, wpa_supplicant, btrfs-progs, Limine, nftables, curl, the micro editor, the `man` command and the manual pages, ...).
+Packages you can add include:
 
 | Package | What it is |
 |---|---|
-| `git`, `tmux`, `htop`, `nano` | The usual tools. |
+| `git`, `tmux`, `htop`, `nano`, `vim` | The usual tools. `vim` is the full editor with its syntax files and help. |
+| `strace`, `lsof`, `file`, `tree`, `patch` | Everyday inspection and patching tools. |
+| `zip`, `libarchive` | `zip` makes .zip files; `libarchive` provides `unzip`, `bsdtar`, `bsdcpio` and the library behind them. |
 | `openssh` | SSH client and server. See [Networking](Networking). |
 | `qemu` | Headless x86-64 emulator with KVM, for testing images. |
 | `python`, `gcc`, `make`, `bison`, `flex`, `perl`, `meson`, `ninja`, `bc` | Languages and build tools. |
@@ -43,3 +46,9 @@ plumbing behind your back. `sudo forge store gc` frees the space of packages not
 ## Your own packages
 
 Packages are built from recipes in a sandbox. See [Building from source](Building-from-source).
+
+## Updates are your decision
+
+Nothing here updates by itself, and nothing notifies you about updates. `forge install`, `forge remove`, `forge apply`
+and `forge edit` never change a package you already have; only `sudo forge upgrade` does, when you run it. See
+[First steps](First-steps).

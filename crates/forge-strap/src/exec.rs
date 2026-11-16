@@ -669,7 +669,9 @@ pub fn starter_declaration(hostname: &str, libc: &str, repo: &str) -> String {
          hostname = \"{hostname}\"\n\
          libc     = \"{libc}\"\n\
          \n\
-         # Language and time. Time zones are in /usr/share/zoneinfo (for example \"Europe/Paris\").\n\
+         # Language and time. Time zones are in /usr/share/zoneinfo (for example \"Europe/Paris\"). Locales: any that\n\
+         # `locale -a` lists (about 85, such as de_DE.UTF-8, fr_FR.UTF-8, ja_JP.UTF-8). Keyboard layouts for the console:\n\
+         # a name from /usr/share/keymaps (us, uk, de, fr, es, ...).\n\
          timezone = \"UTC\"\n\
          locale   = \"en_US.UTF-8\"\n\
          keymap   = \"us\"\n\

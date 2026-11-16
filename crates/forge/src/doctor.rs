@@ -90,6 +90,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
         running_kernel(&mut r);
     }
     if let Some(d) = &decl {
+        language(&mut r, root, d);
         packages(&mut r, root, d, base);
         accounts(&mut r, root, d);
         hostname(&mut r, root, d);
@@ -217,6 +218,50 @@ fn limine_current(r: &mut Report, root: &Path) {
             r.ok(G, "the boot loader on the boot partition is the one in the limine package");
         } else {
             r.warn(G, format!("{installed} is older than the limine package"), "sudo forge apply");
+        }
+    }
+}
+
+/// The declared language settings must exist on the machine: the locale among the generated ones, the keyboard layout
+/// among the console keymaps. (A setting that names something missing is silently ignored by the system otherwise.)
+fn language(r: &mut Report, root: &Path, decl: &forge_schema::SystemDecl) {
+    const G: &str = "Language";
+    let locales = under(root, "/usr/lib/locale");
+    if locales.is_dir() {
+        let wanted = decl.locale.as_str();
+        // glibc spells the charset in lower case without the dash in directory names: de_DE.UTF-8 -> de_DE.utf8.
+        let dir = match wanted.split_once('.') {
+            Some((name, cs)) => format!("{name}.{}", cs.to_lowercase().replace('-', "")),
+            None => wanted.to_string(),
+        };
+        let builtin = matches!(wanted, "C" | "POSIX" | "C.UTF-8" | "C.utf8");
+        if builtin || locales.join(&dir).is_dir() {
+            r.ok(G, format!("the locale {wanted} is installed"));
+        } else {
+            r.warn(G, format!("the locale {wanted} is not installed, so programs fall back to the C locale"), "pick one that `locale -a` lists, in /etc/forge/system.toml");
+        }
+    }
+    let keymaps = under(root, "/usr/share/keymaps");
+    if keymaps.is_dir() {
+        fn has(dir: &Path, names: &[String], depth: usize) -> bool {
+            let Ok(rd) = fs::read_dir(dir) else { return false };
+            for e in rd.filter_map(Result::ok) {
+                let p = e.path();
+                if p.is_dir() {
+                    if depth > 0 && has(&p, names, depth - 1) {
+                        return true;
+                    }
+                } else if p.file_name().is_some_and(|n| names.iter().any(|w| n.to_string_lossy() == w.as_str())) {
+                    return true;
+                }
+            }
+            false
+        }
+        let names = [format!("{}.map.gz", decl.keymap), format!("{}.map", decl.keymap)];
+        if has(&keymaps, &names, 4) {
+            r.ok(G, format!("the keyboard layout {} is installed", decl.keymap));
+        } else {
+            r.warn(G, format!("there is no console keyboard layout called {}", decl.keymap), "choose a name from /usr/share/keymaps in /etc/forge/system.toml");
         }
     }
 }

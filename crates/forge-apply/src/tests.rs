@@ -35,7 +35,7 @@ fn trust_of(keys: &[&SecretKey]) -> Trust {
 }
 
 fn opts() -> Options {
-    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false, base: vec![] }
+    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false, base: vec![], upgrade: false }
 }
 
 fn plan(d: &SystemDecl, r: &Path) -> Plan {
@@ -571,7 +571,7 @@ fn remote_decl(names: &[&str]) -> SystemDecl {
 
 fn remote_opts(r: &Path) -> (Options, Arc<Served>) {
     let served = Arc::new(Served { dir: r.join("srv/repo"), log: Default::default() });
-    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false, base: vec![] };
+    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false, upgrade: false, base: vec![] };
     (opts, served)
 }
 
@@ -962,4 +962,41 @@ fn the_kernel_package_stays_when_the_declaration_does_not_list_it() {
     let p = plan(&pkg_decl(&["a"]), r.path());
     assert!(p.changes.iter().all(|c| c.kind != Kind::Remove), "{:?}", p.changes);
     assert!(p.is_empty());
+}
+
+// ---- installed packages only change when you ask --------------------------------------
+
+fn publish_v(root: &Path, name: &str, version: &str, content: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let scratch = tempfile::tempdir().unwrap();
+    let src = scratch.path().join("src/usr/bin");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join(name), content).unwrap();
+    fs::set_permissions(src.join(name), fs::Permissions::from_mode(0o755)).unwrap();
+    let opts = PackOptions { name: name.into(), version: version.into(), libc: forge_schema::Libc::Musl, hash: None, deps: vec![] };
+    let out = scratch.path().join("pkg.tar.zst");
+    pack_dir(&scratch.path().join("src"), &opts, &out).unwrap();
+    LocalRepo::new(root.join("srv/repo")).publish(&out, Some(&test_key())).unwrap();
+}
+
+#[test]
+fn applying_or_installing_never_moves_a_package_you_already_have_but_upgrade_does() {
+    let r = root();
+    publish_v(r.path(), "a", "1.0", "old a");
+    apply(&plan(&pkg_decl(&["a"]), r.path())).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/a"), "old a");
+
+    // The repository now has a newer a, and a new package b.
+    publish_v(r.path(), "a", "2.0", "new a");
+    publish_v(r.path(), "b", "1.0", "b");
+    assert!(plan(&pkg_decl(&["a"]), r.path()).is_empty(), "nothing to do: what is installed stays");
+    apply(&plan(&pkg_decl(&["a", "b"]), r.path())).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/b"), "b", "a new package is installed");
+    assert_eq!(read(r.path(), "usr/bin/a"), "old a", "installing b did not upgrade a");
+
+    // Only an upgrade moves it.
+    let up = plan_system(&pkg_decl(&["a", "b"]), r.path(), Options { upgrade: true, ..opts() }).unwrap();
+    assert!(!up.is_empty());
+    apply(&up).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/a"), "new a");
 }

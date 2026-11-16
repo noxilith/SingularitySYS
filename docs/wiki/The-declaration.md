@@ -72,3 +72,13 @@ Unknown keys are an error, so a typo is caught when you save rather than silentl
 
 `sudo forge install NAME` and `sudo forge remove NAME` change the `packages` list in place (comments and layout are kept)
 and apply it.
+
+## Language and keyboard
+
+- **`locale`**: any of about 85 UTF-8 locales is installed, including `en_US`, `en_GB`, `de_DE`, `fr_FR`, `es_ES`, `it_IT`,
+  `pt_BR`, `nl_NL`, `pl_PL`, `ru_RU`, `uk_UA`, `tr_TR`, `el_GR`, `ja_JP`, `ko_KR`, `zh_CN`, `zh_TW`, `ar_SA`, `he_IL`,
+  `hi_IN`, `th_TH`, `vi_VN` and more. `locale -a` lists them all. Write it as `de_DE.UTF-8`.
+- **`keymap`**: the keyboard layout of the text console: a name from `/usr/share/keymaps` such as `us`, `uk`, `de`, `fr`,
+  `es`, `it`, `br-abnt2`, `ru`, `dvorak`. (`find /usr/share/keymaps -name '*.map.gz'` lists them.) A graphical desktop
+  chooses its own layout.
+- `sudo forge doctor` checks that the locale and layout you wrote exist.

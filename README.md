@@ -150,7 +150,7 @@ from the Limine menu.
 | Command | What it does |
 |---|---|
 | `forge install NAME…` · `forge remove NAME…` | Add or remove packages in the declaration, then apply it |
-| `forge upgrade` | Move every declared package to the newest version in the repositories |
+| `forge upgrade` | Move every package to the newest version in the repositories. The only command that changes a package you already have: nothing updates by itself |
 | `forge list` · `forge search [TERM]` | What is installed · what the repositories offer |
 | `forge doctor` | Check the system over (init link, boot entries, base packages, users, services, clock, microcode) and say what to run about any problem |
 | `sudo forge edit` | Open `/etc/forge/system.toml` in your editor (micro by default); when you close it, it is checked and applied |
@@ -162,7 +162,7 @@ from the Limine menu.
 | `forge strap ROOT BOOT` | Install onto partitions you made (from the live ISO) |
 | `forge iso` | Build the live ISO |
 | `forge build RECIPE` | Build a package from source, in the sandbox |
-| `forge store`, `forge repo`, `forge key` | The package store, repositories and signing keys |
+| `forge store`, `forge repo`, `forge key` | The package store, repositories and signing keys (`forge key sign` and `forge key verify` sign and check files such as the ISO) |
 
 ## 🌌 How it works
 

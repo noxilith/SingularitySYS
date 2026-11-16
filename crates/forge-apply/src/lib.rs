@@ -38,6 +38,8 @@ pub enum PlanError {
     NoRepo,
     #[error("package store: {0}")]
     Store(String),
+    #[error("what you asked for needs a different {library} than the one installed, and installed packages only change when you ask: run `sudo forge upgrade` first")]
+    NeedsUpgrade { library: String },
 }
 
 fn store_err(e: forge_store::StoreError) -> PlanError {
@@ -186,6 +188,9 @@ pub struct Options {
     pub adopt: bool,
     /// Packages every system has (the base system), installed without being declared. Empty: only what is declared.
     pub base: Vec<String>,
+    /// Move installed packages to the newest versions in the repositories. Off: what is installed stays at its version
+    /// (new packages still get the newest), so only `forge upgrade` ever changes a package you already have.
+    pub upgrade: bool,
 }
 
 fn under(root: &Path, abs: &str) -> PathBuf {
@@ -503,6 +508,15 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.changes.push(Change { section: "init", kind: Kind::Add, summary: summary.into(), op: Op::Run { program: PathBuf::from(tool), args, best_effort: true } });
         }
     }
+    // The manual-page index (for `apropos` and `whatis`) follows the packages: rebuilt whenever they change. Best effort.
+    if root == Path::new("/") && profile_switch.is_some() && package_names.iter().any(|n| n == "mandoc") {
+        p.changes.push(Change {
+            section: "boot",
+            kind: Kind::Modify,
+            summary: "the manual-page index (makewhatis, for apropos and whatis)".into(),
+            op: Op::Run { program: PathBuf::from("/usr/bin/makewhatis"), args: vec![], best_effort: true },
+        });
+    }
 
     // Installs and modifications first, removals last, so a swap never leaves a gap.
     let mut changes = p.changes;
@@ -691,7 +705,24 @@ fn plan_packages(
                 }
             }
         }
-        for e in forge_store::resolve(&merged, names, decl.libc).map_err(store_err)? {
+        // What is installed stays at its version unless the caller asked to upgrade: only `forge upgrade` changes a
+        // package you already have. Packages that are not installed yet get the newest.
+        let prefer: std::collections::BTreeMap<String, String> = if p.opts.upgrade {
+            Default::default()
+        } else {
+            current.iter().map(|id| (id.name().to_string(), id.version().to_string())).collect()
+        };
+        let resolved = forge_store::resolve_preferring(&merged, names, decl.libc, &prefer).map_err(store_err)?;
+        if !p.opts.upgrade {
+            // Two builds of one package in the result: something new needs a different build than what is installed.
+            let mut seen: std::collections::BTreeSet<&str> = Default::default();
+            for e in &resolved {
+                if !seen.insert(e.name.as_str()) {
+                    return Err(PlanError::NeedsUpgrade { library: e.name.clone() });
+                }
+            }
+        }
+        for e in resolved {
             let id = e.id().map_err(store_err)?;
             if !store.has(&id) {
                 let (repo, entry) = repos

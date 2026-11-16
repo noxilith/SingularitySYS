@@ -167,3 +167,16 @@ fn pinned_secure_boot_paths_and_the_signed_loader_are_not_problems() {
     assert!(!t.contains("not in /boot") && !t.contains("older than the limine package"), "{t}");
     assert!(t.contains("every kernel file they name is there"), "{t}");
 }
+
+#[test]
+fn the_declared_locale_and_keyboard_layout_must_exist() {
+    let (_t, r) = healthy();
+    fs::create_dir_all(r.join("usr/lib/locale/en_US.utf8")).unwrap();
+    fs::create_dir_all(r.join("usr/share/keymaps/i386/qwerty")).unwrap();
+    fs::write(r.join("usr/share/keymaps/i386/qwerty/us.map.gz"), "x").unwrap();
+    let t = text(&doctor(&r, ""));
+    assert!(t.contains("the locale en_US.UTF-8 is installed") && t.contains("the keyboard layout us is installed"), "{t}");
+    fs::write(r.join("etc/forge/system.toml"), "hostname = \"nova\"\nlibc = \"glibc\"\nlocale = \"de_DE.UTF-8\"\nkeymap = \"de\"\n").unwrap();
+    let t = text(&doctor(&r, ""));
+    assert!(t.contains("the locale de_DE.UTF-8 is not installed") && t.contains("no console keyboard layout called de"), "{t}");
+}
