@@ -49,6 +49,16 @@ pub fn blake2b_file(path: &Path) -> Result<String, Error> {
     Ok(blake2b_hex(&fs::read(path).map_err(|e| Error::io(path, e))?))
 }
 
+/// The firmware's variables are files under `efivars` only while the `efivarfs` filesystem is mounted there; not every
+/// init system does it (systemd's setup left it empty on one machine). Mount it when the directory is there but empty.
+/// Best effort, root only: a failure just leaves the variables unreadable.
+pub fn mount_efivars(efivars: &Path) {
+    let empty = fs::read_dir(efivars).map(|mut d| d.next().is_none()).unwrap_or(false);
+    if empty {
+        let _ = Command::new("mount").args(["-t", "efivarfs", "efivarfs"]).arg(efivars).status();
+    }
+}
+
 /// Where everything lives. The defaults are for an installed system.
 #[derive(Debug, Clone)]
 pub struct BootSetup {
@@ -160,11 +170,13 @@ impl BootSetup {
     }
 
     pub fn enroll(&self, unix: u64) -> Result<(), Error> {
+        mount_efivars(&self.efivars);
         efi::enroll(&Identity::load(&self.dir)?, &self.efivars, unix)
     }
 
     /// What is true now, for `forge secureboot status`.
     pub fn status(&self) -> Status {
+        mount_efivars(&self.efivars);
         let id = Identity::load(&self.dir).ok();
         let loader = fs::read(self.loader()).ok();
         Status {
