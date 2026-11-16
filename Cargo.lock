@@ -363,6 +363,7 @@ dependencies = [
  "forge-strap",
  "nix",
  "rpassword",
+ "sha2",
  "tar",
  "tempfile",
  "toml",

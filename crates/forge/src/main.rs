@@ -1619,6 +1619,29 @@ enum KeyAction {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+    /// Sign a file (an ISO) with a secret key: writes FILE.sig next to it
+    Sign {
+        file: PathBuf,
+        /// The secret key (a NAME.key from `forge key generate`)
+        #[arg(long)]
+        key: PathBuf,
+        /// Where to write the signature (default: FILE.sig)
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Check a file against its signature
+    Verify {
+        file: PathBuf,
+        /// The signature (default: FILE.sig)
+        #[arg(long)]
+        sig: Option<PathBuf>,
+        /// Trust exactly this public key (a NAME.pub), instead of a keyring
+        #[arg(long = "pub", conflicts_with = "dir")]
+        public: Option<PathBuf>,
+        /// The keyring (default: /etc/forge/keys, which on a SingularitySYS system holds the release key)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     /// Stop trusting a key for good: delete it from the keyring and remember it, so it cannot come back
     Revoke {
         /// The key's 64-digit id (see `forge key list`), or its `.pub` file
@@ -1635,6 +1658,29 @@ enum KeyAction {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+}
+
+fn hex_of(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// SHA-256 and size of a file, read in blocks (an ISO is hundreds of megabytes).
+fn file_digest(path: &Path) -> Result<([u8; 32], u64)> {
+    use sha2::Digest;
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut h = sha2::Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    let mut total = 0u64;
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+        total += n as u64;
+    }
+    Ok((h.finalize().into(), total))
 }
 
 /// A key named on the command line: its 64-digit id, or the `.pub` file to read the id from.
@@ -1669,6 +1715,34 @@ fn key_cmd(a: KeyArgs) -> Result<()> {
             }
             for id in ring.ids() {
                 println!("{id}");
+            }
+        }
+        KeyAction::Sign { file, key, out } => {
+            let secret = forge_store::load_secret_key(&key)?;
+            let (digest, size) = file_digest(&file)?;
+            let sig = secret.sign_file_digest(&digest);
+            let out = out.unwrap_or_else(|| PathBuf::from(format!("{}.sig", file.display())));
+            std::fs::write(&out, sig.render()).with_context(|| format!("writing {}", out.display()))?;
+            println!("sha256:    {}  {} ({size} bytes)", hex_of(&digest), file.display());
+            println!("signed by: {}", sig.key_id);
+            println!("signature: {}", out.display());
+        }
+        KeyAction::Verify { file, sig, public, dir } => {
+            let sig_path = sig.unwrap_or_else(|| PathBuf::from(format!("{}.sig", file.display())));
+            let sig_text = std::fs::read_to_string(&sig_path).with_context(|| format!("reading {}", sig_path.display()))?;
+            let sig = forge_store::SigFile::parse(&sig_text).map_err(|e| anyhow::anyhow!("{}: {e}", sig_path.display()))?;
+            let ring = match public {
+                Some(p) => {
+                    let mut r = forge_store::Keyring::empty();
+                    r.insert(forge_store::load_public_key(&p)?);
+                    r
+                }
+                None => forge_store::Keyring::load_dir(&dir.unwrap_or_else(|| PathBuf::from("/etc/forge/keys")))?,
+            };
+            let (digest, _) = file_digest(&file)?;
+            match ring.verify_file_digest(&digest, &sig) {
+                Ok(id) => println!("good signature on {} by key {id}\nsha256: {}", file.display(), hex_of(&digest)),
+                Err(e) => bail!("{} does NOT match its signature: {e:?}", file.display()),
             }
         }
         KeyAction::Revoke { key, dir } => {

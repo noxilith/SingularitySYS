@@ -27,6 +27,8 @@ use crate::{StoreError, io_ctx};
 /// Prefix of everything that is signed. The version is part of it, so a
 /// future format can never be confused with this one.
 const DOMAIN: &[u8] = b"forge-index-v1\n";
+/// Prefix of a signed file (an ISO): a different domain, so a signature on a file can never be taken for one on an index.
+const FILE_DOMAIN: &[u8] = b"forge-file-v1\n";
 
 fn bad(what: &'static str, value: impl Into<String>) -> StoreError {
     StoreError::Invalid { what, value: value.into() }
@@ -43,6 +45,12 @@ fn unhex<const N: usize>(s: &str) -> Option<[u8; N]> {
         out[i] = v(chunk[0]) * 16 + v(chunk[1]);
     }
     Some(out)
+}
+
+fn file_message(digest: &[u8; 32]) -> Vec<u8> {
+    let mut m = FILE_DOMAIN.to_vec();
+    m.extend_from_slice(digest);
+    m
 }
 
 fn message(index_bytes: &[u8]) -> Vec<u8> {
@@ -119,6 +127,12 @@ impl SecretKey {
 
     pub fn public(&self) -> PublicKey {
         PublicKey { bytes: SigningKey::from_bytes(&self.seed).verifying_key().to_bytes() }
+    }
+
+    /// Sign the SHA-256 digest of a file (the file itself is never loaded: an ISO is hundreds of megabytes).
+    pub fn sign_file_digest(&self, digest: &[u8; 32]) -> SigFile {
+        let sig = SigningKey::from_bytes(&self.seed).sign(&file_message(digest));
+        SigFile { version: 1, key_id: self.public().id(), signature: hex(&sig.to_bytes()) }
     }
 
     /// Sign the exact bytes of an index.
@@ -353,17 +367,24 @@ impl Keyring {
         self.keys.keys().cloned().collect()
     }
 
-    /// Check that `sig` is a valid signature over `index_bytes` by a key in
-    /// the ring; returns the signing key's id.
-    pub fn verify_index(&self, index_bytes: &[u8], sig: &SigFile) -> Result<String, VerifyError> {
+    /// Check that `sig` is a valid signature over the digest of a file by a key in the ring; returns the key's id.
+    pub fn verify_file_digest(&self, digest: &[u8; 32], sig: &SigFile) -> Result<String, VerifyError> {
+        self.verify_message(&file_message(digest), sig)
+    }
+
+    fn verify_message(&self, message: &[u8], sig: &SigFile) -> Result<String, VerifyError> {
         let key = self.keys.get(&sig.key_id).ok_or_else(|| VerifyError::UnknownKey(sig.key_id.clone()))?;
         let sig_bytes = unhex::<64>(&sig.signature)
             .ok_or_else(|| VerifyError::Malformed("signature is not 128 lowercase hex characters".into()))?;
         let verifying = VerifyingKey::from_bytes(&key.bytes).map_err(|e| VerifyError::Malformed(e.to_string()))?;
-        verifying
-            .verify_strict(&message(index_bytes), &Signature::from_bytes(&sig_bytes))
-            .map_err(|_| VerifyError::Invalid)?;
+        verifying.verify_strict(message, &Signature::from_bytes(&sig_bytes)).map_err(|_| VerifyError::Invalid)?;
         Ok(sig.key_id.clone())
+    }
+
+    /// Check that `sig` is a valid signature over `index_bytes` by a key in
+    /// the ring; returns the signing key's id.
+    pub fn verify_index(&self, index_bytes: &[u8], sig: &SigFile) -> Result<String, VerifyError> {
+        self.verify_message(&message(index_bytes), sig)
     }
 }
 
@@ -388,6 +409,20 @@ mod tests {
         let k = key(1);
         let sig = k.sign_index(b"index bytes");
         assert_eq!(ring_of(&[&k]).verify_index(b"index bytes", &sig), Ok(k.public().id()));
+    }
+
+    #[test]
+    fn a_file_signature_verifies_only_for_that_digest_and_is_not_an_index_signature() {
+        let k = key(3);
+        let digest = [7u8; 32];
+        let sig = k.sign_file_digest(&digest);
+        let ring = ring_of(&[&k]);
+        assert_eq!(ring.verify_file_digest(&digest, &sig), Ok(k.public().id()));
+        assert_eq!(ring.verify_file_digest(&[8u8; 32], &sig), Err(VerifyError::Invalid));
+        // The same bytes signed as an index do not pass as a file signature, and the other way round.
+        assert_eq!(ring.verify_file_digest(&digest, &k.sign_index(&digest)), Err(VerifyError::Invalid));
+        assert_eq!(ring.verify_index(&digest, &sig), Err(VerifyError::Invalid));
+        assert!(matches!(ring_of(&[&key(4)]).verify_file_digest(&digest, &sig), Err(VerifyError::UnknownKey(_))));
     }
 
     #[test]
