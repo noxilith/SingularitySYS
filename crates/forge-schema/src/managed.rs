@@ -162,6 +162,8 @@ update_config=1\n";
 
 const WIFI_COMMAND: &str = r#"#!/bin/sh
 # wifi scan | connect SSID [passphrase] | status | disconnect
+# Changing the network settings needs root: ask for it here instead of failing on a file permission.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
 conf=/etc/wpa_supplicant/wpa_supplicant.conf
 
 find_interface() {
@@ -176,6 +178,23 @@ if [ -z "$iface" ]; then
 	echo "      Give the drivers a few seconds after boot, then check: dmesg | grep -i -E 'firmware|wlan|iwl|rtw|ath|mt7|brcm'" >&2
 	exit 1
 fi
+
+# wpa_cli talks to a running wpa_supplicant. Normally the network service starts one; if it has not (yet), start it here,
+# and say so when it cannot start.
+ensure_supplicant() {
+	wpa_cli -i "$iface" ping >/dev/null 2>&1 && return 0
+	[ -f "$conf" ] || { echo "wifi: $conf is missing" >&2; return 1; }
+	mkdir -p /run/netwatch
+	wpa_supplicant -B -i "$iface" -D nl80211 -c "$conf" -P "/run/netwatch/wpa.$iface" || { echo "wifi: wpa_supplicant could not start on $iface" >&2; return 1; }
+	n=0
+	while [ "$n" -lt 10 ]; do
+		wpa_cli -i "$iface" ping >/dev/null 2>&1 && return 0
+		sleep 1; n=$((n + 1))
+	done
+	echo "wifi: wpa_supplicant did not come up on $iface" >&2
+	return 1
+}
+ensure_supplicant || exit 1
 
 case "$1" in
 	scan)

@@ -472,7 +472,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         }
         new_state.init = (system != "openrc" || old_state.init.is_some()).then(|| system.to_string());
     }
-    let package_names = effective_packages(decl, old_state.init.is_some(), &p.opts.base);
+    let package_names = effective_packages(decl, old_state.init.is_some(), &p.opts.base, running_init(root));
     let profile_switch = plan_packages(&package_names, decl, root, &mut p, &old_state.repo_serials, &mut new_state.repo_serials)?;
     // CPU microcode: the package's early image for this machine's CPU is kept in /boot as microcode.img, which every
     // Limine entry loads first. Copied after the package (it may have just been installed or updated); the next
@@ -545,16 +545,35 @@ fn announce_keys(p: &mut Planner, root: &Path, announced: &[String]) {
 
 /// The packages to have installed: the declared ones, without the other init systems' packages, plus the chosen
 /// init system's own. (A declaration that lists no packages and keeps OpenRC asks for nothing: the image already has it.)
-fn effective_packages(decl: &SystemDecl, switched_before: bool, base: &[String]) -> Vec<String> {
+/// The init system that is running now, read from PID 1 (only for the live system, `/`; None when it cannot be told).
+pub fn running_init(root: &Path) -> Option<&'static str> {
+    if root != Path::new("/") {
+        return None;
+    }
+    match fs::read_to_string("/proc/1/comm").ok()?.trim() {
+        "systemd" => Some("systemd"),
+        "openrc-init" => Some("openrc"),
+        _ => None,
+    }
+}
+
+fn effective_packages(decl: &SystemDecl, switched_before: bool, base: &[String], running: Option<&str>) -> Vec<String> {
     let system = decl.init.system.as_str();
     // Without a base set (tests, minimal repositories) the image's own OpenRC is expected in the declaration; with
     // one, the init system's packages are always part of the system, whatever the declaration lists.
     let add_init = system != "openrc" || switched_before || !base.is_empty();
-    let foreign = forge_schema::foreign_init_packages(system);
+    // The init system that is still running keeps its packages until the machine has rebooted into the new one: its
+    // tools (openrc-shutdown, the service scripts) are what reboot and shutdown need in the meantime. The apply after
+    // that reboot removes them.
+    let still_running = running.filter(|r| *r != system);
+    let foreign: Vec<&str> = if still_running.is_some() { Vec::new() } else { forge_schema::foreign_init_packages(system) };
     let mut names: Vec<String> = base.to_vec();
     names.extend(decl.packages.iter().filter(|p| !foreign.contains(&p.as_str())).cloned());
     if add_init {
         names.extend(forge_schema::init_packages(system).iter().map(|s| s.to_string()));
+    }
+    if let Some(r) = still_running {
+        names.extend(forge_schema::init_packages(r).iter().map(|s| s.to_string()));
     }
     names.extend(users::shell_packages(decl));
     let mut seen = BTreeSet::new();

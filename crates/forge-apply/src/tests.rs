@@ -855,3 +855,20 @@ fn keys_announced_by_an_unsigned_repository_are_ignored() {
     // Signed by a key nobody trusts: refused outright, so nothing it announces can matter.
     assert!(plan_system(&pkg_decl(&["a"]), r.path(), opts()).is_err());
 }
+
+// ---- the init system that is running keeps its packages until the reboot -------------------
+
+#[test]
+fn the_running_init_system_is_not_removed_until_the_machine_has_rebooted_into_the_new_one() {
+    let d = init_decl("systemd", &["a"]);
+    let base: Vec<String> = vec![];
+    // OpenRC is running and systemd is declared: both stay installed, so reboot and shutdown still work.
+    let names = effective_packages(&d, false, &base, Some("openrc"));
+    assert!(names.contains(&"openrc".to_string()) && names.contains(&"chrony".to_string()) && names.contains(&"systemd".to_string()), "{names:?}");
+    // After the reboot into systemd, the old one goes.
+    let names = effective_packages(&d, true, &base, Some("systemd"));
+    assert!(!names.contains(&"openrc".to_string()) && names.contains(&"systemd".to_string()), "{names:?}");
+    // Not knowing what runs (a root that is not `/`) keeps the swap immediate.
+    let names = effective_packages(&init_decl("systemd", &["openrc", "a"]), false, &base, None);
+    assert!(!names.contains(&"openrc".to_string()), "{names:?}");
+}

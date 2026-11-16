@@ -1147,7 +1147,8 @@ fn apply(a: ApplyArgs) -> Result<()> {
     if plan.changes_init() {
         println!();
         ui::next(&format!("the init system is now `{}`: reboot to start it", decl.init.system));
-        ui::dim("the previous generation still boots the old one (Limine menu)");
+        ui::dim("the old init system stays installed until then, so reboot and shutdown keep working; after the reboot run `sudo forge apply` once more and it is removed");
+        ui::dim("(the previous generation still boots the old one from the Limine menu)");
     }
     Ok(())
 }

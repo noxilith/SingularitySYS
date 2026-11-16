@@ -249,6 +249,17 @@ fn packages(r: &mut Report, root: &Path, d: &SystemDecl, base: &[String]) {
     } else {
         r.fail(G, format!("base packages are missing: {}", missing.join(", ")), "sudo forge apply");
     }
+    // The init system that was replaced stays installed until the machine runs the new one; then it should go.
+    if let Some(run) = forge_apply::running_init(root) {
+        if run == d.init.system {
+            let leftovers: Vec<&str> = forge_schema::foreign_init_packages(run).into_iter().filter(|n| names.contains(n)).collect();
+            if !leftovers.is_empty() {
+                r.warn(G, format!("the previous init system is still installed ({}) though {run} is running", leftovers.join(", ")), "sudo forge apply");
+            }
+        } else {
+            r.warn(G, format!("{run} is running but the declaration says {}: reboot to switch", d.init.system), "sudo reboot (or undo the change in sudo forge edit)");
+        }
+    }
     let pending: Vec<&String> = d.packages.iter().filter(|n| !names.contains(n.as_str()) && !forge_schema::is_base_package(n)).collect();
     if pending.is_empty() {
         r.ok(G, "everything you declared is installed");
