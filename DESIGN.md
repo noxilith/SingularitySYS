@@ -1017,7 +1017,7 @@ of one name), apply stops with "run `sudo forge upgrade` first" instead of upgra
 
 ## Languages: locales, keyboard layouts, man pages (implemented)
 
-- **Locales.** `glibc-locales` now carries 85 UTF-8 locales (96 MB compressed, 213 MB installed), compiled with glibc's
+- **Locales.** `glibc-locales` now carries 78 UTF-8 locales (96 MB compressed, 213 MB installed), compiled with glibc's
   `localedef` from its own sources (`recipes/glibc-locales`). `locale = "de_DE.UTF-8"` in the declaration works as written;
   `forge doctor` warns when the declared locale or keymap is not installed.
 - **Keyboard layouts.** The `keymap` setting loaded nothing before: there was no `loadkeys`. The `kbd` package (base) provides

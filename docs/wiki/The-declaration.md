@@ -75,7 +75,7 @@ and apply it.
 
 ## Language and keyboard
 
-- **`locale`**: any of about 85 UTF-8 locales is installed, including `en_US`, `en_GB`, `de_DE`, `fr_FR`, `es_ES`, `it_IT`,
+- **`locale`**: any of 78 UTF-8 locales is installed, including `en_US`, `en_GB`, `de_DE`, `fr_FR`, `es_ES`, `it_IT`,
   `pt_BR`, `nl_NL`, `pl_PL`, `ru_RU`, `uk_UA`, `tr_TR`, `el_GR`, `ja_JP`, `ko_KR`, `zh_CN`, `zh_TW`, `ar_SA`, `he_IL`,
   `hi_IN`, `th_TH`, `vi_VN` and more. `locale -a` lists them all. Write it as `de_DE.UTF-8`.
 - **`keymap`**: the keyboard layout of the text console: a name from `/usr/share/keymaps` such as `us`, `uk`, `de`, `fr`,

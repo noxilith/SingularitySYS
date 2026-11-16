@@ -221,6 +221,7 @@ fn write_openrc(root: &Path) -> Result<(), IsoError> {
     // The package's own runlevels include services that do not suit this system; forge's list replaces them.
     let _ = fs::remove_dir_all(root.join("etc/runlevels"));
     write_managed(root, "openrc")?;
+    build_man_index(root);
     let _ = fs::remove_file(root.join("etc/inittab"));
     let init = root.join("sbin/init");
     let _ = fs::remove_file(&init);
@@ -398,6 +399,23 @@ pub const STANDARD_GROUPS: &[(&str, u32)] = &[
     ("nogroup", 65534),
 ];
 
+
+/// The manual-page index (`apropos`, `whatis`; and `man` complains on every call without one). Built with the image's own
+/// `makewhatis`, started through the image's own dynamic loader so it does not depend on the machine building the ISO.
+/// Best effort: an image without mandoc simply has no index.
+fn build_man_index(root: &Path) {
+    let (tool, man) = (root.join("usr/bin/makewhatis"), root.join("usr/share/man"));
+    let loader = ["usr/lib/ld-linux-x86-64.so.2", "lib64/ld-linux-x86-64.so.2"].iter().map(|p| root.join(p)).find(|p| p.exists());
+    if let (true, true, Some(loader)) = (tool.is_file(), man.is_dir(), loader) {
+        let _ = std::process::Command::new(loader)
+            .arg("--library-path")
+            .arg(root.join("usr/lib"))
+            .arg(&tool)
+            .arg(&man)
+            .env("MANPATH", &man)
+            .status();
+    }
+}
 
 /// Write what forge keeps right (`forge_schema::managed`) into a new image: the same files `forge apply` keeps current
 /// on an installed system, plus the login shells' environment.

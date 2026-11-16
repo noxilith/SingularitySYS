@@ -1,4 +1,4 @@
-# Locales for glibc (about 85 UTF-8 locales: English and the widely spoken languages), compiled with the installed glibc's own `localedef` from glibc's locale sources.
+# Locales for glibc (78 UTF-8 locales: English and the widely spoken languages), compiled with the installed glibc's own `localedef` from glibc's locale sources.
 # (C.UTF-8 and POSIX are built into glibc itself.) Written as plain directories under /usr/lib/locale, not an
 # archive, so the package owns exactly its own files and installing it never rewrites a shared archive.
 name        = "glibc-locales"
