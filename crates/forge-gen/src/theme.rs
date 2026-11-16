@@ -17,10 +17,10 @@ pub fn limine_theme(wallpaper: Option<&str>) -> String {
          term_foreground_bright: ffffff\n",
     );
     if let Some(w) = wallpaper {
-        // Centred, not stretched, so the picture is never squashed; black fills what it does not cover (its edges are
-        // black anyway). The menu sits in a dark translucent panel with room around it.
+        // Stretched to the whole screen, whatever its size (centred, it stayed 2000 pixels wide and left black bars on
+        // anything bigger than 1920x1080). The menu sits in a dark translucent panel with room around it.
         s.push_str(&format!(
-            "wallpaper: {w}\nwallpaper_style: centered\nbackdrop: 000000\nterm_background: 70060608\nterm_margin: 72\nterm_margin_gradient: 28\n"
+            "wallpaper: {w}\nwallpaper_style: stretched\nterm_background: 70060608\nterm_margin: 72\nterm_margin_gradient: 28\n"
         ));
     } else {
         s.push_str("term_background: 00060608\n");
@@ -35,7 +35,7 @@ mod tests {
     #[test]
     fn the_theme_names_the_wallpaper_only_when_there_is_one() {
         let with = limine_theme(Some("boot():/wallpaper.jpg"));
-        assert!(with.contains("wallpaper: boot():/wallpaper.jpg") && with.contains("wallpaper_style: centered") && with.contains("term_margin: 72"));
+        assert!(with.contains("wallpaper: boot():/wallpaper.jpg") && with.contains("wallpaper_style: stretched") && with.contains("term_margin: 72"));
         let without = limine_theme(None);
         assert!(!without.contains("wallpaper") && without.contains("interface_branding: SingularitySYS"));
     }
