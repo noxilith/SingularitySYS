@@ -200,7 +200,7 @@ Early and experimental. The full account, including what was **not** verified, i
 <summary><b>Roadmap</b></summary>
 
 - More packages as they are needed
-- Secure Boot
+- Secure Boot with your own key: forge signs Limine and pins the kernel and limine.conf by hash (you enroll the key in the firmware once)
 - `forge apply user`: per-user package sets
 - Device permissions for the `audio`, `video` and `input` groups
 - Bluetooth, and Wi-Fi in the declaration
