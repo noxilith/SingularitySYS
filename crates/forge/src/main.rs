@@ -1859,6 +1859,8 @@ enum KernelAction {
     Build(KernelBuildArgs),
     /// Install a staged kernel: modules, boot files, a generation to roll back to, and Limine
     Install(KernelInstallArgs),
+    /// Install the newest kernel the package repository offers (what the live ISO boots; every driver as a module)
+    Update,
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -1987,6 +1989,7 @@ fn kernel_cmd(a: KernelArgs) -> Result<()> {
         }
         KernelAction::Build(b) => kernel_build(b),
         KernelAction::Install(i) => kernel_install(i),
+        KernelAction::Update => kernel_update(),
     }
 }
 
@@ -2138,6 +2141,46 @@ fn latest_staged() -> Result<PathBuf> {
         .into_iter()
         .find(|c| c.exists())
         .context("no kernel has been built yet: run `forge kernel build --auto` first, or give the staging directory")
+}
+
+/// `forge kernel update`: the `linux` package of the declared repositories (verified like every package) installed with
+/// the same code as a kernel you built yourself: modules, boot files, a generation to roll back to, and Limine.
+fn kernel_update() -> Result<()> {
+    if !is_root() {
+        bail!("installing a kernel needs root");
+    }
+    let trust = load_trust(None, false, PathBuf::from("/etc/forge/keys"))?;
+    let fetch = forge_store::SystemFetch;
+    let store = forge_store::Store::new("/forge/store");
+    let scratch = PathBuf::from("/forge/tmp");
+    std::fs::create_dir_all(&scratch).context("creating /forge/tmp")?;
+    let mut best: Option<(forge_store::Repository, forge_store::IndexEntry)> = None;
+    for spec in system_repos() {
+        let repo = forge_store::Repository::parse(&spec);
+        let loaded = repo.load(&fetch, &trust)?;
+        for e in loaded.index.packages.iter().filter(|e| e.name == "linux" && e.libc == forge_schema::Libc::Glibc) {
+            if best.as_ref().is_none_or(|(_, b)| forge_store::version_cmp(&e.version, &b.version).is_gt()) {
+                best = Some((forge_store::Repository::parse(&spec), e.clone()));
+            }
+        }
+    }
+    let (repo, entry) = best.context("the repositories have no `linux` package")?;
+    ui::heading(&format!("Kernel update: linux {}", entry.version));
+    let file = repo.open_archive(&entry, &fetch, &scratch)?;
+    let id = store.install(file, Some(&entry.archive_sha256))?;
+    ui::ok(&format!("downloaded and verified linux {}", entry.version));
+    let _ = std::fs::remove_dir_all(&scratch);
+    kernel_install(KernelInstallArgs {
+        staged: Some(store.path(&id)),
+        boot_dir: PathBuf::from("/boot"),
+        root: PathBuf::from("/"),
+        limine_conf: PathBuf::from("/boot/limine.conf"),
+        snapshots: PathBuf::from("/.snapshots"),
+        no_generation: false,
+        no_limine: false,
+        // The same release number can be a newer build of the same kernel: replace it.
+        force: true,
+    })
 }
 
 fn kernel_install(i: KernelInstallArgs) -> Result<()> {

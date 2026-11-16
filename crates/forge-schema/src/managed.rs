@@ -316,6 +316,14 @@ pub fn managed(init: &str) -> Vec<Managed> {
                 v.push(link(format!("/etc/runlevels/{level}/{s}"), format!("/etc/init.d/{s}"), Own::Always));
             }
         }
+    } else {
+        // A login on a serial port only where the machine has one: without the port the unit would just fail at every boot.
+        v.push(file(
+            "/etc/systemd/system/serial-getty@.service.d/10-forge.conf",
+            "# managed by forge: a serial console login only where this machine has the serial port\n[Unit]\nConditionPathExists=/sys/class/tty/%i/device\n",
+            0o644,
+            Own::Always,
+        ));
     }
     v
 }
@@ -332,6 +340,7 @@ mod tests {
         assert!(has(&o, "/etc/init.d/network") && has(&o, "/etc/runlevels/default/chronyd") && has(&o, "/etc/init.d/agetty.tty1"));
         assert!(!has(&s, "/etc/init.d/network"), "systemd has its own");
         assert!(has(&s, "/usr/bin/wifi") && has(&s, "/etc/inputrc"));
+        assert!(has(&s, "/etc/systemd/system/serial-getty@.service.d/10-forge.conf") && !has(&o, "/etc/systemd/system/serial-getty@.service.d/10-forge.conf"), "the serial login is conditional on the port, systemd only");
     }
 
     #[test]
