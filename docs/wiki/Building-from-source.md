@@ -50,3 +50,11 @@ An optional boot-menu wallpaper is picked up from `distro/boot/wallpaper.jpg` (i
 QEMU is packaged (`forge install qemu`). `scripts/qemu-boot.sh singularity-live.iso` boots an image headless with the
 serial console on your terminal (KVM is used when available). For UEFI and Secure Boot tests use QEMU's secure edk2
 firmware (`edk2-x86_64-secure-code.fd` with a copy of `edk2-i386-vars.fd`, machine `q35,smm=on`).
+
+## Packages that are not built from a recipe
+
+Three packages are built with the build host's own toolchain and then packaged and signed, because the sandbox has no Rust
+or Go compiler: `forge` (`scripts/package-forge.sh`), `micro` (`scripts/package-micro.sh`) and `fetch`
+(`scripts/package-fetch.sh`). Each pins its source by checksum and produces a static binary, so it needs no libraries on the
+target. To rebuild `fetch` from the same source raise `REVISION` (the package becomes `2.3.0_r1`); to move to a newer
+commit change the pinned revision and checksum in the script.

@@ -29,6 +29,7 @@ Packages you can add include:
 | `strace`, `lsof`, `file`, `tree`, `patch` | Everyday inspection and patching tools. |
 | `zip`, `libarchive` | `zip` makes .zip files; `libarchive` provides `unzip`, `bsdtar`, `bsdcpio` and the library behind them. |
 | `openssh` | SSH client and server. See [Networking](Networking). |
+| `fetch` | The spinning-logo system information tool (<https://github.com/noxilith/Fetch>). Run `fetch`; `fetch --frames 1` draws one frame and exits. |
 | `qemu` | Headless x86-64 emulator with KVM, for testing images. |
 | `python`, `gcc`, `make`, `bison`, `flex`, `perl`, `meson`, `ninja`, `bc` | Languages and build tools. |
 | `systemd`, `dbus` | Installed for you when `init = "systemd"`. |

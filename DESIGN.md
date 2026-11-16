@@ -1045,3 +1045,12 @@ file, so an ISO signature can never pass as a repository-index signature) and `f
 The project is GPL-3.0-or-later (it was MIT OR Apache-2.0). `LICENSE` is the GPL text, forge ships it in
 `/usr/share/licenses/forge`, and the README explains that the packages on the ISO keep their own licenses and that the
 source of each is the upstream tarball and checksum named in its recipe.
+
+## fetch is a package (implemented 2026-11-16)
+
+`fetch` (github.com/noxilith/Fetch, ISC, Rust, one dependency) is in the repository: `sudo forge install fetch` puts
+`/usr/bin/fetch` on PATH. It is built like forge and micro, not from a recipe, by `scripts/package-fetch.sh`: the GitHub
+archive of one commit pinned by SHA-256, `cargo build --release --locked` with the host's Rust and a static glibc, outside
+the repository (inside it cargo would treat the source as part of forge's workspace; the host also needs the linker named
+through `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc`). Static is safe because fetch reads `/proc` and `/sys` itself and
+does no user or host-name lookups. It has a built-in SingularitySYS logo and was run on the live ISO in QEMU.
