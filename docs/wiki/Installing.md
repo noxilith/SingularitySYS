@@ -11,8 +11,17 @@ install on a machine or disk you can afford to lose while the distribution is th
 
 ## 1. Get the ISO
 
-The ISO is not published as a download yet; this page will link it when it is. Until then build it yourself:
-see [Building from source](Building-from-source).
+Download these four files from the newest release on the
+[releases page](https://github.com/noxilith/SingularitySYS/releases) (alpha builds are marked "Pre-release"):
+
+| File | What it is |
+|---|---|
+| `singularity-live.iso` | The live and install image (about 525 MB). |
+| `singularity-live.iso.sig` | Its signature. |
+| `SHA256SUMS` | Its checksum. |
+| `singularity-release.pub` | The public key the signature is made with. |
+
+Or build the ISO yourself: see [Building from source](Building-from-source).
 
 ## Check what you downloaded
 

@@ -84,7 +84,7 @@ from the Limine menu.
 > Early software. It has been installed and used on the author's hardware and very little else.
 > Don't put it on a machine you can't reinstall. See [Status](#-status) for what is and isn't verified.
 
-1. **Boot the live ISO** (Limine, BIOS and UEFI). Log in as `root`, password `root`.
+1. **Download the ISO** from the [releases page](https://github.com/noxilith/SingularitySYS/releases), check it, write it to a USB stick (the [wiki](https://github.com/noxilith/SingularitySYS/wiki/Installing) has the details), and **boot it** (Limine, BIOS and UEFI). Log in as `root`, password `root`.
 2. **Partition the disk** with `cfdisk` (an EFI partition of about 512 MB, and the rest for the system).
 3. **Install:**
 
