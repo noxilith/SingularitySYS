@@ -1,0 +1,15 @@
+**SingularitySYS**
+
+- [Home](Home)
+- [Installing](Installing)
+- [First steps](First-steps)
+- [The declaration](The-declaration)
+- [Packages](Packages)
+- [Generations and rollback](Generations-and-rollback)
+- [Kernel and graphics](Kernel-and-graphics)
+- [Networking](Networking)
+- [Maintenance](Maintenance)
+- [Init systems](Init-systems)
+- [Secure Boot](Secure-Boot)
+- [Troubleshooting](Troubleshooting)
+- [Building from source](Building-from-source)
