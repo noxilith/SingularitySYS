@@ -14,6 +14,38 @@ install on a machine or disk you can afford to lose while the distribution is th
 The ISO is not published as a download yet; this page will link it when it is. Until then build it yourself:
 see [Building from source](Building-from-source).
 
+## Check what you downloaded
+
+Every ISO is published with its SHA-256 checksum (`SHA256SUMS`) and a signature (`singularity-live.iso.sig`) made with the
+project's release key. The public key is `distro/keys/singularity-release.pub` in the repository:
+
+```toml
+version = 1
+public_key = "ab147f6ff8ce0d608925b46dd819b7c5932e176dbc20b1239878dad193ce074e"
+```
+
+Its **key id** (the SHA-256 of that public key) is:
+
+```
+a0178076c79b3c1643e633264beab76ecd753eb8d6582621d8e855b09126dbe3
+```
+
+Check the checksum anywhere:
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+Check the signature with `forge` (on any SingularitySYS machine the release key is already trusted, so
+`forge key verify singularity-live.iso` is enough; elsewhere give it the public key file):
+
+```bash
+forge key verify singularity-live.iso --pub singularity-release.pub
+```
+
+`good signature on ... by key a0178076...` means the file is exactly what the project signed. A signature belongs to one
+exact file: a different or damaged ISO fails.
+
 ## 2. Write it to the USB stick
 
 On another Linux machine (replace `/dev/sdX` with the **stick**, not a disk you care about; check with `lsblk`):
