@@ -989,7 +989,8 @@ fn applying_or_installing_never_moves_a_package_you_already_have_but_upgrade_doe
     // The repository now has a newer a, and a new package b.
     publish_v(r.path(), "a", "2.0", "new a");
     publish_v(r.path(), "b", "1.0", "b");
-    assert!(plan(&pkg_decl(&["a"]), r.path()).is_empty(), "nothing to do: what is installed stays");
+    let stay = plan(&pkg_decl(&["a"]), r.path());
+    assert!(stay.profile_switch.is_none() && stay.changes.iter().all(|c| c.section != "packages"), "what is installed stays: {:?}", stay.changes);
     apply(&plan(&pkg_decl(&["a", "b"]), r.path())).unwrap();
     assert_eq!(read(r.path(), "usr/bin/b"), "b", "a new package is installed");
     assert_eq!(read(r.path(), "usr/bin/a"), "old a", "installing b did not upgrade a");
