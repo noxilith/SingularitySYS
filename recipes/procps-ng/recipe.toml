@@ -1,7 +1,7 @@
 # procps-ng: ps, top, free, pgrep, pkill, uptime, w, watch, vmstat, sysctl, ... (what BusyBox used to provide, GNU style).
 # kill comes from util-linux. No systemd or NUMA support.
 name        = "procps-ng"
-version     = "4.0.5"
+version     = "4.0.5_r1"
 description = "Process and system utilities: ps, top, free, pgrep, pkill, uptime, watch, sysctl"
 license     = "GPL-2.0-or-later AND LGPL-2.1-or-later"
 libc        = ["glibc"]
@@ -23,7 +23,8 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/pkgconfig"
+rm -rf "$DESTDIR/usr/include" "$DESTDIR/usr/lib/pkgconfig"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 rm -f "$DESTDIR"/usr/lib/*.la
 test -x "$DESTDIR/usr/bin/ps" && test -x "$DESTDIR/usr/bin/top" && test -x "$DESTDIR/usr/sbin/sysctl"
 '''

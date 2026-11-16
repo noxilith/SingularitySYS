@@ -1,6 +1,6 @@
 # htop: interactive process viewer.
 name        = "htop"
-version     = "3.5.3"
+version     = "3.5.3_r1"
 description = "Interactive process viewer"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -18,7 +18,7 @@ configure = "./configure --prefix=/usr --enable-unicode --disable-dependency-tra
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/pixmaps"
+rm -rf "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons" "$DESTDIR/usr/share/pixmaps"
 strip "$DESTDIR/usr/bin/htop" 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/htop"
 '''

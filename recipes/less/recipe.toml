@@ -1,6 +1,6 @@
 # less: the pager.
 name        = "less"
-version     = "668"
+version     = "668_r1"
 description = "The less pager"
 license     = "GPL-3.0-or-later OR BSD-2-Clause"
 libc        = ["glibc"]
@@ -18,6 +18,6 @@ configure = "./configure --prefix=/usr --with-regex=posix LIBS='-lncursesw -ltin
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/less"
 '''

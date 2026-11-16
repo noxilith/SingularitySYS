@@ -2,7 +2,7 @@
 # to it. Built against libsystemd (systemd does not need dbus to build, so they are not circular): the bus can activate
 # systemd's own services (timedated, hostnamed, ...) and takes its sockets from systemd.
 name        = "dbus"
-version     = "1.16.2_r6"
+version     = "1.16.2_r7"
 description = "D-Bus message bus system"
 license     = "AFL-2.1 OR GPL-2.0-or-later"
 libc        = ["glibc"]

@@ -2,7 +2,7 @@
 # plus the static libuuid and libblkid that btrfs-progs links. Everything else is off.
 # Programs BusyBox also has (fdisk, blkid, ...) win over its applet links in the live image.
 name        = "util-linux"
-version     = "2.40.2_r3"
+version     = "2.40.2_r4"
 description = "Disk partitioning and block device tools (cfdisk, fdisk, sfdisk, blkid, lsblk, agetty, wipefs)"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -32,7 +32,7 @@ configure = '''
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
-rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/bash-completion"
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/bash-completion"
 rm -f "$DESTDIR"/usr/lib/*.la
 # The programs the system relies on must all be there; strip them. (A missing one names itself.)
 missing=""

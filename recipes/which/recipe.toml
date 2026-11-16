@@ -1,6 +1,6 @@
 # GNU which.
 name        = "which"
-version     = "2.21"
+version     = "2.21_r1"
 description = "GNU which"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -18,6 +18,6 @@ configure = "./configure --prefix=/usr CFLAGS='-O2'"
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/which"
 '''

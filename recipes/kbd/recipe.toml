@@ -1,0 +1,25 @@
+# kbd: keyboard layouts for the console (loadkeys, the keymaps) and console fonts (setfont). Without it the `keymap`
+# setting of the declaration has nothing to load.
+name        = "kbd"
+version     = "2.10.0"
+description = "Console keyboard layouts and fonts (loadkeys, setfont)"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://mirrors.edge.kernel.org/pub/linux/utils/kbd/kbd-2.10.0.tar.xz"
+sha256 = "6e5ca4f8d76ee9e3a8db700b667f13e12aac9933828a64e1aaad93d26be9b479"
+
+[build]
+configure = "./configure --prefix=/usr --disable-vlock --disable-tests --disable-nls --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/doc"
+test -x "$DESTDIR/usr/bin/loadkeys"
+ls "$DESTDIR/usr/share/keymaps/i386/qwerty" | grep -q '^us\.map'
+'''

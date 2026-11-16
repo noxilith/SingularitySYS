@@ -1,5 +1,5 @@
 name        = "iproute2"
-version     = "6.11.0"
+version     = "6.11.0_r1"
 description = "ip, ss, tc and friends (the Linux network tools)"
 license     = "GPL-2.0-only"
 libc        = ["glibc"]
@@ -17,7 +17,8 @@ configure = "./configure"
 compile   = "make -j$JOBS CC=gcc 'CCOPTS=-O2 -std=gnu17' HAVE_MNL=n HAVE_ELF=n HAVE_SELINUX=n HAVE_CAP=n HAVE_BERKELEY_DB=n SHARED_LIBS=n"
 install   = '''
 make DESTDIR=$DESTDIR SBINDIR=/usr/sbin PREFIX=/usr install
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib" "$DESTDIR/etc" "$DESTDIR/var" "$DESTDIR/usr/include"
+rm -rf "$DESTDIR/usr/lib" "$DESTDIR/etc" "$DESTDIR/var" "$DESTDIR/usr/include"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 for f in "$DESTDIR"/usr/sbin/*; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     strip "$f" 2>/dev/null || true

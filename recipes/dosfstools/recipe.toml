@@ -1,6 +1,6 @@
 # dosfstools: mkfs.fat / mkfs.vfat, fsck.fat (the installer formats the EFI partition with mkfs.vfat).
 name        = "dosfstools"
-version     = "4.2"
+version     = "4.2_r1"
 description = "FAT file system tools (mkfs.fat, fsck.fat, fatlabel)"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -18,7 +18,7 @@ configure = "./configure --prefix=/usr --sbindir=/usr/sbin --enable-compat-symli
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 test -x "$DESTDIR/usr/sbin/mkfs.fat"
 test -e "$DESTDIR/usr/sbin/mkfs.vfat"
 '''

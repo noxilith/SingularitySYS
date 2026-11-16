@@ -4,7 +4,7 @@
 # password hash would otherwise be DES. It must not set SHA_CRYPT_MIN_ROUNDS alone: shadow then
 # asks for rounds=999999999, which musl refuses, and every password change fails.
 name        = "shadow"
-version     = "4.16.0_r3"
+version     = "4.16.0_r4"
 description = "User and group account tools (useradd, groupadd, chpasswd, passwd)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
@@ -27,7 +27,8 @@ configure = '''
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/etc/pam.d"
+rm -rf "$DESTDIR/etc/pam.d"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 # shadow puts login, su, nologin and a few more into real /bin and /sbin, which are symlinks into /usr on the system:
 # move them where they belong, and drop what has no use here (libsubid).
 for d in bin sbin; do

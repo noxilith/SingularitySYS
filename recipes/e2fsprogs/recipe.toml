@@ -1,6 +1,6 @@
 # e2fsprogs: mkfs.ext4, e2fsck, tune2fs, resize2fs, ... (for ext2/3/4 disks and USB sticks).
 name        = "e2fsprogs"
-version     = "1.47.2"
+version     = "1.47.2_r1"
 description = "ext2/3/4 file system tools"
 license     = "GPL-2.0-only AND LGPL-2.0-only"
 libc        = ["glibc"]
@@ -22,7 +22,8 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/pkgconfig" "$DESTDIR/usr/include" "$DESTDIR/etc"
+rm -rf "$DESTDIR/usr/lib/pkgconfig" "$DESTDIR/usr/include" "$DESTDIR/etc"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 rm -f "$DESTDIR"/usr/lib/*.a
 test -x "$DESTDIR/usr/sbin/mke2fs" && test -x "$DESTDIR/usr/sbin/e2fsck"
 '''

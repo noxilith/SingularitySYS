@@ -1,0 +1,26 @@
+# Vim: the editor, with its runtime files (syntax colours, help). Terminal only: no GUI, no X, no scripting languages.
+name        = "vim"
+version     = "9.2.1355"
+description = "Vi IMproved text editor (terminal)"
+license     = "Vim"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf"]
+
+[[source]]
+url    = "https://github.com/vim/vim/archive/refs/tags/v9.2.1355.tar.gz"
+sha256 = "4290f6ca08613564329d8e384ab2406d75ba5dca3971b824238967c4e0090665"
+
+[build]
+configure = "./configure --prefix=/usr --with-features=normal --with-tlib=tinfow --enable-multibyte --disable-gui --without-x --disable-nls --disable-gpm --disable-selinux --disable-acl --disable-canberra --disable-netbeans --disable-channel --disable-sysmouse CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR STRIP=true
+rm -rf "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons"
+ln -sf vim "$DESTDIR/usr/bin/vi"
+strip "$DESTDIR/usr/bin/vim" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/vim"
+ls "$DESTDIR/usr/share/vim" | grep -q '^vim'
+'''

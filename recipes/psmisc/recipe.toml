@@ -1,6 +1,6 @@
 # psmisc: killall, fuser, pstree, peekfd.
 name        = "psmisc"
-version     = "23.7"
+version     = "23.7_r1"
 description = "killall, fuser, pstree"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -21,6 +21,6 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/killall" && test -x "$DESTDIR/usr/bin/fuser"
 '''

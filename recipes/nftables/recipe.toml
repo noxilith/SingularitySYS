@@ -1,7 +1,7 @@
 # nftables: the `nft` program that loads firewall rules. forge writes /etc/nftables.conf from the [firewall] section of the
 # declaration and runs it at boot. No interactive CLI, JSON or iptables compatibility.
 name        = "nftables"
-version     = "1.1.7"
+version     = "1.1.7_r1"
 description = "nftables packet filtering (nft)"
 license     = "GPL-2.0-only"
 libc        = ["glibc"]
@@ -23,7 +23,8 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/etc" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/pkgconfig"
+rm -rf "$DESTDIR/etc" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/pkgconfig"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 rm -f "$DESTDIR"/usr/lib/*.la
 strip "$DESTDIR/usr/sbin/nft" 2>/dev/null || true
 test -x "$DESTDIR/usr/sbin/nft"

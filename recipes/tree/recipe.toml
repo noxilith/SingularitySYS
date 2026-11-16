@@ -1,0 +1,22 @@
+# tree: lists directory contents as a tree.
+name        = "tree"
+version     = "2.2.1_r1"
+description = "List the contents of directories as a tree"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://gitlab.com/OldManProgrammer/unix-tree/-/archive/2.2.1/unix-tree-2.2.1.tar.gz"
+sha256 = "70d9c6fc7c5f4cb1f7560b43e2785194594b9b8f6855ab53376f6bd88667ee04"
+
+[build]
+compile = "make -j$JOBS CC=gcc CFLAGS='-O2 -std=c11'"
+install = '''
+make install PREFIX="$DESTDIR/usr" MANDIR="$DESTDIR/usr/share/man"
+strip "$DESTDIR/usr/bin/tree" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/tree"
+'''

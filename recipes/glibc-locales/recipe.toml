@@ -1,9 +1,9 @@
-# Locales for glibc: en_US.UTF-8, compiled with the installed glibc's own `localedef` from glibc's locale sources.
+# Locales for glibc (about 85 UTF-8 locales: English and the widely spoken languages), compiled with the installed glibc's own `localedef` from glibc's locale sources.
 # (C.UTF-8 and POSIX are built into glibc itself.) Written as plain directories under /usr/lib/locale, not an
 # archive, so the package owns exactly its own files and installing it never rewrites a shared archive.
 name        = "glibc-locales"
-version     = "2.42"
-description = "glibc locales (en_US.UTF-8)"
+version     = "2.42_r1"
+description = "glibc locales: English, and the major languages of Europe, the Americas, Asia and the Middle East (UTF-8)"
 license     = "LGPL-2.1-or-later"
 libc        = ["glibc"]
 
@@ -19,8 +19,9 @@ sha256 = "d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f"
 install = '''
 mkdir -p "$DESTDIR/usr/lib/locale"
 export I18NPATH="$SRC/localedata"
-for spec in "en_US:UTF-8"; do
-    loc=${spec%%:*}; cs=${spec##*:}
+# Each is compiled from glibc's own locale sources. C.UTF-8 is built into glibc. `locale -a` lists what is installed.
+for loc in en_US en_GB en_AU en_CA en_IE en_NZ en_IN en_ZA de_DE de_AT de_CH fr_FR fr_CA fr_BE fr_CH es_ES es_MX es_AR es_CO es_CL it_IT pt_PT pt_BR nl_NL nl_BE sv_SE nb_NO nn_NO da_DK fi_FI is_IS pl_PL cs_CZ sk_SK sl_SI hu_HU ro_RO bg_BG hr_HR sr_RS el_GR tr_TR ru_RU uk_UA be_BY lt_LT lv_LV et_EE ga_IE cy_GB ca_ES eu_ES gl_ES mt_MT sq_AL mk_MK ja_JP ko_KR zh_CN zh_TW zh_HK hi_IN bn_BD ta_IN th_TH vi_VN id_ID ms_MY fil_PH fa_IR he_IL ar_SA ar_EG ar_AE ur_PK ka_GE hy_AM kk_KZ; do
+    cs=UTF-8
     localedef --no-archive --prefix="$DESTDIR" -i "$loc" -f "$cs" "$loc.$cs"
 done
 test -d "$DESTDIR/usr/lib/locale/en_US.utf8"

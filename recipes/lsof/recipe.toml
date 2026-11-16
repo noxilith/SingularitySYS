@@ -1,0 +1,32 @@
+# lsof: lists open files and the processes that have them.
+name        = "lsof"
+version     = "4.99.7"
+description = "List open files"
+license     = "lsof"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://github.com/lsof-org/lsof/releases/download/4.99.7/lsof-4.99.7.tar.gz"
+sha256 = "4a10391aab0b8ce1f539e82a1966693b2a6cf225972a6504ebb7ec4fa71675de"
+
+[build]
+configure = "./configure --prefix=/usr --disable-dependency-tracking CFLAGS='-O2'"
+# The man page is made with soelim (groff), which only expands `.so file` lines: a few lines of awk do the same.
+compile   = '''
+mkdir -p /tmp/shim
+cat > /tmp/shim/soelim <<'SH'
+#!/bin/sh
+exec awk '/^\.so /{ while ((getline l < $2) > 0) print l; close($2); next } { print }' "$@"
+SH
+chmod +x /tmp/shim/soelim
+PATH=/tmp/shim:$PATH make -j$JOBS
+'''
+install   = '''
+PATH=/tmp/shim:$PATH make install DESTDIR=$DESTDIR
+strip "$DESTDIR/usr/bin/lsof" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/lsof"
+'''

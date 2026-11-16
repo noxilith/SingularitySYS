@@ -1,5 +1,5 @@
 name        = "rsync"
-version     = "3.3.0"
+version     = "3.3.0_r1"
 description = "File copying tool (what forge strap copies the live system with)"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -21,6 +21,5 @@ configure = '''
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
-rm -rf "$DESTDIR/usr/share/man"
 strip "$DESTDIR/usr/bin/rsync"
 '''

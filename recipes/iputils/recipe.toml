@@ -1,6 +1,6 @@
 # iputils: ping, tracepath, arping.
 name        = "iputils"
-version     = "20240905"
+version     = "20240905_r1"
 description = "ping, tracepath, arping"
 license     = "GPL-2.0-or-later AND BSD-3-Clause"
 libc        = ["glibc"]
@@ -24,6 +24,6 @@ CC=gcc meson setup build --prefix=/usr --bindir=bin --sbindir=sbin --buildtype=r
 compile = "meson compile -C build -j $JOBS"
 install = '''
 DESTDIR=$DESTDIR meson install -C build
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/ping"
 '''

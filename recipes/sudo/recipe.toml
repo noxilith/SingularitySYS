@@ -5,7 +5,7 @@
 # and without /etc/sudoers. The base system image (`forge iso`) is what makes /usr/bin/sudo setuid root,
 # from a short allowlist, and writes /etc/sudoers: sudo is part of the base, like `login`.
 name        = "sudo"
-version     = "1.9.17p2"
+version     = "1.9.17p2_r1"
 description = "Run commands as another user (static, no PAM)"
 license     = "ISC"
 libc        = ["glibc"]
@@ -29,7 +29,8 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make DESTDIR=$DESTDIR install INSTALL_OWNER=
-rm -rf "$DESTDIR/etc" "$DESTDIR/usr/share" "$DESTDIR/var" "$DESTDIR/run"
+rm -rf "$DESTDIR/etc" "$DESTDIR/var" "$DESTDIR/run"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 strip "$DESTDIR/usr/bin/sudo" "$DESTDIR/usr/sbin/visudo" 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/sudo"
 '''

@@ -1,6 +1,6 @@
 # GNU nano: a small, easy editor (the system default editor is micro).
 name        = "nano"
-version     = "8.7"
+version     = "8.7_r1"
 description = "GNU nano text editor"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -18,7 +18,7 @@ configure = "./configure --prefix=/usr --sysconfdir=/etc --disable-nls --disable
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons"
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons"
 strip "$DESTDIR/usr/bin/nano" 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/nano"
 '''

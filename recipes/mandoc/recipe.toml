@@ -1,0 +1,44 @@
+# mandoc: the `man` command (and apropos, whatis, makewhatis) for the manual pages every package installs under
+# /usr/share/man. A small, dependency-free formatter for the man and mdoc page formats. Its own pages are installed
+# under names that cannot collide with the Linux man-pages (man(7), mdoc(7), roff(7) ... become mandoc_man(7) ...).
+name        = "mandoc"
+version     = "1.14.6"
+description = "man, apropos and whatis: read the manual pages"
+license     = "ISC"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib"]
+
+[[source]]
+url    = "https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz"
+sha256 = "8bf0d570f01e70a6e124884088870cbed7537f36328d512909eb10cd53179d9c"
+
+[build]
+configure = '''
+cat > configure.local <<'CONF'
+PREFIX=/usr
+BINDIR=/usr/bin
+SBINDIR=/usr/bin
+MANDIR=/usr/share/man
+MANPATH_DEFAULT="/usr/share/man:/usr/local/share/man"
+MANPATH_BASE="/usr/share/man"
+OSNAME="SingularitySYS"
+INSTALL_LIBMANDOC=0
+MANM_MAN=mandoc_man
+MANM_MDOC=mandoc_mdoc
+MANM_ROFF=mandoc_roff
+MANM_EQN=mandoc_eqn
+MANM_TBL=mandoc_tbl
+MANM_MANCONF=mandoc_man.conf
+CFLAGS="-O2"
+CONF
+./configure
+'''
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+strip "$DESTDIR/usr/bin/mandoc" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/mandoc" && test -e "$DESTDIR/usr/bin/man"
+'''

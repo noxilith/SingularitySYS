@@ -1,5 +1,5 @@
 name        = "dhcpcd"
-version     = "10.1.0"
+version     = "10.1.0_r1"
 description = "DHCP and IPv6 router-advertisement client"
 license     = "BSD-2-Clause"
 libc        = ["glibc"]
@@ -17,7 +17,8 @@ configure = "./configure --prefix=/usr --sbindir=/usr/sbin --libexecdir=/usr/lib
 compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/var" "$DESTDIR/run" "$DESTDIR/usr/include" "$DESTDIR/usr/lib"
+rm -rf "$DESTDIR/var" "$DESTDIR/run" "$DESTDIR/usr/include" "$DESTDIR/usr/lib"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 strip "$DESTDIR/usr/sbin/dhcpcd"
 test -x "$DESTDIR/usr/sbin/dhcpcd"
 '''

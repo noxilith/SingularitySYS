@@ -1,6 +1,6 @@
 # tmux: terminal multiplexer.
 name        = "tmux"
-version     = "3.8"
+version     = "3.8_r1"
 description = "Terminal multiplexer"
 license     = "ISC"
 libc        = ["glibc"]
@@ -18,7 +18,7 @@ configure = "./configure --prefix=/usr --disable-utf8proc LIBNCURSES_CFLAGS='-I/
 compile   = "make -j$JOBS"
 install   = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share"
+find "$DESTDIR/usr/share" -mindepth 1 -maxdepth 1 ! -name man -exec rm -rf {} + 2>/dev/null || true
 strip "$DESTDIR/usr/bin/tmux" 2>/dev/null || true
 test -x "$DESTDIR/usr/bin/tmux"
 '''

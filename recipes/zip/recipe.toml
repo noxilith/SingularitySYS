@@ -1,0 +1,31 @@
+# Info-ZIP zip: creates .zip archives.
+name        = "zip"
+version     = "3.0"
+description = "Create .zip archives (Info-ZIP)"
+license     = "Info-ZIP"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://downloads.sourceforge.net/infozip/zip30.tar.gz"
+sha256 = "f0e8bb1f9b7eb0b01285495a2699df3a4b766784c1765a8f1aeedf63c0806369"
+
+[build]
+# zip 3.0 is C89: newer compilers refuse some of it unless told which dialect it is.
+compile = '''
+CF='-include time.h -include string.h -I. -DUNIX -DLARGE_FILE_SUPPORT -DUIDGID_NOT_16BIT -DNO_ASM -std=gnu89 -Wno-implicit-int -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-int-conversion -Wno-return-mismatch -O2'
+# Its configure tests are C89 programs a modern compiler rejects, so it decides the C library lacks memset and friends
+# and defines replacements for rmdir, strchr, rename, mktime, opendir and friends (which then conflict with the real
+# ones): take those definitions out of the flags it wrote.
+make -f unix/Makefile flags CC=gcc CFLAGS_NOOPT="$CF"
+sed -i -E 's/-D(ZMEM|NO_(RMDIR|STRCHR|STRRCHR|RENAME|MKTEMP|MKTIME|MKSTEMP|DIR))( |")/\3/g' flags
+make -f unix/Makefile generic CC=gcc CFLAGS_NOOPT="$CF"
+'''
+install = '''
+make -f unix/Makefile install prefix="$DESTDIR/usr" MANDIR="$DESTDIR/usr/share/man/man1"
+strip "$DESTDIR/usr/bin/zip" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/zip"
+'''

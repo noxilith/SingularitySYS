@@ -1,0 +1,27 @@
+# libarchive: reads and writes many archive formats. Provides bsdtar, bsdcpio, bsdcat and bsdunzip, and `unzip`
+# (the bsdunzip program: it extracts, lists and tests .zip files with unzip's options).
+name        = "libarchive"
+version     = "3.8.11"
+description = "Archive library with bsdtar, bsdcpio, bsdcat and unzip"
+license     = "BSD-2-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "zlib", "zstd", "pkgconf"]
+
+[[source]]
+url    = "https://github.com/libarchive/libarchive/releases/download/v3.8.11/libarchive-3.8.11.tar.xz"
+sha256 = "a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2"
+
+[build]
+configure = "./configure --prefix=/usr --disable-static --disable-dependency-tracking --without-xml2 --without-expat --without-nettle --without-openssl --without-lz4 --without-lzo2 --without-libb2 --without-cng --without-mbedtls --without-iconv --enable-bsdunzip CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR/usr/lib/libarchive.la"
+# GNU tar and cpio keep the names tar and cpio; unzip is the one this package provides.
+ln -sf bsdunzip "$DESTDIR/usr/bin/unzip"
+strip "$DESTDIR/usr/bin/bsdtar" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/bsdtar" && test -x "$DESTDIR/usr/bin/bsdunzip"
+'''

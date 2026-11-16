@@ -1,0 +1,22 @@
+# The Linux man-pages project: the manual pages for system calls (section 2), the C library (3), special files (4), file
+# formats (5), overviews and conventions (7). The pages for programs come with the programs.
+name        = "man-pages"
+version     = "6.20"
+description = "Linux manual pages: system calls, library functions, file formats, overviews"
+license     = "Linux-man-pages-copyleft"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://www.kernel.org/pub/linux/docs/man-pages/man-pages-6.20.tar.xz"
+sha256 = "180f0d16a2142dd9671760ac0afeadcc25e861f695eb420293e1206a87ca083f"
+
+[build]
+install = '''
+make -R install prefix=/usr DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/doc"
+test -d "$DESTDIR/usr/share/man/man2"
+'''

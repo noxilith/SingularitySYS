@@ -1,7 +1,7 @@
 # git, without the Perl, Python, Tcl/Tk and gettext parts (git add -p, send-email and gitk are the losses). HTTPS works
 # through libcurl and the system CA bundle.
 name        = "git"
-version     = "2.56.1"
+version     = "2.56.1_r1"
 description = "git version control (core commands, HTTPS and SSH transport)"
 license     = "GPL-2.0-only"
 libc        = ["glibc"]
