@@ -940,8 +940,8 @@ i915 stays built in.
 The musl-only recipes (`musl`, `musl-stage0`, `binutils-stage1`, `gcc-stage1`) and the scripts that only bootstrapped
 musl (`bootstrap-base.sh`, `bootstrap-toolchain.sh`, `bootstrap-selfhost.sh`, `build-tools.sh`) are deleted; the glibc
 bootstrap is `scripts/bootstrap-glibc.sh`, then `scripts/build-glibc-world.sh`. The shared stage-0 recipes still carry a
-dormant musl override; the schema still knows the `libc` field. The old musl package repository (release `repo`) is
-untouched on GitHub.
+dormant musl override; the schema still knows the `libc` field. The old musl package repository (release `repo`, tag `repo`)
+was deleted from GitHub on 2026-11-16.
 
 ## The build sandbox has no BusyBox (implemented)
 
@@ -995,3 +995,12 @@ Config and loader are replaced by two renames, so power loss between them leaves
 its menu (boot it from the live ISO and run `forge secureboot refresh`). Not tried: real firmware (some vendors' setup
 mode needs a firmware menu step; that is what the `.auth` files are for), the installer integration (`forge strap`
 does not set it up for you), BIOS machines (not applicable).
+
+## Every kernel build has its own release name (implemented)
+
+The `linux` recipe sets `CONFIG_LOCALVERSION` to `-rN` from the recipe revision (`KCFG_LOCALVERSION=-r7` in the recipe; bump
+it together with `version`), so the release is `7.3.3-r7`: `/boot/vmlinuz-7.3.3-r7` and `/usr/lib/modules/7.3.3-r7` sit next
+to the older kernel's files instead of replacing them. `sudo forge kernel update` installs the repository's newest `linux`
+package like a kernel you built yourself (generation snapshot first, then Limine); a generation from the menu boots the
+old kernel with the old modules. Verified in QEMU: install from the previous ISO (kernel 7.3.3), update to 7.3.3-r7, the
+menu offers both, the new one boots and loads modules. Kernels built before this keep the plain name `7.3.3`.
