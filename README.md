@@ -245,6 +245,10 @@ terms), and more. **The source of every package** is the upstream tarball named,
 configuration is `recipes/linux/full-config.sh`. If you want the corresponding source for something on the ISO and cannot
 get it that way, open an issue and it will be provided.
 
+The boot-menu wallpaper shipped on the ISO is a separate picture. It is not part of this project's source, it is not
+covered by the GPL, and it is not in this repository; the ISO builder includes it only when `distro/boot/wallpaper.jpg` is
+present. Builds without that file have a plain themed menu.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">

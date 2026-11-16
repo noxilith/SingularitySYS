@@ -1,7 +1,7 @@
 # libcap, static and position-independent (OpenRC's shared libraries link it). Library only: the
 # programs need bash (a helper script), which is not a package yet.
 name        = "libcap"
-version     = "2.78_r1"
+version     = "2.78_r2"
 description = "POSIX capabilities library (static)"
 license     = "BSD-3-Clause OR GPL-2.0-only"
 libc        = ["glibc"]
@@ -15,11 +15,13 @@ url    = "https://cdn.kernel.org/pub/linux/libs/security/linux-privs/libcap2/lib
 sha256 = "0d621e562fd932ccf67b9660fb018e468a683d7b827541df27813228c996bb11"
 
 [build]
-compile = "make -j$JOBS -C libcap prefix=/usr lib=lib SHARED=yes GOLANG=no PAM_CAP=no RAISE_SETFCAP=no DEBUG= CFLAGS='-O2 -fPIC'"
+# -static-libgcc: without it libpsx.so needs libgcc_s.so.1, and that pulls the whole compiler package into every system.
+compile = "make -j$JOBS -C libcap prefix=/usr lib=lib SHARED=yes GOLANG=no PAM_CAP=no RAISE_SETFCAP=no DEBUG= CFLAGS='-O2 -fPIC' LDFLAGS='-static-libgcc'"
 install = '''
-make -C libcap DESTDIR=$DESTDIR prefix=/usr lib=lib SHARED=yes GOLANG=no PAM_CAP=no RAISE_SETFCAP=no DEBUG= CFLAGS='-O2 -fPIC' install
+make -C libcap DESTDIR=$DESTDIR prefix=/usr lib=lib SHARED=yes GOLANG=no PAM_CAP=no RAISE_SETFCAP=no DEBUG= CFLAGS='-O2 -fPIC' LDFLAGS='-static-libgcc' install
 rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc"
 test -f "$DESTDIR/usr/lib/libcap.a"
 test -f "$DESTDIR/usr/lib/libcap.so.2"
+! readelf -d "$DESTDIR"/usr/lib/libpsx.so.2* "$DESTDIR"/usr/lib/libcap.so.2* | grep -q libgcc_s
 test -f "$DESTDIR/usr/lib/pkgconfig/libcap.pc"
 '''
