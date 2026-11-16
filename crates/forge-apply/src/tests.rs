@@ -1001,3 +1001,26 @@ fn applying_or_installing_never_moves_a_package_you_already_have_but_upgrade_doe
     apply(&up).unwrap();
     assert_eq!(read(r.path(), "usr/bin/a"), "new a");
 }
+
+#[test]
+fn an_installed_package_stays_even_when_the_repository_no_longer_lists_its_version() {
+    // A repository holds only the newest build of each package, so after a release the installed one is not in the index.
+    let r = root();
+    publish_v(r.path(), "a", "1.0", "old a");
+    apply(&plan(&pkg_decl(&["a"]), r.path())).unwrap();
+    // The repository is replaced by one that has only a 2.0 and a new b.
+    fs::remove_dir_all(r.path().join("srv/repo")).unwrap();
+    publish_v(r.path(), "a", "2.0", "new a");
+    publish_v(r.path(), "b", "1.0", "b");
+    apply(&plan(&pkg_decl(&["a", "b"]), r.path())).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/a"), "old a", "installing b did not upgrade a");
+    assert_eq!(read(r.path(), "usr/bin/b"), "b");
+    // Removing b from the declaration still removes it, and a stays.
+    let p = plan(&pkg_decl(&["a"]), r.path());
+    assert!(p.changes.iter().any(|c| c.kind == Kind::Remove && c.summary.contains("b-1.0")), "{:?}", p.changes);
+    apply(&p).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/a"), "old a");
+    // The owner asks for the newest.
+    apply(&plan_system(&pkg_decl(&["a"]), r.path(), Options { upgrade: true, ..opts() }).unwrap()).unwrap();
+    assert_eq!(read(r.path(), "usr/bin/a"), "new a");
+}

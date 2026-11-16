@@ -381,20 +381,10 @@ impl LocalRepo {
     }
 }
 
-/// Like [`resolve`], but a name in `prefer` (name -> version) resolves to that version when the index still has it,
-/// instead of the newest one: what is installed stays as it is until its owner asks to upgrade.
-pub fn resolve_preferring(index: &Index, names: &[String], libc: Libc, prefer: &BTreeMap<String, String>) -> Result<Vec<IndexEntry>, StoreError> {
-    resolve_with(index, names, libc, prefer)
-}
-
 /// Work out what to install for the wanted package names: the newest version
 /// of each for `libc`, plus everything they depend on, with dependencies
 /// listed before the packages that need them.
 pub fn resolve(index: &Index, names: &[String], libc: Libc) -> Result<Vec<IndexEntry>, StoreError> {
-    resolve_with(index, names, libc, &BTreeMap::new())
-}
-
-fn resolve_with(index: &Index, names: &[String], libc: Libc, prefer: &BTreeMap<String, String>) -> Result<Vec<IndexEntry>, StoreError> {
     fn visit(
         index: &Index,
         entry: &IndexEntry,
@@ -424,11 +414,7 @@ fn resolve_with(index: &Index, names: &[String], libc: Libc, prefer: &BTreeMap<S
 
     let mut by_name: BTreeMap<&str, &IndexEntry> = BTreeMap::new();
     for n in names {
-        let kept = prefer.get(n.as_str()).and_then(|v| index.packages.iter().find(|p| p.name == *n && p.version == *v && p.libc == libc));
-        let e = match kept {
-            Some(e) => e,
-            None => index.latest(n, libc).ok_or_else(|| StoreError::PackageNotFound(n.clone()))?,
-        };
+        let e = index.latest(n, libc).ok_or_else(|| StoreError::PackageNotFound(n.clone()))?;
         by_name.insert(n, e);
     }
     let (mut done, mut active, mut out) = (BTreeSet::new(), BTreeSet::new(), Vec::new());

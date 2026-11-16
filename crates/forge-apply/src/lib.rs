@@ -705,24 +705,31 @@ fn plan_packages(
                 }
             }
         }
-        // What is installed stays at its version unless the caller asked to upgrade: only `forge upgrade` changes a
-        // package you already have. Packages that are not installed yet get the newest.
-        let prefer: std::collections::BTreeMap<String, String> = if p.opts.upgrade {
-            Default::default()
-        } else {
-            current.iter().map(|id| (id.name().to_string(), id.version().to_string())).collect()
-        };
-        let resolved = forge_store::resolve_preferring(&merged, names, decl.libc, &prefer).map_err(store_err)?;
+        // What is installed stays exactly as it is unless the caller asked to upgrade: only `forge upgrade` changes a
+        // package you already have. This works from the installed packages and their recorded dependencies, not from the
+        // index, because a repository lists only the newest build of each package: the installed one is usually gone from
+        // it. Packages that are not installed yet get the newest.
+        let mut wanted: Vec<String> = names.to_vec();
         if !p.opts.upgrade {
-            // Two builds of one package in the result: something new needs a different build than what is installed.
-            let mut seen: std::collections::BTreeSet<&str> = Default::default();
-            for e in &resolved {
-                if !seen.insert(e.name.as_str()) {
-                    return Err(PlanError::NeedsUpgrade { library: e.name.clone() });
+            let installed: std::collections::BTreeMap<&str, &StoreId> = current.iter().map(|id| (id.name(), id)).collect();
+            wanted.retain(|n| !installed.contains_key(n.as_str()));
+            let mut stack: Vec<StoreId> = names.iter().filter_map(|n| installed.get(n.as_str()).map(|id| (*id).clone())).collect();
+            while let Some(id) = stack.pop() {
+                if target.insert(id.clone()) {
+                    if let Ok(m) = store.manifest(&id) {
+                        stack.extend(m.deps.iter().filter_map(|d| StoreId::parse(d)));
+                    }
                 }
             }
         }
+        let resolved = forge_store::resolve(&merged, &wanted, decl.libc).map_err(store_err)?;
         for e in resolved {
+            let id = e.id().map_err(store_err)?;
+            // Something new needs a different build of a package than the installed one: that is an upgrade, and only
+            // the owner starts one.
+            if target.iter().any(|t| t.name() == id.name() && *t != id) {
+                return Err(PlanError::NeedsUpgrade { library: id.name().to_string() });
+            }
             let id = e.id().map_err(store_err)?;
             if !store.has(&id) {
                 let (repo, entry) = repos

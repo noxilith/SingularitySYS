@@ -1009,9 +1009,10 @@ menu offers both, the new one boots and loads modules. Kernels built before this
 
 Nothing updates automatically and nothing notifies. Before this change `forge upgrade` was just `forge apply`, and every
 apply (including `forge install` and `forge edit`) resolved each package to the newest version in the repository, so
-installing one program upgraded the system. Now `Options.upgrade` is set only by `forge upgrade`: otherwise resolution
-prefers the installed version of each package (`forge_store::resolve_preferring`) and only packages that are not installed
-get the newest. If a new package needs a different build of a library than the installed one (a result with two builds
+installing one program upgraded the system. Now `Options.upgrade` is set only by `forge upgrade`: otherwise the packages
+that are installed (and the dependencies recorded in their manifests) are kept as they are, and only packages that are not installed
+get the newest. (This works from the installed set, not from the index: a repository lists only the newest build of each
+package, so the installed one is usually not in it.) If a new package needs a different build of a library than the installed one (a result with two builds
 of one name), apply stops with "run `sudo forge upgrade` first" instead of upgrading. The kernel was already separate
 (`forge kernel update`). Maintenance only prunes, trims, scrubs and cleans the store; it never touches installed versions.
 
