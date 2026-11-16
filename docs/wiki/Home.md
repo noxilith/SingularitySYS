@@ -36,5 +36,7 @@ Checked only in a virtual machine (QEMU): systemd as the init system, Secure Boo
 Not included, on purpose or not yet: a desktop environment (graphics libraries such as Mesa, a compositor, audio,
 Bluetooth, power management are future packages), disk encryption (decided against), a system logger (decided against).
 
+SingularitySYS is free software under the GNU General Public License, version 3 or later.
+
 The full technical record, including what was not verified, is in
 [DESIGN.md](https://github.com/noxilith/SingularitySYS/blob/main/DESIGN.md).

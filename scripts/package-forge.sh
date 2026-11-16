@@ -28,6 +28,7 @@ trap 'chmod -R u+w "$tree" 2>/dev/null; rm -rf "$tree"' EXIT
 mkdir -p "$tree/usr/bin"
 install -m 755 "$bin" "$tree/usr/bin/forge"
 strip "$tree/usr/bin/forge"
+install -Dm644 LICENSE "$tree/usr/share/licenses/forge/LICENSE"
 
 mkdir -p "$OUT"
 archive=$OUT/forge-$VERSION.tar.zst

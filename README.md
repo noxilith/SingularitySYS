@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/init-OpenRC-4fd1a5?style=flat-square" alt="OpenRC">
   <img src="https://img.shields.io/badge/root-btrfs%20generations-24c8db?style=flat-square" alt="btrfs generations">
   <img src="https://img.shields.io/badge/boot-Limine%20%C2%B7%20BIOS%20%2B%20UEFI-ffb547?style=flat-square" alt="Limine, BIOS and UEFI">
-  <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-8b7bff?style=flat-square" alt="License: MIT OR Apache-2.0">
+  <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-8b7bff?style=flat-square" alt="License: GPL-3.0-or-later">
   <img src="https://img.shields.io/badge/status-early%20%26%20experimental-ff6b6b?style=flat-square" alt="Early and experimental">
 </p>
 
@@ -232,7 +232,18 @@ and `build-iso.sh`. The host needs `gcc`, `make`, `bison`, `flex`, `python3`, `p
 
 ## 📄 License
 
-The workspace is licensed `MIT OR Apache-2.0`. Package recipes build third-party software, which keeps its own license.
+SingularitySYS (the `forge` program, its libraries, the scripts and the package recipes in this repository) is free
+software under the **GNU General Public License, version 3 or (at your option) any later version**: see
+[LICENSE](LICENSE). Rust crates that forge builds on keep their own permissive licenses (MIT, Apache-2.0, BSD, ISC),
+which are compatible with the GPL.
+
+The packages and the ISO contain software written by others, each under its own license (listed in the `license` field of
+its recipe, and installed under `/usr/share/licenses/` where the package ships it): the Linux kernel (GPL-2.0 with the
+syscall exception), GNU programs (GPL and LGPL), firmware from the linux-firmware project (redistributable, with its own
+terms), and more. **The source of every package** is the upstream tarball named, with its SHA-256, in the recipe
+(`recipes/NAME/recipe.toml`) together with the exact build steps, so anyone can fetch and rebuild it; the kernel's
+configuration is `recipes/linux/full-config.sh`. If you want the corresponding source for something on the ISO and cannot
+get it that way, open an issue and it will be provided.
 
 <p align="center">
   <picture>
