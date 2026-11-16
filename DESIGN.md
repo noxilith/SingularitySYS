@@ -899,8 +899,8 @@ written by `forge apply` and the ISO builder like the rest (`Own::Always`: they 
 - **SSH**: choosing the `openssh` package also installs `sshd_config` (only when missing: root login off, no PAM), an
   `sshd` service (creates the `sshd` user and host keys on first start) and enables it.
 
-Not done: disk encryption (an installed system has no initramfs; LUKS root needs one) and Secure Boot (needs signing
-the kernel and Limine, and enrolling keys). There is still no system logger.
+Decided against (by the owner): disk encryption and a system logger. Not done: Secure Boot (needs signing the kernel and
+Limine, and enrolling keys).
 
 QEMU 11.1.3 (headless, KVM, no network back end) is a package (`recipes/qemu`, with `glib`, `pixman`, `libffi`,
 `pcre2`); `scripts/qemu-boot.sh ISO` boots an image with the serial console on stdout.

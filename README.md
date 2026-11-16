@@ -199,8 +199,8 @@ Early and experimental. The full account, including what was **not** verified, i
 <details>
 <summary><b>Roadmap</b></summary>
 
-- More packages as they are needed; a system logger
-- Disk encryption (LUKS) and Secure Boot
+- More packages as they are needed
+- Secure Boot
 - `forge apply user`: per-user package sets
 - Device permissions for the `audio`, `video` and `input` groups
 - Bluetooth, and Wi-Fi in the declaration
