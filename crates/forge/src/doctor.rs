@@ -74,10 +74,17 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
     let system = decl.as_ref().map(|d| d.init.system.clone()).unwrap_or_else(|| "openrc".into());
 
     init_link(&mut r, root, &system);
-    limine(&mut r, root);
-    limine_current(&mut r, root);
-    microcode(&mut r, root);
-    secureboot(&mut r, root);
+    // /boot and a few files in /etc are readable by root only: without root those checks would report problems that
+    // are not there, so they are skipped with a pointer instead.
+    let boot_hidden = fs::read_dir(under(root, "/boot")).is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied);
+    if boot_hidden {
+        r.warn("Boot", "/boot can only be read by root, so the boot files were not checked", "sudo forge doctor");
+    } else {
+        limine(&mut r, root);
+        limine_current(&mut r, root);
+        microcode(&mut r, root);
+        secureboot(&mut r, root);
+    }
     defaults(&mut r, root, decl.as_ref(), &system);
     if root == Path::new("/") {
         running_kernel(&mut r);
@@ -171,7 +178,12 @@ fn defaults(r: &mut Report, root: &Path, decl: Option<&forge_schema::SystemDecl>
     for m in all.into_iter().filter(|m| m.own == forge_schema::Own::Always) {
         let path = under(root, &m.path);
         let ok = match &m.entry {
-            Entry::File { content, .. } => fs::read_to_string(&path).is_ok_and(|c| &c == content),
+            Entry::File { content, .. } => match fs::read_to_string(&path) {
+                Ok(c) => &c == content,
+                // Not readable without root (nftables.conf is 0600): not a sign that it is out of date.
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => continue,
+                Err(_) => false,
+            },
             Entry::Link(t) => fs::read_link(&path).is_ok_and(|cur| cur == Path::new(t)),
             Entry::Absent => !path.exists(),
         };

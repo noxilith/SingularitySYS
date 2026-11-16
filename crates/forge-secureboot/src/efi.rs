@@ -125,7 +125,8 @@ pub fn enroll(id: &Identity, efivars: &Path, unix: u64) -> Result<(), Error> {
     match setup_mode(efivars) {
         Some(true) => {}
         Some(false) => return Err(Error::NotSetupMode),
-        None => return Err(Error::NoEfi),
+        None if !efivars.is_dir() => return Err(Error::NoEfi),
+        None => return Err(Error::NoSecureBootVars),
     }
     let list = esl(&id.cert);
     write_var(efivars, "db", DB_GUID, &authenticated(id, "db", DB_GUID, &list, unix)?)?;
@@ -178,7 +179,8 @@ mod tests {
         let d = std::env::temp_dir().join(format!("forge-efivars-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         let id = crate::cms_test_identity();
-        assert!(matches!(enroll(id, &d, 0), Err(Error::NoEfi)));
+        assert!(matches!(enroll(id, &d, 0), Err(Error::NoSecureBootVars)), "efivars exist but no SetupMode");
+        assert!(matches!(enroll(id, &d.join("missing"), 0), Err(Error::NoEfi)));
         std::fs::write(d.join(format!("SetupMode-{GLOBAL_GUID}")), [6, 0, 0, 0, 0]).unwrap();
         assert!(matches!(enroll(id, &d, 0), Err(Error::NotSetupMode)));
         std::fs::write(d.join(format!("SetupMode-{GLOBAL_GUID}")), [6, 0, 0, 0, 1]).unwrap();

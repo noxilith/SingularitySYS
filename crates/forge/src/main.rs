@@ -1406,6 +1406,9 @@ fn secureboot_cmd(a: SecurebootArgs) -> Result<()> {
             None => "unknown".to_string(),
         };
         ui::heading("Secure Boot");
+        if !is_root() {
+            ui::info("not running as root: /boot and the key are hidden from you, so lines below may say no; run it with sudo");
+        }
         println!("  started through UEFI:        {}", yn(s.uefi));
         println!("  signing key made by forge:   {}", yn(s.key));
         println!("  set up (menu pinned):        {}", yn(s.enabled));

@@ -28,6 +28,8 @@ pub enum Error {
     NoEfi,
     #[error("the firmware is not in setup mode, so it will not accept a new key from here; clear the Secure Boot keys in the firmware's settings (\"setup mode\", \"custom mode\", \"delete all keys\") and run this again, or enroll /boot/EFI/forge-secureboot/ from the firmware menu")]
     NotSetupMode,
+    #[error("the firmware does not show the Secure Boot variables (SetupMode): switch Secure Boot support on in its settings, or enroll the files in /boot/EFI/forge-secureboot from the firmware menu")]
+    NoSecureBootVars,
     #[error("`{0}` failed")]
     Command(String),
 }
