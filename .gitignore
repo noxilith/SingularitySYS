@@ -6,3 +6,6 @@
 *.iso
 /singularity-live.iso.work
 /distro/boot/
+
+SHA256SUMS
+singularity-live.iso.sig
