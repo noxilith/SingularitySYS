@@ -1,5 +1,7 @@
 //! How the Limine menu looks: a dark panel over the wallpaper (when there is one), amber branding like the accretion
-//! disk, warm light text, and a selection bar in that same light colour (Limine draws the selected entry in reverse).
+//! disk, warm light text, and a selection bar in that same light colour (Limine draws the selected entry in reverse: the
+//! text colour becomes the bar and the dark panel colour becomes the lettering). The comment under the menu is cyan, which
+//! the palette makes a soft blue-grey.
 //! One place, used by the installed system's `limine.conf` and by the live ISO's.
 
 /// The options at the top of `limine.conf`. `wallpaper` is a path in the form Limine takes (`boot():/wallpaper.jpg`).
@@ -9,11 +11,10 @@ pub fn limine_theme(wallpaper: Option<&str>) -> String {
          interface_branding_colour: e8a24b\n\
          interface_help_colour: 8b8578\n\
          interface_help_colour_bright: e8a24b\n\
-         term_palette: 0b0b0d;e5604f;8bc34a;e8a24b;5aa9e6;b48ead;4fd1c5;d9d4cc\n\
+         term_palette: 0b0b0d;e5604f;8bc34a;e8a24b;5aa9e6;b48ead;a9c1d9;d9d4cc\n\
          term_palette_bright: 55524c;ff7b6b;a6e063;ffc169;7ec3ff;d1a8e6;7ae8dc;ffffff\n\
          term_foreground: e6d5b8\n\
-         term_foreground_bright: ffffff\n\
-         term_background_bright: e8a24b\n",
+         term_foreground_bright: ffffff\n",
     );
     if let Some(w) = wallpaper {
         // Centred, not stretched, so the picture is never squashed; black fills what it does not cover (its edges are
