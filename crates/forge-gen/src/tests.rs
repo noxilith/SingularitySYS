@@ -156,6 +156,23 @@ fn remove_all_skips_protected_generations() {
 }
 
 #[test]
+fn prune_keeps_the_newest_and_never_the_protected() {
+    let m = Machine::new();
+    let ctx = m.ctx(&CopyBackend, "@");
+    for d in ["a", "b", "c", "d"] {
+        create(&ctx, d).unwrap();
+    }
+    let r = prune(&ctx, 2).unwrap();
+    assert_eq!(r.removed, [1, 2]);
+    assert_eq!(list(&ctx).unwrap().iter().map(|g| g.id).collect::<Vec<_>>(), [3, 4]);
+    assert!(prune(&ctx, 2).unwrap().removed.is_empty(), "nothing more to prune");
+    // The booted generation survives even when it is old.
+    let booted_old = m.ctx(&CopyBackend, "@snapshots/gen-3");
+    let r = prune(&booted_old, 1).unwrap();
+    assert!(r.removed.is_empty() && r.skipped.len() == 1, "{r:?}");
+}
+
+#[test]
 fn rollback_stages_into_next_and_points_the_menu_at_it() {
     let m = Machine::new();
     let ctx = m.ctx(&CopyBackend, "@");

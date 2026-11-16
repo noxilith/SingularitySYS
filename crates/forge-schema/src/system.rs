@@ -131,6 +131,17 @@ pub struct SystemDecl {
     /// Package repositories, as local directories (searched in order).
     #[serde(default)]
     pub repos: Vec<String>,
+    /// `zram` (compressed swap in memory, the default) or `none`.
+    #[serde(default = "default_swap")]
+    pub swap: String,
+    #[serde(default)]
+    pub firewall: crate::extras::FirewallDecl,
+    #[serde(default)]
+    pub maintenance: crate::extras::MaintenanceDecl,
+}
+
+fn default_swap() -> String {
+    "zram".into()
 }
 
 fn default_timezone() -> String {
@@ -162,6 +173,13 @@ impl SystemDecl {
         }
         if !crate::INIT_SYSTEMS.contains(&self.init.system.as_str()) {
             return Err(SchemaError::Invalid(format!("unknown init system `{}` (supported: {})", self.init.system, crate::INIT_SYSTEMS.join(", "))));
+        }
+        if !crate::extras::SWAP_KINDS.contains(&self.swap.as_str()) {
+            return Err(SchemaError::Invalid(format!("unknown swap kind `{}` (supported: {})", self.swap, crate::extras::SWAP_KINDS.join(", "))));
+        }
+        self.firewall.validate()?;
+        if self.maintenance.keep_generations == 0 {
+            return Err(SchemaError::Invalid("maintenance.keep_generations must be at least 1".into()));
         }
         let mut seen = std::collections::BTreeSet::new();
         for p in &self.packages {

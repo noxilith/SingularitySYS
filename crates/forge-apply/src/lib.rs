@@ -442,7 +442,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     // the OpenRC runlevels): rewritten when they differ, so a fix arrives with the forge package. Starting points you may
     // edit (config) are only created when missing. (On a real system, which has /usr/sbin.)
     if under(root, "/usr/sbin").is_dir() {
-        for m in forge_schema::managed(system) {
+        for m in forge_schema::managed_for(decl) {
             if m.own == forge_schema::Own::IfMissing && under(root, &m.path).symlink_metadata().is_ok() {
                 continue;
             }

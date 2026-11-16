@@ -1,0 +1,23 @@
+# htop: interactive process viewer.
+name        = "htop"
+version     = "3.5.3"
+description = "Interactive process viewer"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz"
+sha256 = "a8b164386494cb85bb255a415a3f5f80afe7a0c4491da5d113b3a0f951087e65"
+
+[build]
+configure = "./configure --prefix=/usr --enable-unicode --disable-dependency-tracking HTOP_NCURSESW_CONFIG_SCRIPT=/bin/false CURSES_CFLAGS='-I/usr/include' CURSES_LIBS='-lncursesw -ltinfow' CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/pixmaps"
+strip "$DESTDIR/usr/bin/htop" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/htop"
+'''

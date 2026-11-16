@@ -1,0 +1,28 @@
+# nftables: the `nft` program that loads firewall rules. forge writes /etc/nftables.conf from the [firewall] section of the
+# declaration and runs it at boot. No interactive CLI, JSON or iptables compatibility.
+name        = "nftables"
+version     = "1.1.7"
+description = "nftables packet filtering (nft)"
+license     = "GPL-2.0-only"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libmnl", "libnftnl", "bison", "flex", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://www.netfilter.org/pub/nftables/nftables-1.1.7.tar.xz"
+sha256 = "a6fbf060d8d4fff001517a2b94f356bb4366bfbf0ba366366f9d27cc38caa58f"
+
+[build]
+configure = '''
+./configure --prefix=/usr --sbindir=/usr/sbin --sysconfdir=/etc --libdir=/usr/lib --disable-static --without-cli --without-json \
+    --without-xtables --disable-man-doc --disable-python --disable-debug --with-mini-gmp --disable-dependency-tracking CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/etc" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/pkgconfig"
+rm -f "$DESTDIR"/usr/lib/*.la
+strip "$DESTDIR/usr/sbin/nft" 2>/dev/null || true
+test -x "$DESTDIR/usr/sbin/nft"
+'''

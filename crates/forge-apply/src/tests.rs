@@ -872,3 +872,23 @@ fn the_running_init_system_is_not_removed_until_the_machine_has_rebooted_into_th
     let names = effective_packages(&init_decl("systemd", &["openrc", "a"]), false, &base, None);
     assert!(!names.contains(&"openrc".to_string()), "{names:?}");
 }
+
+#[test]
+fn the_firewall_forwards_and_services_come_from_the_declaration() {
+    let r = image_root();
+    let d = decl("packages = []\nswap = \"zram\"\n[firewall]\nallow = [\"ssh\"]\n[[firewall.forward]]\nport = 8080\nto = \"192.168.1.50:80\"\n");
+    apply(&plan(&d, r.path())).unwrap();
+    let conf = read(r.path(), "etc/nftables.conf");
+    assert!(conf.contains("tcp dport 22 accept") && conf.contains("dnat to 192.168.1.50:80"), "{conf}");
+    assert_eq!(fs::read_link(r.path().join("etc/runlevels/default/nftables")).unwrap(), Path::new("/etc/init.d/nftables"));
+    assert!(read(r.path(), "etc/init.d/nftables").contains("ip_forward"));
+    assert!(r.path().join("usr/libexec/singularity/zram").exists() && r.path().join("usr/libexec/singularity/maintenance-loop").exists());
+    assert!(plan(&d, r.path()).changes.iter().all(|c| c.section != "defaults"), "second apply changes nothing");
+
+    // Turning things off removes them again.
+    let off = decl("packages = []\nswap = \"none\"\n[firewall]\nenable = false\n[maintenance]\nenable = false\n");
+    apply(&plan(&off, r.path())).unwrap();
+    for p in ["etc/nftables.conf", "etc/runlevels/default/nftables", "etc/init.d/zram", "etc/init.d/forge-maintenance"] {
+        assert!(r.path().join(p).symlink_metadata().is_err(), "{p} should be gone");
+    }
+}

@@ -1,0 +1,29 @@
+# GLib: the C utility library QEMU (and much desktop software) is built on. Minimal: no introspection, tests,
+# documentation, translations or SELinux/libmount support. Headers and pkg-config files are kept.
+name        = "glib"
+version     = "2.90.1"
+description = "GLib, GObject and GIO"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "libffi", "pcre2", "zlib", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://download.gnome.org/sources/glib/2.90/glib-2.90.1.tar.xz"
+sha256 = "93c941aa17d5eb1d53fe838365f29a8b4e539c222a256d974ec8f30fc413e396"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dtests=false -Dintrospection=disabled -Dlibmount=disabled \
+    -Dselinux=disabled -Dxattr=false -Dnls=disabled -Ddocumentation=false -Dman-pages=disabled -Dsysprof=disabled \
+    -Dlibelf=disabled -Ddtrace=disabled -Dsystemtap=disabled -Dglib_debug=disabled -Dgtk_doc=false
+'''
+compile = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/gdb" "$DESTDIR/usr/share/gettext" "$DESTDIR/usr/share/bash-completion" "$DESTDIR/usr/share/man"
+test -f "$DESTDIR/usr/lib/libglib-2.0.so.0"
+'''

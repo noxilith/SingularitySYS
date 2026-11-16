@@ -1,6 +1,6 @@
 # Jinja2 templates: systemd's build renders its unit files with it.
 name        = "python-jinja2"
-version     = "3.1.6"
+version     = "3.1.6_r1"
 description = "Jinja2 template engine"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]

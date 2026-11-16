@@ -1,6 +1,6 @@
 # MarkupSafe (pure Python fallback, no C speedups): Jinja2 needs it.
 name        = "python-markupsafe"
-version     = "3.0.4"
+version     = "3.0.4_r1"
 description = "Safely add untrusted strings to HTML/XML markup"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]

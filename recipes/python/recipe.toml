@@ -2,7 +2,7 @@
 # tests, IDLE, Tk, ensurepip or bytecode caches. Optional modules whose libraries are not packages
 # (ssl, sqlite3, ctypes, readline...) are simply not built.
 name        = "python"
-version     = "3.12.16_r1"
+version     = "3.12.16_r2"
 description = "Python interpreter"
 license     = "PSF-2.0"
 libc        = ["glibc"]
@@ -21,7 +21,7 @@ compile   = "make -j$JOBS"
 install   = '''
 make DESTDIR=$DESTDIR install
 cd "$DESTDIR/usr/lib/python3.12"
-rm -rf test idlelib tkinter turtledemo lib2to3 ensurepip config-3.12-*/libpython3.12.a
+rm -rf test idlelib tkinter turtledemo lib2to3 config-3.12-*/libpython3.12.a
 find "$DESTDIR" -name __pycache__ -type d -prune -exec rm -rf {} +
 ln -sf python3 "$DESTDIR/usr/bin/python"
 test -x "$DESTDIR/usr/bin/python3"

@@ -1,0 +1,22 @@
+# libmnl: minimal netlink library (nftables). Headers and pkg-config file kept.
+name        = "libmnl"
+version     = "1.0.5"
+description = "Minimalistic Netlink library"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://www.netfilter.org/pub/libmnl/libmnl-1.0.5.tar.bz2"
+sha256 = "274b9b919ef3152bfb3da3a13c950dd60d6e2bcd54230ffeca298d03b40d0525"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+test -f "$DESTDIR/usr/lib/libmnl.so.0"
+'''

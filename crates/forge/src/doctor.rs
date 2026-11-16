@@ -77,7 +77,7 @@ pub fn examine(root: &Path, base: &[String]) -> Vec<Check> {
     limine(&mut r, root);
     limine_current(&mut r, root);
     microcode(&mut r, root);
-    defaults(&mut r, root, &system);
+    defaults(&mut r, root, decl.as_ref(), &system);
     if root == Path::new("/") {
         running_kernel(&mut r);
     }
@@ -160,13 +160,14 @@ fn limine(r: &mut Report, root: &Path) {
 
 /// The files forge keeps current (services, the wifi command, shell defaults, runlevels) must match what this forge
 /// carries; a mismatch after an upgrade means `forge apply` has not run since.
-fn defaults(r: &mut Report, root: &Path, system: &str) {
+fn defaults(r: &mut Report, root: &Path, decl: Option<&forge_schema::SystemDecl>, system: &str) {
     const G: &str = "System files";
     if !under(root, "/usr/sbin").is_dir() {
         return;
     }
     let mut stale = Vec::new();
-    for m in forge_schema::managed(system).into_iter().filter(|m| m.own == forge_schema::Own::Always) {
+    let all = decl.map_or_else(|| forge_schema::managed(system), forge_schema::managed_for);
+    for m in all.into_iter().filter(|m| m.own == forge_schema::Own::Always) {
         let path = under(root, &m.path);
         let ok = match &m.entry {
             Entry::File { content, .. } => fs::read_to_string(&path).is_ok_and(|c| &c == content),

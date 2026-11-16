@@ -50,8 +50,24 @@ repos    = ["https://github.com/noxilith/SingularitySYS/releases/download/repo-g
 # The packages you chose. The base system (shell, networking, forge itself, ...) is always there and not listed.
 packages = """
   git,
+  openssh,
   htop,
 """
+
+swap = "zram"               # compressed swap in memory; "none" for no swap
+
+# Everything coming in is dropped unless it is allowed here. Names (ssh, http, https, dns) or ports.
+[firewall]
+allow = ["ssh"]
+
+# Port forwarding: traffic arriving on port 8080 of this machine goes to another machine.
+[[firewall.forward]]
+port = 8080
+to   = "192.168.1.50:80"
+
+# Trim the SSD and clean the store weekly, prune old generations weekly, scrub the disk monthly.
+[maintenance]
+keep_generations = 10
 
 [[users]]
 name   = "ada"
@@ -139,7 +155,8 @@ from the Limine menu.
 | `forge doctor` | Check the system over (init link, boot entries, base packages, users, services, clock, microcode) and say what to run about any problem |
 | `sudo forge edit` | Open `/etc/forge/system.toml` in your editor (micro by default); when you close it, it is checked and applied |
 | `forge apply` | Converge the machine to `/etc/forge/system.toml` (`--dry-run` shows the plan) |
-| `forge gen` | List, create and roll back generations |
+| `forge gen` | List, create, prune and roll back generations |
+| `forge maintenance status \| run` | Trim, scrub, prune generations, clean the store (also runs by itself in the background) |
 | `forge kernel list \| build \| install` | Find, build and install kernels |
 | `forge strap ROOT BOOT` | Install onto partitions you made (from the live ISO) |
 | `forge iso` | Build the live ISO |
@@ -182,7 +199,8 @@ Early and experimental. The full account, including what was **not** verified, i
 <details>
 <summary><b>Roadmap</b></summary>
 
-- More packages (an editor, htop, git ...) as they are needed
+- More packages as they are needed; a system logger
+- Disk encryption (LUKS) and Secure Boot
 - `forge apply user`: per-user package sets
 - Device permissions for the `audio`, `video` and `input` groups
 - Bluetooth, and Wi-Fi in the declaration

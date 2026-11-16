@@ -247,11 +247,11 @@ esac
 "#;
 
 
-fn file(path: &str, content: &str, mode: u32, own: Own) -> Managed {
+pub(crate) fn file(path: &str, content: &str, mode: u32, own: Own) -> Managed {
     Managed { path: path.to_string(), entry: Entry::File { content: content.to_string(), mode }, own }
 }
 
-fn link(path: String, target: String, own: Own) -> Managed {
+pub(crate) fn link(path: String, target: String, own: Own) -> Managed {
     Managed { path, entry: Entry::Link(target), own }
 }
 

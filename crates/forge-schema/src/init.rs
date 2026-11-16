@@ -36,7 +36,7 @@ pub const BASE_PACKAGES: &[&str] = &[
     "diffutils", "util-linux", "shadow", "sudo", "kmod", "iproute2", "dhcpcd", "wpa_supplicant", "wireless-regdb",
     "linux-firmware-wifi", "btrfs-progs", "limine", "efibootmgr", "rsync", "forge", "ncurses", "libxcrypt", "openssl",
     "tzdata", "glibc-locales", "curl", "ca-certificates", "micro", "microcode", "procps-ng", "psmisc", "less", "iputils",
-    "which", "pciutils", "dosfstools", "e2fsprogs",
+    "which", "pciutils", "dosfstools", "e2fsprogs", "nftables",
 ];
 
 /// True for a package that is part of the base system (it cannot be removed, and need not be declared).

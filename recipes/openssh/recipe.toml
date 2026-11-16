@@ -1,0 +1,31 @@
+# OpenSSH (portable): ssh, scp, sftp, ssh-keygen and the sshd server. No PAM. The service files for OpenRC and systemd are
+# kept by forge (forge_schema::managed) and the system user `sshd` is created when the package is installed; nothing
+# listens until you enable the service (services = ["sshd"] in the declaration) and open the port (firewall allow = ["ssh"]).
+name        = "openssh"
+version     = "10.6p2"
+description = "OpenSSH client and server"
+license     = "BSD-2-Clause AND SSH-OpenSSH"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "openssl", "zlib", "libxcrypt", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.6p2.tar.gz"
+sha256 = "9ae44872090cf2f06b3cf9ff147e7f16f309671340763ed2f99248398ae29d5b"
+
+[build]
+configure = '''
+./configure --prefix=/usr --sysconfdir=/etc/ssh --libexecdir=/usr/libexec --with-privsep-path=/var/empty \
+    --with-privsep-user=sshd --without-pam --without-selinux --disable-strip CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make install-nokeys DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/Ssh.bin"
+# The default configuration comes from forge (it is created if missing, with safer defaults and an Include).
+rm -f "$DESTDIR/etc/ssh/sshd_config"
+for b in ssh scp sftp ssh-keygen ssh-add ssh-agent ssh-keyscan; do strip "$DESTDIR/usr/bin/$b" 2>/dev/null || true; done
+strip "$DESTDIR/usr/sbin/sshd" 2>/dev/null || true
+test -x "$DESTDIR/usr/sbin/sshd" && test -x "$DESTDIR/usr/bin/ssh-keygen"
+'''

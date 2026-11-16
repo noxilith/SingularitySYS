@@ -1,0 +1,28 @@
+# git, without the Perl, Python, Tcl/Tk and gettext parts (git add -p, send-email and gitk are the losses). HTTPS works
+# through libcurl and the system CA bundle.
+name        = "git"
+version     = "2.56.1"
+description = "git version control (core commands, HTTPS and SSH transport)"
+license     = "GPL-2.0-only"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "curl", "zlib", "openssl", "ca-certificates", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+run   = ["ca-certificates"]
+
+[[source]]
+url    = "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.56.1.tar.xz"
+sha256 = "f0b0bf89264b9bd2e1c640363e7529643989da76281600473c50745cd34a607f"
+
+[build]
+configure = '''
+./configure --prefix=/usr --with-curl=/usr --with-openssl=/usr --with-zlib=/usr --without-tcltk --without-python --without-expat \
+    --with-editor=micro CFLAGS='-O2'
+'''
+compile = "make -j$JOBS NO_PERL=1 NO_PYTHON=1 NO_TCLTK=1 NO_GETTEXT=1 NO_EXPAT=1 NO_RUST=1 NO_INSTALL_HARDLINKS=1"
+install = '''
+make install DESTDIR=$DESTDIR NO_PERL=1 NO_PYTHON=1 NO_TCLTK=1 NO_GETTEXT=1 NO_EXPAT=1 NO_RUST=1 NO_INSTALL_HARDLINKS=1
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/gitweb" "$DESTDIR/usr/share/locale"
+strip "$DESTDIR/usr/bin/git" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/git"
+'''

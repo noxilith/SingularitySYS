@@ -1,0 +1,25 @@
+# pixman: pixel manipulation (QEMU's display code needs it). Headers and pkg-config file kept.
+name        = "pixman"
+version     = "0.46.4"
+description = "Low-level pixel manipulation library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson"]
+
+[[source]]
+url    = "https://cairographics.org/releases/pixman-0.46.4.tar.gz"
+sha256 = "d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dtests=disabled -Ddemos=disabled -Dgtk=disabled -Dlibpng=disabled
+'''
+compile = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+test -f "$DESTDIR/usr/lib/libpixman-1.so.0"
+'''

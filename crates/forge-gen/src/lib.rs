@@ -313,6 +313,27 @@ pub fn remove_all(ctx: &Ctx) -> Result<Removed, GenError> {
     Ok(out)
 }
 
+/// Remove the oldest generations so that at most `keep` of the newest remain; the current and the booted one are never
+/// removed (they are reported as skipped and do not count against `keep`).
+pub fn prune(ctx: &Ctx, keep: usize) -> Result<Removed, GenError> {
+    let mut out = Removed::default();
+    let all = ids(ctx)?;
+    let old = all.len().saturating_sub(keep);
+    for id in all.into_iter().take(old) {
+        match protected(ctx, id)? {
+            Some(why) => out.skipped.push((id, why)),
+            None => {
+                remove_one(ctx, id)?;
+                out.removed.push(id);
+            }
+        }
+    }
+    if !out.removed.is_empty() {
+        rewrite_limine(ctx)?;
+    }
+    Ok(out)
+}
+
 // ---- boot menu -----------------------------------------------------------
 
 /// Regenerate `limine.conf`. Also completes a staged rollback if we are

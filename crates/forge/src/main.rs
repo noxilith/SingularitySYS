@@ -8,6 +8,7 @@ use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
 mod doctor;
+mod maintenance;
 mod ui;
 
 #[derive(Parser)]
@@ -59,6 +60,8 @@ enum Cmd {
     Apply(ApplyArgs),
     /// Manage generations (read-only snapshots with their own boot entries)
     Gen(GenArgs),
+    /// Routine maintenance: trim the SSD, scrub btrfs, prune old generations, clean the store
+    Maintenance(MaintenanceArgs),
     /// Switch init system (not implemented yet)
     SwapInit,
     /// Find, build and install kernels (every driver as a module, trimmed to this machine, or by hand)
@@ -454,6 +457,11 @@ enum GenAction {
     Current,
     /// Remove one generation, or `all` (the current and booted ones are kept)
     Remove { target: String },
+    /// Remove the oldest generations, keeping the newest N (the current and booted ones are always kept)
+    Prune {
+        #[arg(long, default_value_t = 10)]
+        keep: usize,
+    },
     /// Roll back to a generation (finishes after a reboot)
     Rollback { id: u32 },
     /// Delete the leftover @.next once a rollback is complete
@@ -681,6 +689,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Strap(a) => strap(a),
         Cmd::Apply(a) => apply(a),
         Cmd::Gen(a) => gen_cmd(a),
+        Cmd::Maintenance(a) => maintenance_cmd(a),
         Cmd::SwapInit => todo_cmd("swap-init"),
         Cmd::Kernel(a) => kernel_cmd(a),
         Cmd::Build(a) => build_cmd(a),
@@ -1266,6 +1275,19 @@ fn gen_cmd(a: GenArgs) -> Result<()> {
             }
             Ok(())
         }
+        GenAction::Prune { keep } => {
+            let r = forge_gen::prune(ctx, keep)?;
+            for id in &r.removed {
+                println!("removed generation {id}");
+            }
+            for (id, why) in &r.skipped {
+                println!("kept generation {id}: it is {why}");
+            }
+            if r.removed.is_empty() {
+                println!("nothing to prune (keeping the newest {keep})");
+            }
+            Ok(())
+        }
         GenAction::Rollback { id } => {
             match forge_gen::rollback(ctx, id)? {
                 forge_gen::RollbackOutcome::Staged => println!(
@@ -1293,6 +1315,45 @@ fn gen_cmd(a: GenArgs) -> Result<()> {
             Ok(())
         }
     })
+}
+
+#[derive(Args)]
+struct MaintenanceArgs {
+    #[command(subcommand)]
+    action: MaintenanceAction,
+}
+
+#[derive(Subcommand)]
+enum MaintenanceAction {
+    /// Run the routine tasks now (all of them, or the ones named: trim, prune, gc, scrub)
+    Run {
+        /// Only what is overdue (this is what the maintenance service runs every hour)
+        #[arg(long)]
+        due: bool,
+        tasks: Vec<String>,
+    },
+    /// Show when each task last ran and when it is next due
+    Status,
+}
+
+fn maintenance_cmd(a: MaintenanceArgs) -> Result<()> {
+    let state = Path::new(maintenance::STATE);
+    match a.action {
+        MaintenanceAction::Status => {
+            maintenance::status(state);
+            Ok(())
+        }
+        MaintenanceAction::Run { due, tasks } => {
+            if !is_root() {
+                bail!("maintenance needs root: sudo forge maintenance run");
+            }
+            let keep = std::fs::read_to_string("/etc/forge/system.toml")
+                .ok()
+                .and_then(|t| SystemDecl::parse(&t).ok())
+                .map_or(10, |d| d.maintenance.keep_generations);
+            maintenance::run(due, &tasks, keep, state)
+        }
+    }
 }
 
 fn to_libc(l: &LibcArg) -> forge_schema::Libc {

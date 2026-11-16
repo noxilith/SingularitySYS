@@ -1,0 +1,23 @@
+# libevent: event notification library (tmux needs it). Headers and pkg-config files are kept.
+name        = "libevent"
+version     = "2.1.13"
+description = "Event notification library"
+license     = "BSD-3-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "openssl", "zlib", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://github.com/libevent/libevent/releases/download/release-2.1.13-stable/libevent-2.1.13-stable.tar.gz"
+sha256 = "f7e9383b8c0baa81b687e5b5eecc01beefaf1b19b64151d95ed61647fe7a315c"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-openssl --disable-samples --disable-libevent-regress --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -f "$DESTDIR/usr/bin/event_rpcgen.py"
+test -f "$DESTDIR/usr/lib/libevent-2.1.so.7"
+'''

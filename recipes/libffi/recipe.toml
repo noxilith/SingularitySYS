@@ -1,0 +1,22 @@
+# libffi: foreign function interface (glib needs it). Headers and pkg-config file are kept: other packages build against them.
+name        = "libffi"
+version     = "3.8.1"
+description = "Foreign function interface library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://github.com/libffi/libffi/releases/download/v3.8.1/libffi-3.8.1.tar.gz"
+sha256 = "81e879c094cc5ec3186c48510c6385ac6b3e866192e8bc71a35245703757ee40"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-docs --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/libffi.la"
+test -f "$DESTDIR/usr/lib/libffi.so.8"
+'''

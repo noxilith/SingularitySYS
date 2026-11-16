@@ -1,7 +1,7 @@
 # curl 8.23 on OpenSSL: HTTP(S) and FTP downloads for people and for forge (forge uses curl when it is installed,
 # BusyBox wget otherwise). Certificates are checked against /etc/ssl/certs/ca-certificates.crt.
 name        = "curl"
-version     = "8.23.0"
+version     = "8.23.0_r1"
 description = "curl command-line tool and libcurl"
 license     = "curl"
 libc        = ["glibc"]
@@ -23,7 +23,8 @@ configure = '''
 compile = "make -j$JOBS"
 install = '''
 make install DESTDIR=$DESTDIR
-rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/pkgconfig" "$DESTDIR/usr/include" "$DESTDIR/usr/lib/libcurl.la"
+# The headers, libcurl.pc and curl-config stay: git (and anything else with HTTPS) builds against them.
+rm -rf "$DESTDIR/usr/share" "$DESTDIR/usr/lib/libcurl.la"
 strip "$DESTDIR/usr/bin/curl"
 test -f "$DESTDIR/usr/lib/libcurl.so.4"
 LD_LIBRARY_PATH="$DESTDIR/usr/lib" "$DESTDIR/usr/bin/curl" --version | grep -q '^curl 8.23.0'

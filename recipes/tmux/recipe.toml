@@ -1,0 +1,23 @@
+# tmux: terminal multiplexer.
+name        = "tmux"
+version     = "3.8"
+description = "Terminal multiplexer"
+license     = "ISC"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "libevent", "ncurses", "pkgconf", "bison", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://github.com/tmux/tmux/releases/download/3.8/tmux-3.8.tar.gz"
+sha256 = "e79c699c7e949dccd0a4a125e17b8d1261e311b16979dbc8eb34542f3966d82e"
+
+[build]
+configure = "./configure --prefix=/usr --disable-utf8proc LIBNCURSES_CFLAGS='-I/usr/include' LIBNCURSES_LIBS='-lncursesw -ltinfow' CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share"
+strip "$DESTDIR/usr/bin/tmux" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/tmux"
+'''

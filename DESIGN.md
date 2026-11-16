@@ -877,3 +877,30 @@ What used to exist only in the image now follows `forge upgrade`:
   (`NEXT_KEYS=new.pub scripts/publish-release.sh`), wait until systems have updated, then sign with the new key.
   Announced keys from an unsigned or untrusted repository are never looked at.
 - **The kernel** stays `forge kernel` (built on the machine); there is deliberately no prebuilt kernel package to apply.
+
+## Swap, firewall, port forwarding, maintenance, SSH (implemented; tested in QEMU only for boot, not on hardware)
+
+The declaration gained `swap`, `[firewall]` (with `[[firewall.forward]]`) and `[maintenance]`
+(`crates/forge-schema/src/extras.rs`). `forge_schema::managed_for(decl)` (`services.rs`) turns them into managed files,
+written by `forge apply` and the ISO builder like the rest (`Own::Always`: they follow the declaration):
+
+- **Swap**: `swap = "zram"` (default) installs `/usr/libexec/singularity/zram`, which sizes a zram device at half the RAM
+  (zstd when the kernel has it) and swaps on it with priority 100; an OpenRC service or a systemd unit runs it.
+  `"none"` removes the service. No swap file or partition: hibernation is not supported.
+- **Firewall**: `nftables` is in the base. `/etc/nftables.conf` is generated: policy drop on input and forward, replies
+  and loopback and ICMP and DHCP accepted, plus `allow` rules (`ssh|http|https|dns`, `PORT[/tcp|udp]`, `A-B/tcp`).
+  On by default with nothing allowed, so a machine running `openssh` needs `allow = ["ssh"]`.
+  `forward` entries add a `dnat` rule (`ip forge_nat` table), accept the forwarded traffic and masquerade it, and the
+  service turns on `net.ipv4.ip_forward` only when something is forwarded. Targets are IPv4 `ADDR:PORT`; they are
+  validated when the declaration is read. No kernel rebuild was needed (`NF_TABLES`, `NFT_*`, `NF_NAT` are in 7.3.3).
+- **Maintenance**: a background service (an hourly loop under OpenRC, no cron) runs `forge maintenance run --due`:
+  fstrim and `forge store gc` and `forge gen prune --keep N` weekly, `btrfs scrub` monthly; the times of the last runs are
+  in `/var/lib/forge/maintenance`. `forge gen prune` never removes the current or booted generation.
+- **SSH**: choosing the `openssh` package also installs `sshd_config` (only when missing: root login off, no PAM), an
+  `sshd` service (creates the `sshd` user and host keys on first start) and enables it.
+
+Not done: disk encryption (an installed system has no initramfs; LUKS root needs one) and Secure Boot (needs signing
+the kernel and Limine, and enrolling keys). There is still no system logger.
+
+QEMU 11.1.3 (headless, KVM, no network back end) is a package (`recipes/qemu`, with `glib`, `pixman`, `libffi`,
+`pcre2`); `scripts/qemu-boot.sh ISO` boots an image with the serial console on stdout.

@@ -692,11 +692,35 @@ pub fn starter_declaration(hostname: &str, libc: &str, repo: &str) -> String {
          \x20 # python,    # the Python interpreter\n\
          \x20 # gcc, make, # a C compiler and make\n\
          \x20 # bc,        # a calculator\n\
+         \x20 # git, tmux, htop, nano,  # version control, terminal multiplexer, process viewer, simple editor\n\
+         \x20 # openssh,  # SSH server and client (also allow \"ssh\" in the [firewall] section below)\n\
          \"\"\"\n\
          \n\
          # Services to start at boot (OpenRC service names, or systemd units), and kernel modules to load.\n\
          services       = []\n\
-         kernel_modules = []\n"
+         kernel_modules = []\n\
+         \n\
+         # Swap: \"zram\" (compressed memory, no disk needed) or \"none\".\n\
+         swap = \"zram\"\n\
+         \n\
+         # Firewall: everything coming in is dropped unless it answers something this machine started, or is allowed\n\
+         # here. Allow by name (ssh, http, https, dns) or port: \"443/tcp\", \"5353/udp\", \"8000-8100/tcp\".\n\
+         [firewall]\n\
+         enable = true\n\
+         allow  = []\n\
+         \n\
+         # Port forwarding: traffic arriving on a port of this machine is sent to another machine. Remove the # in\n\
+         # front of the example (all four lines) and adjust it; add more [[firewall.forward]] blocks for more ports.\n\
+         # [[firewall.forward]]\n\
+         # port  = 8080\n\
+         # to    = \"192.168.1.50:80\"\n\
+         # proto = \"tcp\"\n\
+         \n\
+         # Routine maintenance, run by forge in the background: trims the SSD and clears unused packages weekly,\n\
+         # prunes old generations weekly, and scrubs the disk monthly. `forge maintenance status` shows when.\n\
+         [maintenance]\n\
+         enable           = true\n\
+         keep_generations = 10\n"
     )
 }
 
@@ -713,8 +737,8 @@ mod starter_tests {
         assert_eq!(d.repos, ["https://example.org/repo"]);
         assert!(text.contains("sudo forge edit") && text.contains("timezone") && text.contains("keymap"));
         // `forge install` edits it in place, keeping the comments and the readable layout.
-        let e = forge_decl::add_package(&text, "htop").unwrap();
-        assert!(e.text.contains("  # python,") && e.text.contains("  htop,\n\"\"\"") && e.text.contains("# Where packages come from."), "{}", e.text);
-        assert_eq!(SystemDecl::parse(&e.text).unwrap().packages, ["htop"], "the examples are comments, not packages");
+        let e = forge_decl::add_package(&text, "ripgrep").unwrap();
+        assert!(e.text.contains("  # python,") && e.text.contains("  ripgrep,\n\"\"\"") && e.text.contains("# Where packages come from."), "{}", e.text);
+        assert_eq!(SystemDecl::parse(&e.text).unwrap().packages, ["ripgrep"], "the examples are comments, not packages");
     }
 }

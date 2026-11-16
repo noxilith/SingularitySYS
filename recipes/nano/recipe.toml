@@ -1,0 +1,23 @@
+# GNU nano: a small, easy editor (the system default editor is micro).
+name        = "nano"
+version     = "8.7"
+description = "GNU nano text editor"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["busybox", "make", "binutils", "gcc", "glibc", "linux-headers", "ncurses", "pkgconf", "coreutils", "sed", "grep", "gawk", "bash", "findutils", "diffutils", "tar"]
+
+[[source]]
+url    = "https://www.nano-editor.org/dist/v8/nano-8.7.tar.xz"
+sha256 = "afd287aa672c48b8e1a93fdb6c6588453d527510d966822b687f2835f0d986e9"
+
+[build]
+configure = "./configure --prefix=/usr --sysconfdir=/etc --disable-nls --disable-libmagic --disable-speller --enable-utf8 --disable-dependency-tracking NCURSESW_CFLAGS='-I/usr/include' NCURSESW_LIBS='-lncursesw -ltinfow' CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/applications" "$DESTDIR/usr/share/icons"
+strip "$DESTDIR/usr/bin/nano" 2>/dev/null || true
+test -x "$DESTDIR/usr/bin/nano"
+'''
