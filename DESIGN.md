@@ -1054,3 +1054,15 @@ archive of one commit pinned by SHA-256, `cargo build --release --locked` with t
 the repository (inside it cargo would treat the source as part of forge's workspace; the host also needs the linker named
 through `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc`). Static is safe because fetch reads `/proc` and `/sys` itself and
 does no user or host-name lookups. It has a built-in SingularitySYS logo and was run on the live ISO in QEMU.
+
+## Vesper desktop is a package (implemented 2026-11-17)
+
+`forge install vesper` installs the user's Vesper desktop (noxilith/VesperDE), built from source in the sandbox. That needed a
+graphics stack the repository did not have, now added as recipes: rust (the official release tarballs repackaged), wayland,
+wayland-protocols, libdrm, libpciaccess, xkeyboard-config, libxkbcommon, libevdev, mtdev, libinput, seatd, cmake, llvm
+(x86 + AMDGPU only, shared), mesa (EGL, GLES, GBM; radeonsi, nouveau, llvmpipe, softpipe; **no Intel iris**: it needs
+clang and SPIR-V tooling; no Vulkan), linux-pam (pam_unix; `usr/bin/unix_chkpwd` is now in `SETUID_FILES`), two font packages
+and three pure-Python modules for Mesa's build. A forge build has no network, so the source is a tarball with every crate vendored
+(`scripts/vendor-vesper.sh`, uploaded to the `sources` release of this repository); the recipe pins its SHA-256 and the commit.
+The package ships `/etc/pam.d/vesper-lock` (pam_unix) and an OpenRC `seatd` service. Checked: every Vesper binary links and
+`vesper --version` runs against the packaged libraries; **not yet run on a display**.

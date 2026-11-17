@@ -1,0 +1,26 @@
+# Wayland protocol extensions
+name        = "wayland-protocols"
+version     = "1.45"
+description = "Wayland protocol extensions"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "wayland", "expat", "libffi"]
+
+[[source]]
+url    = "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/1.45/downloads/wayland-protocols-1.45.tar.xz"
+sha256 = "4d2b2a9e3e099d017dc8107bf1c334d27bb87d9e4aff19a0c8d856d17cd41ef0"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dtests=false
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -e "$DESTDIR/usr/share/pkgconfig/wayland-protocols.pc"
+'''

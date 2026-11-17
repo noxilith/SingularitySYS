@@ -30,6 +30,7 @@ Packages you can add include:
 | `zip`, `libarchive` | `zip` makes .zip files; `libarchive` provides `unzip`, `bsdtar`, `bsdcpio` and the library behind them. |
 | `openssh` | SSH client and server. See [Networking](Networking). |
 | `fetch` | The spinning-logo system information tool (<https://github.com/noxilith/Fetch>). Run `fetch`; `fetch --frames 1` draws one frame and exits. |
+| `vesper` | The Vesper desktop environment (<https://github.com/noxilith/VesperDE>): Wayland compositor with scrollable tiling, bar, launcher, notifications, lock screen, settings and file manager. Pulls in Mesa (AMD and software rendering; no Intel graphics yet), libinput, fonts and PAM. Start it from a text console with `vesper-session`. On OpenRC run `rc-update add seatd default` first (systemd uses logind). **Early and untested on real hardware.** |
 | `qemu` | Headless x86-64 emulator with KVM, for testing images. |
 | `python`, `gcc`, `make`, `bison`, `flex`, `perl`, `meson`, `ninja`, `bc` | Languages and build tools. |
 | `systemd`, `dbus` | Installed for you when `init = "systemd"`. |

@@ -1,0 +1,22 @@
+# Python packaging utilities (pure Python, used when building Mesa)
+name        = "python-packaging"
+version     = "25.0"
+description = "Python packaging utilities"
+license     = "Apache-2.0 OR BSD-2-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "python"]
+run   = ["python"]
+
+[[source]]
+url    = "https://files.pythonhosted.org/packages/source/p/packaging/packaging-25.0.tar.gz"
+sha256 = "d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f"
+
+[build]
+install = '''
+site="$DESTDIR/usr/lib/python3.12/site-packages"
+mkdir -p "$site"
+cp -R src/packaging "$site/packaging"
+test -f "$site/packaging/__init__.py"
+'''

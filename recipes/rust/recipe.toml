@@ -1,0 +1,45 @@
+# Rust: rustc, cargo and the standard library, repackaged from the official release tarballs of the Rust project (the
+# compiler is written in Rust, so it cannot be built here without already having one). Needs a C compiler/linker at
+# run time (gcc). Shared LLVM and the standard library live in /usr/lib; no documentation or source is kept.
+name        = "rust"
+version     = "1.98.0"
+description = "Rust compiler (rustc), package manager (cargo) and standard library"
+license     = "MIT OR Apache-2.0"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+run   = ["gcc", "binutils", "glibc", "linux-headers"]
+
+# $SRC is the first source: rustc.
+[[source]]
+url    = "https://static.rust-lang.org/dist/rustc-1.98.0-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "18ed6559de1b8ea6b77474ea86992b9a507d3a3d134d9ee017d30cf3f406e3ee"
+
+[[source]]
+url    = "https://static.rust-lang.org/dist/cargo-1.98.0-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "18bf1598891b30dd5eb52a337d08a92b4456255ddbe4c1ab996ffb578077031c"
+
+[[source]]
+url    = "https://static.rust-lang.org/dist/rust-std-1.98.0-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "8aa6405356392ce50160d1b286e86091c5e14adae3061115699c84ed4394d546"
+
+[build]
+prepare = '''
+cd /build
+tar -o -xf /sources/cargo-1.98.0-x86_64-unknown-linux-gnu.tar.gz
+tar -o -xf /sources/rust-std-1.98.0-x86_64-unknown-linux-gnu.tar.gz
+'''
+compile = "true"
+install = '''
+for d in "$SRC" /build/cargo-1.98.0-x86_64-unknown-linux-gnu /build/rust-std-1.98.0-x86_64-unknown-linux-gnu; do
+    (cd "$d" && sh ./install.sh --prefix=/usr --destdir="$DESTDIR" --disable-ldconfig --without=rust-docs)
+done
+# installer bookkeeping and documentation
+rm -rf "$DESTDIR/usr/lib/rustlib/uninstall.sh" "$DESTDIR/usr/lib/rustlib/install.log" "$DESTDIR/usr/lib/rustlib/components" \
+       "$DESTDIR/usr/lib/rustlib/rust-installer-version" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -x "$DESTDIR/usr/bin/rustc"
+test -x "$DESTDIR/usr/bin/cargo"
+test -d "$DESTDIR/usr/lib/rustlib/x86_64-unknown-linux-gnu/lib"
+'''

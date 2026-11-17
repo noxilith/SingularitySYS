@@ -1,0 +1,23 @@
+# PCI access library (libdrm, Mesa)
+name        = "libpciaccess"
+version     = "0.18.1"
+description = "PCI access library (libdrm, Mesa)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "zlib", "python", "ninja", "meson"]
+
+[[source]]
+url    = "https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz"
+sha256 = "4af43444b38adb5545d0ed1c2ce46d9608cc47b31c2387fc5181656765a6fa76"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dzlib=enabled"
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+test -f "$DESTDIR/usr/lib/libpciaccess.so.0"
+'''

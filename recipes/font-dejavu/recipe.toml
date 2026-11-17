@@ -1,0 +1,21 @@
+# DejaVu fonts: the sans-serif, serif and monospace fallback fonts every program can rely on.
+name        = "font-dejavu"
+version     = "2.37"
+description = "DejaVu fonts (TrueType)"
+license     = "Bitstream-Vera AND LicenseRef-DejaVu-public-domain"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which"]
+
+[[source]]
+url    = "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2"
+sha256 = "fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7"
+
+[build]
+install = '''
+mkdir -p "$DESTDIR/usr/share/fonts/dejavu" "$DESTDIR/usr/share/licenses/font-dejavu"
+install -m 644 ttf/*.ttf "$DESTDIR/usr/share/fonts/dejavu/"
+cp LICENSE "$DESTDIR/usr/share/licenses/font-dejavu/"
+test -f "$DESTDIR/usr/share/fonts/dejavu/DejaVuSans.ttf"
+'''

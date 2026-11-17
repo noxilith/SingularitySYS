@@ -1,0 +1,39 @@
+# Mesa: OpenGL ES/EGL and GBM for Wayland compositors, with the radeonsi (AMD), nouveau (NVIDIA, older open driver),
+# llvmpipe and softpipe (software, on any GPU) drivers. No X11/GLX, no Vulkan and no Intel (iris) driver yet: Intel
+# needs the OpenCL compiler stack (clang, SPIR-V) this repository does not have.
+name        = "mesa"
+version     = "25.2.5"
+description = "Mesa 3D graphics library (EGL, GLES, GBM; radeonsi, nouveau, llvmpipe, softpipe)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "bison",
+         "flex", "m4", "python-mako", "python-packaging", "python-pyyaml", "python-markupsafe", "llvm", "libdrm",
+         "wayland", "wayland-protocols", "expat", "zlib", "zstd", "libelf"]
+
+[[source]]
+url    = "https://archive.mesa3d.org/mesa-25.2.5.tar.xz"
+sha256 = "bb6243e7a6f525febfa1e6ab50827ca4d4bfdad73812377b0ca9b6c50998b03e"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --buildtype=release -Db_ndebug=true \
+    -Dplatforms=wayland -Dgallium-drivers=radeonsi,nouveau,llvmpipe,softpipe -Dvulkan-drivers= \
+    -Dglx=disabled -Degl=enabled -Dgbm=enabled -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dglvnd=disabled \
+    -Dllvm=enabled -Dshared-llvm=enabled -Dvideo-codecs= -Dlibunwind=disabled -Dlmsensors=disabled -Dvalgrind=disabled \
+    -Dzstd=enabled -Dxlib-lease=disabled -Dbuild-tests=false -Dgallium-va=disabled -Dgallium-vdpau=disabled \
+    -Dgallium-rusticl=false -Dteflon=false -Dintel-rt=disabled
+'''
+compile = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -e "$DESTDIR/usr/lib/libEGL.so.1"
+test -e "$DESTDIR/usr/lib/libgbm.so.1"
+test -e "$DESTDIR/usr/lib/libGLESv2.so.2"
+test -e "$DESTDIR"/usr/lib/libgallium-25.2.5.so
+'''

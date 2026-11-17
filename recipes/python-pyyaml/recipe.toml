@@ -1,0 +1,22 @@
+# PyYAML (pure Python build) (pure Python, used when building Mesa)
+name        = "python-pyyaml"
+version     = "6.0.2"
+description = "PyYAML (pure Python build)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "python"]
+run   = ["python"]
+
+[[source]]
+url    = "https://files.pythonhosted.org/packages/source/P/PyYAML/pyyaml-6.0.2.tar.gz"
+sha256 = "d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"
+
+[build]
+install = '''
+site="$DESTDIR/usr/lib/python3.12/site-packages"
+mkdir -p "$site"
+cp -R lib/yaml "$site/yaml"
+test -f "$site/yaml/__init__.py"
+'''

@@ -1,0 +1,42 @@
+# Vesper: the desktop environment written in Rust (https://github.com/noxilith/VesperDE): a Wayland compositor with
+# scrollable tiling, plus its bar, launcher, notifications, lock screen, settings and file manager. Built from the
+# vendored source tarball of one commit that scripts/vendor-vesper.sh makes (a forge build has no network).
+#
+# Start it from a text console with `vesper-session` (needs a seat: systemd-logind, or `seatd` on OpenRC) or pick the
+# "Vesper" session in a display manager. Not packaged yet and optional at run time: Xwayland (X11 apps), pipewire
+# (volume), NetworkManager (nmcli), bluez, polkit, matugen, a display manager (greetd).
+name        = "vesper"
+version     = "0.1.0_r1"
+description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "rust", "libxkbcommon", "libinput", "seatd", "libdrm", "mesa", "wayland", "systemd", "dbus", "linux-pam"]
+run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mesa", "wayland", "dbus",
+         "font-jetbrains-mono-nerd", "font-dejavu", "linux-pam"]
+
+[[source]]
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-8ac63ba0fe7d49694ea1816d402cb8a64c88e15b-vendored.tar.gz"
+sha256 = "69aac084517bbb155cab4271e9e319d2819d9fef2b8a91a3970c7347618bf1f7"
+
+[build]
+compile = '''
+export HOME=/build CARGO_HOME=/build/cargo
+cd "$SRC"
+cargo build --release --frozen -j $JOBS
+cargo build --release --frozen -j $JOBS --manifest-path file-manager/Cargo.toml
+'''
+install = '''
+cd "$SRC"
+make DESTDIR=$DESTDIR PREFIX=/usr install
+# This system has no /etc/pam.d/login to include: check the password with pam_unix directly.
+printf 'auth     required pam_unix.so\naccount  required pam_unix.so\n' > "$DESTDIR/etc/pam.d/vesper-lock"
+# OpenRC: the seat daemon (systemd systems use logind instead). Enable it with: rc-update add seatd default
+mkdir -p "$DESTDIR/etc/init.d"
+printf '#!/sbin/openrc-run\ndescription="Seat management daemon"\ncommand=/usr/bin/seatd\ncommand_args="-g video"\ncommand_background=true\npidfile=/run/seatd.pid\n' > "$DESTDIR/etc/init.d/seatd"
+chmod 755 "$DESTDIR/etc/init.d/seatd"
+test -x "$DESTDIR/usr/bin/vesper"
+test -x "$DESTDIR/usr/bin/vesper-session"
+test -x "$DESTDIR/usr/bin/file-manager"
+'''

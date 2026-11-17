@@ -1,0 +1,26 @@
+# Input device handling library
+name        = "libinput"
+version     = "1.29.0"
+description = "Input device handling library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "libevdev", "mtdev", "systemd"]
+
+[[source]]
+url    = "https://gitlab.freedesktop.org/libinput/libinput/-/archive/1.29.0/libinput-1.29.0.tar.gz"
+sha256 = "ec71f6ec6632108a62756f49d86e864494108e70cf670e85f8b7579e970e152c"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dlibwacom=false -Ddebug-gui=false -Dtests=false -Ddocumentation=false -Dudev-dir=/usr/lib/udev
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -e "$DESTDIR/usr/lib/libinput.so.10"
+'''

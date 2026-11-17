@@ -1,0 +1,27 @@
+# Keyboard keymap compiler library
+name        = "libxkbcommon"
+version     = "1.11.0_r1"
+description = "Keyboard keymap compiler library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "bison", "flex", "m4", "xkeyboard-config"]
+run   = ["xkeyboard-config"]
+
+[[source]]
+url    = "https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-1.11.0.tar.gz"
+sha256 = "78a6b14f16e9a55025978c252e53ce9e16a02bfdb929550b9a0db5af87db7e02"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc meson setup build --prefix=/usr --libdir=lib --buildtype=release -Denable-docs=false -Denable-tools=false -Denable-x11=false -Denable-wayland=false -Denable-xkbregistry=false -Denable-bash-completion=false
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -e "$DESTDIR/usr/lib/libxkbcommon.so.0"
+'''

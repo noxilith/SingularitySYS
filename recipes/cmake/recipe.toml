@@ -1,0 +1,22 @@
+# CMake: the build-system generator LLVM needs. Bootstrapped with the compiler, without OpenSSL, documentation or the GUI.
+name        = "cmake"
+version     = "4.1.2"
+description = "Cross-platform build system generator"
+license     = "BSD-3-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "zlib"]
+
+[[source]]
+url    = "https://cmake.org/files/v4.1/cmake-4.1.2.tar.gz"
+sha256 = "643f04182b7ba323ab31f526f785134fb79cba3188a852206ef0473fee282a15"
+
+[build]
+configure = "./bootstrap --prefix=/usr --parallel=$JOBS --datadir=/share/cmake --docdir=/share/doc/cmake -- -DCMAKE_BUILD_TYPE=Release -DCMAKE_USE_OPENSSL=OFF -DBUILD_TESTING=OFF -DBUILD_CursesDialog=OFF"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/cmake/Help" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/bash-completion" "$DESTDIR/usr/share/emacs" "$DESTDIR/usr/share/vim" "$DESTDIR/usr/share/aclocal"
+test -x "$DESTDIR/usr/bin/cmake"
+'''

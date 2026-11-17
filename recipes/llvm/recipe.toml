@@ -1,0 +1,46 @@
+# LLVM: the compiler library Mesa's radeonsi and llvmpipe drivers use to compile shaders. Only the x86 and AMD GPU
+# targets, as one shared library; no clang, no tools beyond llvm-config, no static libraries.
+name        = "llvm"
+version     = "20.1.8"
+description = "LLVM compiler infrastructure library (x86 and AMDGPU targets)"
+license     = "Apache-2.0 WITH LLVM-exception"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "python", "ninja", "zlib", "zstd"]
+
+# $SRC is the first source: llvm.
+[[source]]
+url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/llvm-20.1.8.src.tar.xz"
+sha256 = "e1363888216b455184dbb8a74a347bf5612f56a3f982369e1cba6c7e0726cde1"
+
+[[source]]
+url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/cmake-20.1.8.src.tar.xz"
+sha256 = "3319203cfd1172bbac50f06fa68e318af84dcb5d65353310c0586354069d6634"
+
+[build]
+prepare = '''
+cd /build/extract
+tar -o -xf /sources/cmake-20.1.8.src.tar.xz && mv cmake-20.1.8.src cmake
+'''
+configure = '''
+cd "$SRC"
+cmake -S . -B /build/llvm-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+    -DLLVM_TARGETS_TO_BUILD="X86;AMDGPU" -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_ENABLE_RTTI=ON \
+    -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF \
+    -DLLVM_ENABLE_ZLIB=ON -DLLVM_ENABLE_ZSTD=ON -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_TERMINFO=OFF \
+    -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_ENABLE_PLUGINS=OFF \
+    -DLLVM_HOST_TRIPLE=x86_64-unknown-linux-gnu -DLLVM_PARALLEL_LINK_JOBS=2 -DPython3_EXECUTABLE=/usr/bin/python3
+'''
+compile = "cmake --build /build/llvm-build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install /build/llvm-build
+# Mesa links the shared library; keep llvm-config and drop the rest of the tools and every static library.
+cd "$DESTDIR/usr"
+find bin -type f ! -name llvm-config -delete
+rm -f lib/*.a
+rm -rf share/doc share/man
+test -x bin/llvm-config
+ls lib/libLLVM*.so* >/dev/null
+'''
