@@ -511,10 +511,12 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     // systemd's own users (journal, network, ...) and dbus's runtime directories are created at boot, but doing it
     // now means the first boot starts with them in place (a dbus that races its user at first boot is not a good
     // first impression). Best effort: the units order themselves after these at boot anyway.
-    if systemd && root == Path::new("/") && (switching || profile_switch.is_some()) {
+    // (Also under OpenRC: packages such as greetd and polkit bring sysusers files, and the systemd package is always there.)
+    if root == Path::new("/") && (switching || profile_switch.is_some()) {
         for (summary, tool, args) in [
             ("systemd system users (sysusers)", "/usr/bin/systemd-sysusers", vec![]),
             ("dbus runtime directories (tmpfiles)", "/usr/bin/systemd-tmpfiles", vec!["--create".to_string(), "/usr/lib/tmpfiles.d/dbus.conf".to_string()]),
+            ("login screen directories (tmpfiles)", "/usr/bin/systemd-tmpfiles", vec!["--create".to_string(), "/usr/lib/tmpfiles.d/vesper-greeter.conf".to_string()]),
         ] {
             p.changes.push(Change { section: "init", kind: Kind::Add, summary: summary.into(), op: Op::Run { program: PathBuf::from(tool), args, best_effort: true } });
         }
