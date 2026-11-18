@@ -1,12 +1,13 @@
 # X server that runs inside a Wayland compositor (X11 apps)
 name        = "xwayland"
-version     = "24.1.8"
+version     = "24.1.8_r1"
 description = "X server that runs inside a Wayland compositor (X11 apps)"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
 build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "xorgproto", "xtrans", "libXau", "libXdmcp", "libXfont2", "libfontenc", "libxcvt", "libxshmfence", "libepoxy", "libdrm", "mesa", "wayland", "wayland-protocols", "libxkbfile", "libX11", "libxcb", "pixman", "openssl", "freetype", "libpng", "zlib", "expat", "libffi", "xkeyboard-config", "libxkbcommon"]
+run   = ["xkbcomp", "xkeyboard-config"]
 
 [[source]]
 url    = "https://xorg.freedesktop.org/archive/individual/xserver/xwayland-24.1.8.tar.xz"

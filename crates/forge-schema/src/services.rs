@@ -138,6 +138,62 @@ fn systemd_nftables(forwarding: bool) -> String {
     )
 }
 
+const OPENRC_DBUS: &str = "#!/sbin/openrc-run
+# managed by forge
+description=\"D-Bus system message bus\"
+command=/usr/bin/dbus-daemon
+command_args=\"--system --nofork --nopidfile\"
+command_background=true
+pidfile=/run/dbus.pid
+
+depend() {
+	need localmount
+	after bootmisc
+}
+
+start_pre() {
+	install -d -m 755 /run/dbus /var/lib/dbus
+	/usr/bin/dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null
+	[ -e /var/lib/dbus/machine-id ] || ln -sf /etc/machine-id /var/lib/dbus/machine-id
+}
+";
+
+const OPENRC_UDEV: &str = "#!/sbin/openrc-run
+# managed by forge
+description=\"udev device manager (input and graphics devices for the desktop)\"
+command=/usr/lib/systemd/systemd-udevd
+command_background=true
+pidfile=/run/udevd.pid
+
+depend() {
+	need sysfs devfs
+	before dbus seatd greetd
+}
+
+start_pre() {
+	install -d -m 755 /run/udev
+}
+
+start_post() {
+	/usr/bin/udevadm trigger --type=devices --action=add
+	/usr/bin/udevadm trigger --type=subsystems --action=add
+	/usr/bin/udevadm settle --timeout=20
+}
+";
+
+const OPENRC_POLKIT: &str = "#!/sbin/openrc-run
+# managed by forge
+description=\"polkit authorization daemon\"
+command=/usr/lib/polkit-1/polkitd
+command_args=\"--no-debug\"
+command_background=true
+pidfile=/run/polkitd.pid
+
+depend() {
+	need dbus
+}
+";
+
 /// Everything in [`managed`] plus what the declaration asks for: the firewall (and port forwarding), zram swap, routine
 /// maintenance and the SSH server. A service the declaration turns off is made absent.
 pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
@@ -219,6 +275,16 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
                 v.push(Managed { path: enable, entry: Entry::Absent, own: Own::Always });
                 v.push(Managed { path, entry: Entry::Absent, own: Own::Always });
             }
+        }
+    }
+    // The desktop under OpenRC needs the message bus and polkit running, and the services that talk to polkit must start
+    // after it. Their packages ship no OpenRC scripts for these two, so forge writes them; the ordering goes in conf.d.
+    if decl.desktop() && init == "openrc" {
+        v.push(file("/etc/init.d/dbus", OPENRC_DBUS, 0o755, Own::Always));
+        v.push(file("/etc/init.d/polkit", OPENRC_POLKIT, 0o755, Own::Always));
+        v.push(file("/etc/init.d/udev", OPENRC_UDEV, 0o755, Own::Always));
+        for s in ["NetworkManager", "upower", "power-profiles-daemon", "udisks2"] {
+            v.push(file(&format!("/etc/conf.d/{s}"), "# managed by forge\nrc_need=\"dbus polkit\"\n", 0o644, Own::Always));
         }
     }
     // The desktop brings NetworkManager, which must be the only thing configuring interfaces: forge's own network setup

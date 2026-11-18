@@ -1,6 +1,6 @@
 # Network connection manager (Wi-Fi, Ethernet; nmcli)
 name        = "networkmanager"
-version     = "1.54.0"
+version     = "1.54.0_r1"
 description = "Network connection manager (Wi-Fi, Ethernet; nmcli)"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -36,7 +36,7 @@ export PATH=/build/shim:$PATH
 DESTDIR=$DESTDIR meson install -C build
 rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
 mkdir -p "$DESTDIR/etc/init.d"
-printf "#!/sbin/openrc-run\ndescription=\"NetworkManager\"\ncommand=/usr/bin/NetworkManager\ncommand_args=\"--no-daemon\"\ncommand_background=true\npidfile=/run/NetworkManager.pid\ndepend() { need dbus; }\n" > "$DESTDIR/etc/init.d/NetworkManager"
+printf "#!/sbin/openrc-run\ndescription=\"NetworkManager\"\ncommand=/usr/sbin/NetworkManager\ncommand_args=\"--no-daemon\"\ncommand_background=true\npidfile=/run/NetworkManager.pid\ndepend() { need dbus; provide net; }\n" > "$DESTDIR/etc/init.d/NetworkManager"
 chmod 755 "$DESTDIR/etc/init.d/NetworkManager"
 test -e "$DESTDIR/usr/bin/nmcli"
 '''

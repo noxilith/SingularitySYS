@@ -393,7 +393,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     let mut declared: Vec<String> = decl.init.services.clone();
     // The desktop's services are in the declaration already (see `with_desktop`); their init scripts and units come with
     // their packages, which are installed before these links are made, so they need not exist yet.
-    let implied: Vec<String> = if desktop { forge_schema::DESKTOP_SERVICES.iter().map(|s| (*s).to_string()).collect() } else { Vec::new() };
+    let implied: Vec<String> = if desktop { forge_schema::DESKTOP_SERVICES.iter().chain(forge_schema::DESKTOP_OPENRC_SERVICES).map(|s| (*s).to_string()).collect() } else { Vec::new() };
     declared.sort();
     declared.dedup();
     let mut new_state = old_state.clone();

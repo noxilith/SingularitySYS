@@ -180,6 +180,13 @@ impl SystemDecl {
                 d.init.services.push((*s).to_string());
             }
         }
+        if d.init.system == "openrc" {
+            for s in crate::DESKTOP_OPENRC_SERVICES {
+                if !d.init.services.iter().any(|x| x == s) {
+                    d.init.services.push((*s).to_string());
+                }
+            }
+        }
         for u in &mut d.users {
             for g in crate::DESKTOP_GROUPS {
                 if !u.groups.iter().any(|x| x == g) {

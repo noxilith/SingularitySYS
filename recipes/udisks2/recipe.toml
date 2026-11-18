@@ -1,6 +1,6 @@
 # Disk management service (mount and eject drives)
 name        = "udisks2"
-version     = "2.10.1_r1"
+version     = "2.10.1_r2"
 description = "Disk management service (mount and eject drives)"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -13,6 +13,13 @@ url    = "https://github.com/storaged-project/udisks/releases/download/udisks-2.
 sha256 = "b75734ccf602540dedb4068bec206adcb508a4c003725e117ae8f994d92d8ece"
 
 [build]
+prepare = '''
+# The daemon aborts (udisks_error) when a libblockdev plugin is missing; mdraid, crypto and nvme are not built here, so
+# turn those errors into warnings: the rest works, and only those features report failures when used.
+cd "$SRC"
+sed -i 's/udisks_error ("Error initializing libblockdev library/udisks_warning ("Error initializing libblockdev library/; s/udisks_error ("Failed to load the/udisks_warning ("Failed to load the/' src/udisksdaemon.c
+grep -c 'udisks_warning ("Failed to load the' src/udisksdaemon.c
+'''
 configure = '''
 export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages
 mkdir -p /build/shim
