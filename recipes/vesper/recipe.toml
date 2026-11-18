@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: matugen, the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r4"
+version     = "0.1.0_r6"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -40,13 +40,22 @@ printf 'auth     required pam_unix.so\naccount  required pam_unix.so\n' > "$DEST
 mkdir -p "$DESTDIR/etc/init.d"
 printf '#!/sbin/openrc-run\ndescription="Seat management daemon"\ncommand=/usr/bin/seatd\ncommand_args="-g video"\ncommand_background=true\npidfile=/run/seatd.pid\n' > "$DESTDIR/etc/init.d/seatd"
 chmod 755 "$DESTDIR/etc/init.d/seatd"
+mkdir -p "$DESTDIR/usr/lib/systemd/system"
+printf '[Unit]\nDescription=Seat management daemon\n\n[Service]\nType=simple\nExecStart=/usr/bin/seatd -g video\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\n' > "$DESTDIR/usr/lib/systemd/system/seatd.service"
 # OpenRC has no user service manager: start the audio stack with the session (systemd starts it as user units).
 cat > /build/audio-snippet <<'SNIP'
-if [ ! -d /run/systemd/system ]; then
-    for p in pipewire wireplumber pipewire-pulse; do
-        if command -v "$p" >/dev/null 2>&1 && ! pgrep -u "$(id -u)" -x "$p" >/dev/null 2>&1; then "$p" >/dev/null 2>&1 & fi
-    done
+# Without logind (OpenRC) nothing creates /run/user/UID: fall back to a private directory in /tmp.
+if [ ! -d "$XDG_RUNTIME_DIR" ] || [ ! -w "$XDG_RUNTIME_DIR" ]; then
+    XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+    mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+    export XDG_RUNTIME_DIR
 fi
+# One seat provider on both init systems: the seatd daemon (forge enables it when vesper is declared).
+export LIBSEAT_BACKEND="${LIBSEAT_BACKEND:-seatd}"
+# Start the audio stack with the session on both init systems (a login without logind has no user service manager).
+for p in pipewire wireplumber pipewire-pulse; do
+    if command -v "$p" >/dev/null 2>&1 && ! pgrep -u "$(id -u)" -x "$p" >/dev/null 2>&1; then "$p" >/dev/null 2>&1 & fi
+done
 SNIP
 awk 'FNR==NR{s=s $0 "\n"; next} {print} /^export XDG_RUNTIME_DIR/{printf "%s", s}' /build/audio-snippet "$DESTDIR/usr/bin/vesper-session" > /build/vs && cat /build/vs > "$DESTDIR/usr/bin/vesper-session"
 test -x "$DESTDIR/usr/bin/vesper"

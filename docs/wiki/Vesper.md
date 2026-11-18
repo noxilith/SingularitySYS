@@ -2,35 +2,34 @@
 
 `sudo forge install vesper` installs the [Vesper](https://github.com/noxilith/VesperDE) desktop and everything it uses. It is
 early software: the compositor, bar, launcher and file manager run, but this packaging has not been through much real hardware yet.
+It works the same under OpenRC and systemd.
 
 ## Start it
 
-Turn on the services it needs, once, then start the session from a text console (not from inside another desktop).
+Declaring `vesper` also turns on the background services it needs under whichever init you use (`seatd`, `bluetooth`, `upower`,
+`power-profiles-daemon`, `udisks2`); forge does it on the same apply. Your user needs the `video` and `input` groups, which you
+give in `/etc/forge/system.toml`, for example:
 
-**OpenRC (the default):**
+```toml
+[[users]]
+name = "you"
+groups = ["wheel", "video", "input", "audio"]
+```
+
+Then apply, log in on a text console and run:
 
 ```bash
-sudo rc-update add dbus default
-sudo rc-update add seatd default
-sudo rc-update add NetworkManager default
-sudo rc-update add bluetooth default
-sudo rc-update add upower default
-sudo rc-update add power-profiles-daemon default
-sudo usermod -aG video,input,seat "$USER"    # seat only if the group exists
-sudo reboot
+sudo forge apply
 vesper-session
 ```
 
-PipeWire, WirePlumber and the PulseAudio bridge are started by `vesper-session` itself on OpenRC. polkit's daemon (`polkitd`) is
-started by D-Bus when something asks for it.
+Use `vesper-session`, not `vesper`: the script prepares the environment (a runtime directory, the seat daemon, the audio stack
+with PipeWire, WirePlumber and the PulseAudio bridge, a D-Bus session).
 
-**systemd:** logind is the seat provider, so no `seatd` is needed.
+## Wi-Fi (NetworkManager) is opt-in
 
-```bash
-sudo systemctl enable --now NetworkManager bluetooth upower power-profiles-daemon
-systemctl --user enable --now pipewire wireplumber pipewire-pulse
-vesper-session
-```
+NetworkManager would fight forge's own network setup, so it is not turned on for you. If you want the bar's Wi-Fi switch and `nmcli`,
+add it yourself: `services = ["NetworkManager"]` in `system.toml` (and remove forge's wired/wireless setup if you changed it).
 
 ## What is in and what is not
 
@@ -40,12 +39,12 @@ vesper-session
 
 ## Login screen (greetd)
 
-`greetd` is installed but not enabled. For Vesper's own login screen create the unprivileged user, use its config and enable it:
+`greetd` is installed but not enabled. For Vesper's own login screen create the unprivileged user, use its config and enable it by
+adding `greetd` to `services` in `system.toml`:
 
 ```bash
 sudo useradd -r -s /usr/bin/nologin greeter
 sudo cp /usr/share/vesper/greetd-vesper.toml /etc/greetd/config.toml
-sudo rc-update add greetd default        # systemd: sudo systemctl enable greetd
 ```
 
 Skip it if you prefer to log in on the console and run `vesper-session`.

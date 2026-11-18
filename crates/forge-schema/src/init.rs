@@ -246,3 +246,7 @@ mod tests {
         assert_eq!(systemd_unit("foo.socket"), "foo.socket");
     }
 }
+
+/// System services the Vesper desktop needs (seat daemon, Bluetooth, power, drives). Declaring the `vesper` package enables
+/// them under either init system; NetworkManager is left out on purpose because it would fight forge's own network setup.
+pub const DESKTOP_SERVICES: &[&str] = &["seatd", "bluetooth", "upower", "power-profiles-daemon", "udisks2"];

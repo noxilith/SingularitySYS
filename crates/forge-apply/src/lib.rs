@@ -387,13 +387,24 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     }
 
     let mut declared: Vec<String> = decl.init.services.clone();
+    // Installing the Vesper desktop turns on the system services it needs (their init scripts and units come with
+    // their packages, which are installed before these links are made).
+    let mut implied: Vec<String> = Vec::new();
+    if decl.packages.iter().any(|p| p == "vesper") {
+        for s in forge_schema::DESKTOP_SERVICES {
+            if !declared.iter().any(|d| d == s) {
+                declared.push((*s).to_string());
+                implied.push((*s).to_string());
+            }
+        }
+    }
     declared.sort();
     declared.dedup();
     let mut new_state = old_state.clone();
 
     if openrc {
         for s in &declared {
-            if !under(root, &format!("/etc/init.d/{s}")).exists() {
+            if !implied.contains(s) && !under(root, &format!("/etc/init.d/{s}")).exists() {
                 return Err(PlanError::ServiceMissing(s.clone()));
             }
             p.link(

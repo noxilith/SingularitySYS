@@ -130,6 +130,23 @@ fn only_services_forge_enabled_are_disabled_again() {
 }
 
 #[test]
+fn declaring_vesper_enables_the_desktop_services_even_before_their_scripts_exist() {
+    let r = root();
+    publish_v(r.path(), "vesper", "1.0", "desktop");
+    let p = plan(&pkg_decl(&["vesper"]), r.path());
+    assert!(p.changes.iter().any(|c| c.summary.contains("seatd")));
+    apply(&p).unwrap();
+    for s in forge_schema::DESKTOP_SERVICES {
+        let link = r.path().join(format!("etc/runlevels/default/{s}"));
+        assert_eq!(fs::read_link(link).unwrap(), Path::new(&format!("/etc/init.d/{s}")));
+    }
+    // taking the desktop out turns them off again
+    let p = plan(&decl(""), r.path());
+    apply(&p).unwrap();
+    assert!(!r.path().join("etc/runlevels/default/seatd").exists());
+}
+
+#[test]
 fn removals_come_after_everything_else() {
     let r = root();
     apply(&plan(&decl("[init]\nservices = [\"sshd\"]\n"), r.path())).unwrap();
