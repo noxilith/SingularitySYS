@@ -1,0 +1,26 @@
+# Bluetooth protocol stack (bluetoothd, bluetoothctl)
+name        = "bluez"
+version     = "5.83"
+description = "Bluetooth protocol stack (bluetoothd, bluetoothctl)"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "glib", "dbus", "systemd", "readline", "ncurses", "libffi", "pcre2", "zlib", "expat"]
+
+[[source]]
+url    = "https://www.kernel.org/pub/linux/bluetooth/bluez-5.83.tar.xz"
+sha256 = "108522d909d220581399bfec93daab62035539ceef3dda3e79970785c63bd24c"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --libexecdir=/usr/libexec --disable-manpages --disable-cups --disable-obex --disable-midi --disable-mesh --disable-testing --disable-hid2hci --with-systemdsystemunitdir=/usr/lib/systemd/system --with-systemduserunitdir=/usr/lib/systemd/user --with-udevdir=/usr/lib/udev --with-dbusconfdir=/etc --with-dbussystembusdir=/usr/share/dbus-1/system-services CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+mkdir -p "$DESTDIR/etc/init.d"
+printf "#!/sbin/openrc-run\ndescription=\"Bluetooth daemon\"\ncommand=/usr/libexec/bluetooth/bluetoothd\ncommand_background=true\npidfile=/run/bluetoothd.pid\ndepend() { need dbus; }\nstart_pre() { modprobe btusb 2>/dev/null; true; }\n" > "$DESTDIR/etc/init.d/bluetooth"
+chmod 755 "$DESTDIR/etc/init.d/bluetooth"
+test -e "$DESTDIR/usr/libexec/bluetooth/bluetoothd"
+'''

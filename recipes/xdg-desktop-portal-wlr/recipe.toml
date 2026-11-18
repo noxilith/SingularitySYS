@@ -1,0 +1,27 @@
+# xdg-desktop-portal backend for wlroots-style compositors (screen sharing)
+name        = "xdg-desktop-portal-wlr"
+version     = "0.8.1"
+description = "xdg-desktop-portal backend for wlroots-style compositors (screen sharing)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "pipewire", "wayland", "wayland-protocols", "libdrm", "mesa", "inih", "systemd", "libffi", "expat", "alsa-lib", "dbus", "glib"]
+
+[[source]]
+url    = "https://github.com/emersion/xdg-desktop-portal-wlr/releases/download/v0.8.1/xdg-desktop-portal-wlr-0.8.1.tar.gz"
+sha256 = "24d365bbac02f5ae3300024d84928484852d962712b6acc1f1ed7d92f2f59b2f"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dman-pages=disabled -Dsd-bus-provider=libsystemd
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/libexec/xdg-desktop-portal-wlr"
+'''

@@ -33,7 +33,7 @@ use crate::{StoreError, StoreId, io_ctx};
 /// Programs that must be setuid root. The store never holds a setuid bit, so the bit is set on the copies in
 /// the tree. Nothing outside this list is ever made setuid, and a symlink is refused (the bit would land on
 /// whatever it points to).
-pub const SETUID_FILES: &[&str] = &["usr/bin/sudo", "usr/bin/passwd", "usr/bin/su", "usr/bin/mount", "usr/bin/umount", "usr/bin/ping", "usr/libexec/dbus-daemon-launch-helper", "usr/bin/unix_chkpwd"];
+pub const SETUID_FILES: &[&str] = &["usr/bin/sudo", "usr/bin/passwd", "usr/bin/su", "usr/bin/mount", "usr/bin/umount", "usr/bin/ping", "usr/libexec/dbus-daemon-launch-helper", "usr/bin/unix_chkpwd", "usr/bin/fusermount3", "usr/bin/pkexec", "usr/lib/polkit-1/polkit-agent-helper-1"];
 
 /// Where the state file lives, relative to the root.
 pub const STATE_PATH: &str = "var/lib/forge/materialized.toml";

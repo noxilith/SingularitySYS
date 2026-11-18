@@ -1,0 +1,40 @@
+# Authorization framework: privilege prompts for desktop programs
+name        = "polkit"
+version     = "126"
+description = "Authorization framework: privilege prompts for desktop programs"
+license     = "LGPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "perl", "duktape", "glib", "expat", "linux-pam", "systemd", "libffi", "pcre2", "zlib"]
+
+[[source]]
+url    = "https://github.com/polkit-org/polkit/archive/refs/tags/126.tar.gz"
+sha256 = "2814a7281989f6baa9e57bd33bbc5e148827e2721ccef22aaf28ab2b376068e8"
+
+[build]
+configure = '''
+export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages
+# no gettext here: a msgfmt that only does what merge_file needs (copy the template, untranslated)
+mkdir -p /build/shim
+cat > /build/shim/msgfmt <<'SH'
+#!/bin/sh
+tmpl=; out=
+while [ $# -gt 0 ]; do case "$1" in --template) tmpl=$2; shift;; -o) out=$2; shift;; --version) echo "msgfmt (shim) 0.22"; exit 0;; esac; shift; done
+if [ -n "$tmpl" ]; then cp "$tmpl" "$out"; elif [ -n "$out" ]; then : > "$out"; fi
+SH
+chmod 755 /build/shim/msgfmt
+export PATH=/build/shim:$PATH
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=false -Dexamples=false -Dman=false -Dgtk_doc=false -Dintrospection=false -Dsession_tracking=logind -Dauthfw=pam -Dos_type=lfs -Dpolkitd_user=polkitd -Dsystemdsystemunitdir=/usr/lib/systemd/system
+'''
+compile   = "export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/locale" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+chmod 755 "$DESTDIR/etc/polkit-1/rules.d" "$DESTDIR/usr/share/polkit-1/rules.d" 2>/dev/null || true
+mkdir -p "$DESTDIR/etc/pam.d" "$DESTDIR/usr/lib/sysusers.d"
+printf "auth     required pam_unix.so\naccount  required pam_unix.so\npassword required pam_unix.so\nsession  required pam_unix.so\n" > "$DESTDIR/etc/pam.d/polkit-1"
+printf "u polkitd - \"PolicyKit daemon\" /var/lib/polkit-1\n" > "$DESTDIR/usr/lib/sysusers.d/polkit.conf"
+test -e "$DESTDIR/usr/bin/pkexec"
+'''

@@ -1,0 +1,27 @@
+# Font loading and glyph rasterization library (foot)
+name        = "fcft"
+version     = "3.3.2"
+description = "Font loading and glyph rasterization library (foot)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "tllist", "freetype", "fontconfig", "pixman", "libpng", "zlib", "expat"]
+
+[[source]]
+url    = "https://codeberg.org/dnkl/fcft/archive/3.3.2.tar.gz"
+sha256 = "22bcf73f51480ad48110a52cb26f93180d125929ac6b29bef67545fc36967479"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Ddocs=disabled -Dtest-text-shaping=false -Dgrapheme-shaping=disabled -Drun-shaping=disabled
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/lib/libfcft.so.4"
+'''

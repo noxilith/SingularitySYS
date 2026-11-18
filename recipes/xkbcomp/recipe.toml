@@ -1,0 +1,24 @@
+# XKB keymap compiler (Xwayland runs it)
+name        = "xkbcomp"
+version     = "1.4.7"
+description = "XKB keymap compiler (Xwayland runs it)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "xorgproto", "libX11", "libxkbfile", "libxcb", "libXau", "libXdmcp"]
+
+[[source]]
+url    = "https://xorg.freedesktop.org/archive/individual/app/xkbcomp-1.4.7.tar.xz"
+sha256 = "0a288114e5f44e31987042c79aecff1ffad53a8154b8ec971c24a69a80f81f77"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --disable-specs --without-xmlto --without-fop --without-xsltproc --without-doxygen --disable-docs --disable-devel-docs CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+
+test -e "$DESTDIR/usr/bin/xkbcomp"
+'''

@@ -1,0 +1,27 @@
+# Fast, lightweight Wayland terminal emulator
+name        = "foot"
+version     = "1.25.0"
+description = "Fast, lightweight Wayland terminal emulator"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "fcft", "tllist", "wayland", "wayland-protocols", "libxkbcommon", "pixman", "freetype", "fontconfig", "libpng", "zlib", "expat"]
+
+[[source]]
+url    = "https://codeberg.org/dnkl/foot/archive/1.25.0.tar.gz"
+sha256 = "ee9d0e51295945157ecb33119cb2c79b276093d0fd342d959d78d772d505571c"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Ddocs=disabled -Dgrapheme-clustering=disabled -Dime=true -Dterminfo=disabled
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/bin/foot"
+'''

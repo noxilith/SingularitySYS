@@ -1,0 +1,27 @@
+# Image loading library (PNG built in)
+name        = "gdk-pixbuf"
+version     = "2.42.12"
+description = "Image loading library (PNG built in)"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "glib", "libpng", "libffi", "pcre2", "zlib"]
+
+[[source]]
+url    = "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-2.42.12.tar.xz"
+sha256 = "b9505b3445b9a7e48ced34760c3bcb73e966df3ac94c95a148cb669ab748e3c7"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dpng=enabled -Dtiff=disabled -Djpeg=disabled -Dgif=disabled -Dothers=disabled -Dintrospection=disabled -Dgtk_doc=false -Dman=false -Dgio_sniffing=false -Dtests=false -Dinstalled_tests=false -Dbuiltin_loaders=png -Drelocatable=false
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/lib/libgdk_pixbuf-2.0.so.0"
+'''

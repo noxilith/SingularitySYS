@@ -1,0 +1,27 @@
+# X server that runs inside a Wayland compositor (X11 apps)
+name        = "xwayland"
+version     = "24.1.8"
+description = "X server that runs inside a Wayland compositor (X11 apps)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "xorgproto", "xtrans", "libXau", "libXdmcp", "libXfont2", "libfontenc", "libxcvt", "libxshmfence", "libepoxy", "libdrm", "mesa", "wayland", "wayland-protocols", "libxkbfile", "libX11", "libxcb", "pixman", "openssl", "freetype", "libpng", "zlib", "expat", "libffi", "xkeyboard-config", "libxkbcommon"]
+
+[[source]]
+url    = "https://xorg.freedesktop.org/archive/individual/xserver/xwayland-24.1.8.tar.xz"
+sha256 = "c8908d57c8ed9ceb8293c16ba7ad5af522efaf1ba7e51f9e4cf3c0774d199907"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dxvfb=false -Dxdmcp=false -Dsecure-rpc=false -Dlibunwind=false -Dglamor=true -Dglx=false -Ddri3=true -Dxcsecurity=true -Dsha1=libcrypto -Ddocs=false -Dxkb_dir=/usr/share/X11/xkb -Dxkb_bin_dir=/usr/bin -Dxkb_output_dir=/var/lib/xkb -Ddefault_font_path=/usr/share/fonts -Dbuilder_addr=noxilith
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/bin/Xwayland"
+'''

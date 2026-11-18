@@ -1,0 +1,24 @@
+# X font library
+name        = "libXfont2"
+version     = "2.0.7"
+description = "X font library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "xorgproto", "xtrans", "freetype", "libfontenc", "zlib", "libpng"]
+
+[[source]]
+url    = "https://xorg.freedesktop.org/archive/individual/lib/libXfont2-2.0.7.tar.xz"
+sha256 = "8b7b82fdeba48769b69433e8e3fbb984a5f6bf368b0d5f47abeec49de3e58efb"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --disable-specs --without-xmlto --without-fop --without-xsltproc --without-doxygen --disable-docs --disable-devel-docs --without-bzip2 CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+
+test -e "$DESTDIR/usr/lib/libXfont2.so.2"
+'''

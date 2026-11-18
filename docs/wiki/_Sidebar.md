@@ -5,6 +5,7 @@
 - [First steps](First-steps)
 - [The declaration](The-declaration)
 - [Packages](Packages)
+- [Vesper desktop](Vesper)
 - [Generations and rollback](Generations-and-rollback)
 - [Kernel and graphics](Kernel-and-graphics)
 - [Networking](Networking)

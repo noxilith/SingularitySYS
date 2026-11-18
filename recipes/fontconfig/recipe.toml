@@ -1,0 +1,27 @@
+# Font configuration and lookup library
+name        = "fontconfig"
+version     = "2.16.0"
+description = "Font configuration and lookup library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "gperf", "expat", "freetype", "libpng", "zlib"]
+
+[[source]]
+url    = "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.16.0.tar.xz"
+sha256 = "6a33dc555cc9ba8b10caf7695878ef134eeb36d0af366041f639b1da9b6ed220"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=disabled -Ddoc=disabled -Dnls=disabled -Dtools=enabled -Dxml-backend=expat -Ddefault-hinting=slight
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/lib/libfontconfig.so.1"
+'''

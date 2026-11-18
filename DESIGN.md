@@ -1066,3 +1066,16 @@ and three pure-Python modules for Mesa's build. A forge build has no network, so
 (`scripts/vendor-vesper.sh`, uploaded to the `sources` release of this repository); the recipe pins its SHA-256 and the commit.
 The package ships `/etc/pam.d/vesper-lock` (pam_unix) and an OpenRC `seatd` service. Checked: every Vesper binary links and
 `vesper --version` runs against the packaged libraries; **not yet run on a display**.
+
+### Everything Vesper uses is tied to it (2026-11-17)
+
+`vesper`'s run dependencies now name the whole desktop: Xwayland (and the X libraries it needs: xorgproto, libxcb, libX11,
+libxkbfile, xkbcomp, libXfont2, libxcvt, libepoxy, ...), xdg-desktop-portal with the wlr backend and slurp (screen sharing),
+PipeWire and WirePlumber (with alsa-lib and Lua), NetworkManager (built with `crypto=null`, so no 802.1X; libndp, readline),
+BlueZ, brightnessctl, power-profiles-daemon and UPower, polkit (duktape; `pkexec` and the agent helper are setuid), foot (fcft,
+tllist), fontconfig/freetype/libpng, Noto Color Emoji (served from the `sources` release because the font is a bare file),
+fuse3 and gdk-pixbuf (the portal needs them). There is no gettext, so msgfmt is a shim in the recipes that need it
+(the .mo files are empty and removed; translations are not installed). Not included: the GTK portal backend (GTK is not in
+the repository), Intel graphics, Vulkan, Bluetooth audio, a display manager. The kernel gained `FUSE_FS` (7.3.3-r8).
+OpenRC init scripts for seatd, bluetooth, NetworkManager, upower and power-profiles-daemon ship in the packages; on OpenRC
+`vesper-session` starts pipewire, wireplumber and pipewire-pulse itself.

@@ -1,0 +1,34 @@
+# Desktop integration portals for sandboxed and Wayland apps
+name        = "xdg-desktop-portal"
+version     = "1.20.3"
+description = "Desktop integration portals for sandboxed and Wayland apps"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "glib", "json-glib", "gdk-pixbuf", "libpng", "fuse3", "pipewire", "systemd", "libffi", "pcre2", "zlib", "dbus", "alsa-lib"]
+
+[[source]]
+url    = "https://github.com/flatpak/xdg-desktop-portal/releases/download/1.20.3/xdg-desktop-portal-1.20.3.tar.xz"
+sha256 = "4bfb164937f59107eb1a3cc21abaa948d903c76f3b99fac210cea38ce1da9edc"
+
+[build]
+prepare = '''
+# GStreamer is only for validating notification sounds: build a stub that rejects them instead.
+cd "$SRC"
+sed -i "s/dependency('gstreamer-pbutils-1.0')/dependency('gstreamer-pbutils-1.0', required: false)/" meson.build
+sed -i "s/'validate-sound.c',/'stub-sound.c',/; s/dependencies: \[gst_pbutils_dep\],/dependencies: [],/" src/meson.build
+printf 'int main(void) { return 1; }\n' > src/stub-sound.c
+'''
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Ddocumentation=disabled -Dman-pages=disabled -Dtests=disabled -Dgeoclue=disabled -Dsystemd=enabled -Dinstalled-tests=false -Dsandboxed-sound-validation=disabled -Dsandboxed-image-validation=disabled
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/libexec/xdg-desktop-portal"
+'''

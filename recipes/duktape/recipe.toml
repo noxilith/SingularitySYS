@@ -1,0 +1,27 @@
+# Duktape: the small JavaScript engine polkit evaluates its rules with. Built as a shared library; upstream has no
+# build system for one, so it is compiled by hand and given a pkg-config file.
+name        = "duktape"
+version     = "2.7.0"
+description = "Embeddable JavaScript engine"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://duktape.org/duktape-2.7.0.tar.xz"
+sha256 = "90f8d2fa8b5567c6899830ddef2c03f3c27960b11aca222fa17aa7ac613c2890"
+
+[build]
+compile = "gcc -O2 -fPIC -shared -Wl,-soname,libduktape.so.207 -Isrc src/duktape.c -o libduktape.so.207.20700 -lm"
+install = '''
+d=$DESTDIR/usr
+mkdir -p $d/lib/pkgconfig $d/include
+install -m 755 libduktape.so.207.20700 $d/lib/
+ln -s libduktape.so.207.20700 $d/lib/libduktape.so.207
+ln -s libduktape.so.207.20700 $d/lib/libduktape.so
+install -m 644 src/duktape.h src/duk_config.h $d/include/
+printf 'prefix=/usr\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n\nName: duktape\nDescription: Embeddable JavaScript engine\nVersion: 2.7.0\nLibs: -L${libdir} -lduktape\nLibs.private: -lm\nCflags: -I${includedir}\n' > $d/lib/pkgconfig/duktape.pc
+test -e $d/lib/libduktape.so.207
+'''

@@ -1,0 +1,23 @@
+# alsa-lib: user-space interface to the kernel sound drivers (pipewire's ALSA plugin, aplay-style tools).
+name        = "alsa-lib"
+version     = "1.2.14"
+description = "ALSA sound library"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://www.alsa-project.org/files/pub/lib/alsa-lib-1.2.14.tar.bz2"
+sha256 = "be9c88a0b3604367dd74167a2b754a35e142f670292ae47a2fdef27a2ee97a32"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-python --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la "$DESTDIR"/usr/lib/alsa-lib/*/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc"
+test -f "$DESTDIR/usr/lib/libasound.so.2"
+'''

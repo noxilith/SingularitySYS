@@ -1,0 +1,22 @@
+# Noto Color Emoji: the colour emoji font browsers, chat apps and GTK/Qt programs draw emoji with (through fontconfig).
+name        = "font-noto-color-emoji"
+version     = "2.051"
+description = "Noto Color Emoji font"
+license     = "OFL-1.1"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/noto-color-emoji-2.051.tar.gz"
+sha256 = "a556e814b612ddb1af6cf8d01abe3884ed6c1bf7f0e07fc99b81ede2dea420b4"
+
+[build]
+install = '''
+mkdir -p "$DESTDIR/usr/share/fonts/noto"
+cp "$SRC/NotoColorEmoji.ttf" "$DESTDIR/usr/share/fonts/noto/NotoColorEmoji.ttf"
+mkdir -p "$DESTDIR/usr/share/licenses/font-noto-color-emoji"; cp "$SRC/OFL.txt" "$DESTDIR/usr/share/licenses/font-noto-color-emoji/"
+chmod 644 "$DESTDIR/usr/share/fonts/noto/NotoColorEmoji.ttf"
+test -s "$DESTDIR/usr/share/fonts/noto/NotoColorEmoji.ttf"
+'''

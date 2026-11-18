@@ -1,0 +1,23 @@
+# libpng: PNG image library (freetype, cairo). Headers and pkg-config files kept, no tools.
+name        = "libpng"
+version     = "1.6.50"
+description = "PNG reference library"
+license     = "libpng-2.0"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "zlib"]
+
+[[source]]
+url    = "https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.50.tar.gz"
+sha256 = "71158e53cfdf2877bc99bcab33641d78df3f48e6e0daad030afe9cb8c031aa46"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man"
+test -f "$DESTDIR/usr/lib/libpng16.so.16"
+'''

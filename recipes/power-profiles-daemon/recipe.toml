@@ -1,0 +1,40 @@
+# Power profile switching service (bar power mode)
+name        = "power-profiles-daemon"
+version     = "0.30"
+description = "Power profile switching service (bar power mode)"
+license     = "GPL-3.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "glib", "libgudev", "upower", "polkit", "systemd", "dbus", "libffi", "pcre2", "zlib", "duktape", "expat", "linux-pam"]
+
+[[source]]
+url    = "https://gitlab.freedesktop.org/upower/power-profiles-daemon/-/archive/0.30/power-profiles-daemon-0.30.tar.gz"
+sha256 = "90f2c95024861d9f4062abedd514084939224e7a49edd468f001af7260ec8e6c"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+# no gettext here: a msgfmt that only does what merge_file needs (copy the template, untranslated)
+mkdir -p /build/shim
+cat > /build/shim/msgfmt <<'SH'
+#!/bin/sh
+tmpl=; out=
+while [ $# -gt 0 ]; do case "$1" in --template) tmpl=$2; shift;; -o) out=$2; shift;; --version) echo "msgfmt (shim) 0.22"; exit 0;; esac; shift; done
+if [ -n "$tmpl" ]; then cp "$tmpl" "$out"; elif [ -n "$out" ]; then : > "$out"; fi
+SH
+chmod 755 /build/shim/msgfmt
+export PATH=/build/shim:$PATH
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dgtk_doc=false -Dtests=false -Dpylint=disabled -Dmanpage=disabled -Dbashcomp=disabled -Dzshcomp= -Dsystemdsystemunitdir=/usr/lib/systemd/system
+'''
+compile   = "export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+export PATH=/build/shim:$PATH
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+mkdir -p "$DESTDIR/etc/init.d"
+printf "#!/sbin/openrc-run\ndescription=\"Power profiles daemon\"\ncommand=/usr/libexec/power-profiles-daemon\ncommand_background=true\npidfile=/run/power-profiles-daemon.pid\ndepend() { need dbus; }\n" > "$DESTDIR/etc/init.d/power-profiles-daemon"
+chmod 755 "$DESTDIR/etc/init.d/power-profiles-daemon"
+test -e "$DESTDIR/usr/libexec/power-profiles-daemon"
+'''

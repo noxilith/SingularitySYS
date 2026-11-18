@@ -1,0 +1,42 @@
+# Network connection manager (Wi-Fi, Ethernet; nmcli)
+name        = "networkmanager"
+version     = "1.54.0"
+description = "Network connection manager (Wi-Fi, Ethernet; nmcli)"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "perl", "glib", "libnl", "libndp", "util-linux", "systemd", "dbus", "polkit", "libffi", "pcre2", "zlib", "expat", "linux-pam", "duktape", "readline", "ncurses"]
+
+[[source]]
+url    = "https://github.com/NetworkManager/NetworkManager/archive/refs/tags/1.54.0.tar.gz"
+sha256 = "c5356e5a86b351dc79d23c8685d02b91917d1f107628c97d370c6441a8322a93"
+
+[build]
+configure = '''
+export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages
+# no gettext here: a msgfmt that only does what merge_file needs (copy the template, untranslated)
+mkdir -p /build/shim
+cat > /build/shim/msgfmt <<'SH'
+#!/bin/sh
+tmpl=; out=
+while [ $# -gt 0 ]; do case "$1" in --template) tmpl=$2; shift;; -o) out=$2; shift;; --version) echo "msgfmt (shim) 0.22"; exit 0;; esac; shift; done
+if [ -n "$tmpl" ]; then cp "$tmpl" "$out"; elif [ -n "$out" ]; then : > "$out"; fi
+SH
+chmod 755 /build/shim/msgfmt
+export PATH=/build/shim:$PATH
+mkdir -p /build/shim; printf '#!/bin/sh\nexit 1\n' > /build/shim/xsltproc; chmod 755 /build/shim/xsltproc
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dcrypto=null -Dintrospection=false -Dvapi=false -Dqt=false -Dselinux=false -Dsession_tracking=systemd -Dsuspend_resume=systemd -Dsystemd_journal=false -Dlibaudit=no -Dwext=false -Dwifi=true -Diwd=false -Dppp=false -Dmodem_manager=false -Dofono=false -Dconcheck=false -Dteamdctl=false -Dovs=false -Dnmtui=false -Dnm_cloud_setup=false -Dbluez5_dun=false -Dnbft=false -Difcfg_rh=false -Difupdown=false -Dlibpsl=false -Dtests=no -Ddocs=false -Dpolkit=true -Dconfig_dhcp_default=internal -Dreadline=libreadline -Dnmcli=true -Dconfig_logging_backend_default=syslog -Dsystem_ca_path=/etc/ssl/certs -Dnft=/usr/bin/nft -Diptables= -Dip6tables= -Ddnsmasq= -Dmodprobe=/usr/bin/modprobe -Dudev_dir=/usr/lib/udev -Ddbus_conf_dir=/etc/dbus-1/system.d -Dsystemdsystemunitdir=/usr/lib/systemd/system -Druntime_dir=/run -Debpf=false -Dfirewalld_zone=false -Dld_gc=false -Dmore_asserts=0 -Dmobile_broadband_provider_info_database=
+'''
+compile   = "export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages
+mkdir -p /build/shim; printf '#!/bin/sh\nexit 1\n' > /build/shim/xsltproc; chmod 755 /build/shim/xsltproc
+export PATH=/build/shim:$PATH
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+mkdir -p "$DESTDIR/etc/init.d"
+printf "#!/sbin/openrc-run\ndescription=\"NetworkManager\"\ncommand=/usr/bin/NetworkManager\ncommand_args=\"--no-daemon\"\ncommand_background=true\npidfile=/run/NetworkManager.pid\ndepend() { need dbus; }\n" > "$DESTDIR/etc/init.d/NetworkManager"
+chmod 755 "$DESTDIR/etc/init.d/NetworkManager"
+test -e "$DESTDIR/usr/bin/nmcli"
+'''

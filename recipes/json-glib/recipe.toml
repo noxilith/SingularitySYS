@@ -1,0 +1,27 @@
+# JSON library for GLib
+name        = "json-glib"
+version     = "1.10.6"
+description = "JSON library for GLib"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "glib", "libffi", "pcre2", "zlib"]
+
+[[source]]
+url    = "https://download.gnome.org/sources/json-glib/1.10/json-glib-1.10.6.tar.xz"
+sha256 = "77f4bcbf9339528f166b8073458693f0a20b77b7059dbc2db61746a1928b0293"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dintrospection=disabled -Dgtk_doc=disabled -Dman=false -Dtests=false -Dnls=disabled
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/lib/libjson-glib-1.0.so.0"
+'''

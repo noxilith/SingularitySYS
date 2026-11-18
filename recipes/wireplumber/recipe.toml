@@ -1,0 +1,27 @@
+# PipeWire session and policy manager (wpctl)
+name        = "wireplumber"
+version     = "0.5.10"
+description = "PipeWire session and policy manager (wpctl)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "pipewire", "lua", "glib", "systemd", "libffi", "pcre2", "zlib", "dbus", "alsa-lib"]
+
+[[source]]
+url    = "https://gitlab.freedesktop.org/pipewire/wireplumber/-/archive/0.5.10/wireplumber-0.5.10.tar.gz"
+sha256 = "c2e021d8e6ef1db644facd4a97f5a644b67481c641da9100e851aab6752ba446"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dsystem-lua=true -Dintrospection=disabled -Ddoc=disabled -Dtests=false -Dtools=true -Dsystemd=enabled -Dsystemd-system-service=false -Dsystemd-user-service=true
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/bin/wpctl"
+'''
