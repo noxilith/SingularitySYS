@@ -13,6 +13,7 @@ If an update leaves the machine broken or unpleasant:
 
 ```bash
 sudo forge gen rollback N      # N is the generation number
+# forge mounts the btrfs top-level volume itself for the length of the command (no --top needed)
 ```
 
 A rollback finishes after a reboot; then run `sudo forge gen rewrite-limine`, and after one more reboot

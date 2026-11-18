@@ -410,7 +410,7 @@ struct GenPaths {
     /// Snapshots directory (the @snapshots subvolume)
     #[arg(long, global = true, default_value = "/.snapshots")]
     snapshots: PathBuf,
-    /// Mount of the top-level btrfs volume (subvolid=5); needed by rollback
+    /// Mount of the top-level btrfs volume (subvolid=5); mounted for you when rolling back if not given
     #[arg(long, global = true)]
     top: Option<PathBuf>,
     /// limine.conf to (re)write
@@ -1234,12 +1234,77 @@ fn with_gen_ctx<R>(
     f(&ctx)
 }
 
+
+/// The device the root file system is mounted from, out of `/proc/self/mountinfo`.
+fn root_device(mountinfo: &str) -> Option<String> {
+    mountinfo
+        .lines()
+        .filter_map(|l| {
+            let (before, after) = l.split_once(" - ")?;
+            (before.split_whitespace().nth(4) == Some("/")).then(|| after.split_whitespace().nth(1).map(String::from))?
+        })
+        .last()
+}
+
+#[cfg(test)]
+mod top_mount_tests {
+    use super::root_device;
+
+    #[test]
+    fn the_root_device_is_found_in_mountinfo() {
+        let info = "22 1 0:21 /@ / rw,relatime shared:1 - btrfs /dev/nvme0n1p2 rw,ssd,subvol=/@\n\
+                    30 22 0:5 / /dev rw - devtmpfs devtmpfs rw\n\
+                    31 22 0:26 /@home /home rw - btrfs /dev/nvme0n1p2 rw,subvol=/@home\n";
+        assert_eq!(root_device(info).as_deref(), Some("/dev/nvme0n1p2"));
+        assert_eq!(root_device("30 22 0:5 / /dev rw - devtmpfs devtmpfs rw\n"), None);
+    }
+}
+
+
+/// The btrfs top-level volume (subvolid=5) mounted on a private directory for the length of a command: rolling back
+/// replaces the root subvolume, which can only be done from the top. Unmounted again when dropped.
+struct TopMount {
+    dir: PathBuf,
+}
+
+impl TopMount {
+    fn mount() -> Result<Self> {
+        // The device the running root is on: the source field of the mountinfo line whose mount point is `/`.
+        let info = std::fs::read_to_string("/proc/self/mountinfo").context("reading /proc/self/mountinfo")?;
+        let device = root_device(&info).context("could not find the device the system is mounted from")?;
+        let dir = PathBuf::from("/run/forge-top");
+        std::fs::create_dir_all(&dir).context("creating /run/forge-top")?;
+        let out = std::process::Command::new("mount").args(["-o", "subvolid=5", &device]).arg(&dir).output().context("running mount")?;
+        if !out.status.success() {
+            bail!("mounting the top-level volume of {device} failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        }
+        Ok(Self { dir })
+    }
+}
+
+impl Drop for TopMount {
+    fn drop(&mut self) {
+        let _ = std::process::Command::new("umount").arg(&self.dir).status();
+        let _ = std::fs::remove_dir(&self.dir);
+    }
+}
+
 fn gen_cmd(a: GenArgs) -> Result<()> {
     let read_only = matches!(a.action, GenAction::List | GenAction::Current);
     if !read_only && !a.paths.copy_backend && !is_root() {
         bail!("changing generations needs root");
     }
-    with_gen_ctx(&a.paths, !read_only, |ctx| match a.action {
+    // Rolling back works on the top-level volume: when none was given, mount it for this command and unmount it after.
+    let needs_top = matches!(a.action, GenAction::Rollback { .. } | GenAction::CleanupNext | GenAction::RewriteLimine);
+    let mut paths = a.paths.clone();
+    let _top_mount = if needs_top && paths.top.is_none() && !paths.copy_backend {
+        let m = TopMount::mount()?;
+        paths.top = Some(m.dir.clone());
+        Some(m)
+    } else {
+        None
+    };
+    with_gen_ctx(&paths, !read_only, |ctx| match a.action {
         GenAction::Create { description } => {
             let g = forge_gen::create(ctx, &description.join(" "))?;
             println!("created generation {}: {}", g.id, g.description);
