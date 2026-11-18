@@ -1,6 +1,6 @@
 # Disk management service (mount and eject drives)
 name        = "udisks2"
-version     = "2.10.1"
+version     = "2.10.1_r1"
 description = "Disk management service (mount and eject drives)"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]

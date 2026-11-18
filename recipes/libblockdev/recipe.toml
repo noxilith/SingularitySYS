@@ -1,6 +1,6 @@
 # Block device library (udisks2)
 name        = "libblockdev"
-version     = "3.3.1_r1"
+version     = "3.3.1_r2"
 description = "Block device library (udisks2)"
 license     = "LGPL-2.1-or-later"
 libc        = ["glibc"]
