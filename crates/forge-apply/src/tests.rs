@@ -130,20 +130,41 @@ fn only_services_forge_enabled_are_disabled_again() {
 }
 
 #[test]
-fn declaring_vesper_enables_the_desktop_services_even_before_their_scripts_exist() {
+fn declaring_vesper_sets_up_the_desktop_and_removing_it_takes_it_all_away_again() {
     let r = root();
     publish_v(r.path(), "vesper", "1.0", "desktop");
-    let p = plan(&pkg_decl(&["vesper"]), r.path());
-    assert!(p.changes.iter().any(|c| c.summary.contains("seatd")));
-    apply(&p).unwrap();
+    fs::write(r.path().join("etc/passwd"), "root:x:0:0::/root:/bin/sh\nalice:x:1000:1000::/home/alice:/bin/sh\n").unwrap();
+    fs::write(r.path().join("etc/group"), "root:x:0:\nalice:x:1000:\nvideo:x:12:\ninput:x:13:\naudio:x:14:\n").unwrap();
+    let d = decl("repos = [\"/srv/repo\"]\npackages = [\"vesper\"]\n[[users]]\nname = \"alice\"\ngroups = [\"wheel\"]\n");
+    let p = plan(&d, r.path());
+    let text: Vec<String> = p.changes.iter().map(|c| c.summary.clone()).collect();
+    assert!(text.iter().any(|s| s.contains("system user greeter: create")), "{text:?}");
+    assert!(text.iter().any(|s| s.contains("alice: join") && s.contains("video") && s.contains("input") && s.contains("audio")), "{text:?}");
     for s in forge_schema::DESKTOP_SERVICES {
-        let link = r.path().join(format!("etc/runlevels/default/{s}"));
-        assert_eq!(fs::read_link(link).unwrap(), Path::new(&format!("/etc/init.d/{s}")));
+        assert!(text.iter().any(|t| t.contains(s)), "{s} is enabled: {text:?}");
     }
-    // taking the desktop out turns them off again
-    let p = plan(&decl(""), r.path());
-    apply(&p).unwrap();
-    assert!(!r.path().join("etc/runlevels/default/seatd").exists());
+
+    // Later: the desktop is installed (the state remembers what forge added) and then taken out of the declaration.
+    fs::write(r.path().join("etc/passwd"), "root:x:0:0::/root:/bin/sh\nalice:x:1000:1000::/home/alice:/bin/sh\ngreeter:x:990:990::/var/lib/greeter:/usr/sbin/nologin\n").unwrap();
+    fs::write(r.path().join("etc/group"), "root:x:0:\nalice:x:1000:\nvideo:x:12:alice,greeter\ninput:x:13:alice,greeter\naudio:x:14:alice\n").unwrap();
+    fs::create_dir_all(r.path().join("var/lib/forge")).unwrap();
+    fs::write(
+        r.path().join("var/lib/forge/state.toml"),
+        "managed_services = [\"seatd\", \"greetd\"]\nmanaged_users = [\"greeter\"]\nmanaged_memberships = [\"alice:video\", \"alice:input\", \"alice:audio\"]\n",
+    )
+    .unwrap();
+    let gone = decl("[[users]]\nname = \"alice\"\ngroups = [\"wheel\"]\n");
+    let p = plan(&gone, r.path());
+    let text: Vec<String> = p.changes.iter().map(|c| c.summary.clone()).collect();
+    assert!(text.iter().any(|s| s.contains("user greeter: remove")), "{text:?}");
+    for g in ["video", "input", "audio"] {
+        assert!(text.iter().any(|s| s.contains("alice: leave") && s.contains(g)), "{g}: {text:?}");
+    }
+    // A group the user declared themselves is not taken away.
+    let keeps = decl("[[users]]\nname = \"alice\"\ngroups = [\"wheel\", \"video\"]\n");
+    let text: Vec<String> = plan(&keeps, r.path()).changes.iter().map(|c| c.summary.clone()).collect();
+    assert!(!text.iter().any(|s| s.contains("alice: leave video")), "{text:?}");
+    assert!(text.iter().any(|s| s.contains("alice: leave input")), "{text:?}");
 }
 
 #[test]

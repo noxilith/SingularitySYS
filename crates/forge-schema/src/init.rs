@@ -247,6 +247,11 @@ mod tests {
     }
 }
 
-/// System services the Vesper desktop needs (seat daemon, login screen, Bluetooth, power, drives). Declaring the `vesper` package enables
-/// them under either init system; NetworkManager is left out on purpose because it would fight forge's own network setup.
-pub const DESKTOP_SERVICES: &[&str] = &["seatd", "greetd", "bluetooth", "upower", "power-profiles-daemon", "udisks2"];
+/// The package that makes a system a desktop: declaring it sets up everything below, and taking it out removes it again.
+pub const DESKTOP_PACKAGE: &str = "vesper";
+/// System services the desktop needs (seat daemon, login screen, Bluetooth, power, drives, networking). NetworkManager takes
+/// over from forge's own network setup while the desktop is installed.
+pub const DESKTOP_SERVICES: &[&str] = &["seatd", "greetd", "NetworkManager", "bluetooth", "upower", "power-profiles-daemon", "udisks2"];
+/// The login screen's account, and the groups every user gets for the desktop (graphics, input devices, sound).
+pub const DESKTOP_USER: &str = "greeter";
+pub const DESKTOP_GROUPS: &[&str] = &["video", "input", "audio"];

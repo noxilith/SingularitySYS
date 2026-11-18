@@ -221,6 +221,26 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
             }
         }
     }
+    // The desktop brings NetworkManager, which must be the only thing configuring interfaces: forge's own network setup
+    // (the `network` service under OpenRC, systemd-networkd and the per-interface supplicant under systemd) is switched off
+    // while the desktop is installed and comes back, exactly as before, when it is removed.
+    let networkd_link = "/etc/systemd/system/multi-user.target.wants/systemd-networkd.service".to_string();
+    if decl.desktop() {
+        if init == "openrc" {
+            for m in v.iter_mut().filter(|m| m.path == "/etc/runlevels/default/network") {
+                m.entry = Entry::Absent;
+            }
+        } else {
+            for path in [networkd_link.as_str(), "/etc/udev/rules.d/80-wifi.rules"] {
+                v.push(Managed { path: path.into(), entry: Entry::Absent, own: Own::Always });
+            }
+        }
+    } else if init != "openrc" {
+        v.push(link(networkd_link.clone(), "/usr/lib/systemd/system/systemd-networkd.service".into(), Own::Always));
+        for (path, content) in crate::SYSTEMD_NETWORK_FILES.iter().chain(crate::SYSTEMD_WIFI_FILES.iter()) {
+            v.push(file(path, content, 0o644, Own::Always));
+        }
+    }
     v
 }
 
@@ -234,6 +254,20 @@ mod tests {
 
     fn find<'a>(v: &'a [Managed], p: &str) -> Option<&'a Managed> {
         v.iter().find(|m| m.path == p)
+    }
+
+    #[test]
+    fn the_desktop_swaps_forges_network_setup_for_networkmanager_and_gives_it_back() {
+        let on = |init: &str| managed_for(&decl(&format!("init = \"{init}\"\npackages = [\"vesper\"]")).with_desktop());
+        let off = |init: &str| managed_for(&decl(&format!("init = \"{init}\"")));
+        let rl = "/etc/runlevels/default/network";
+        assert_eq!(find(&on("openrc"), rl).unwrap().entry, Entry::Absent);
+        assert!(matches!(find(&off("openrc"), rl).unwrap().entry, Entry::Link(_)));
+        let nd = "/etc/systemd/system/multi-user.target.wants/systemd-networkd.service";
+        assert_eq!(find(&on("systemd"), nd).unwrap().entry, Entry::Absent);
+        assert!(matches!(find(&off("systemd"), nd).unwrap().entry, Entry::Link(_)));
+        assert_eq!(find(&on("systemd"), "/etc/udev/rules.d/80-wifi.rules").unwrap().entry, Entry::Absent);
+        assert!(matches!(find(&off("systemd"), "/etc/udev/rules.d/80-wifi.rules").unwrap().entry, Entry::File { .. }));
     }
 
     #[test]

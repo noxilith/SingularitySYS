@@ -3,7 +3,8 @@
 //! The declaration says who exists, which groups they are in, and their shell; forge makes the machine match using
 //! the shadow tools (`useradd`, `usermod`, `groupadd`), after the packages are installed. Passwords are never in
 //! the declaration: a user created here has none until `sudo passwd NAME` (the installer's user already has one).
-//! Nothing is ever removed: dropping a user from the declaration does not delete the account or its files.
+//! Nothing is removed except what forge added for the desktop (the `greeter` account and the group memberships it gave):
+//! dropping any other user from the declaration does not delete the account or its files.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -73,7 +74,7 @@ impl Planner<'_> {
 }
 
 /// Plan `/etc/shells` and the accounts.
-pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl) -> Result<(), crate::PlanError> {
+pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl, old: &crate::State, new: &mut crate::State) -> Result<(), crate::PlanError> {
     let root = p.root.to_path_buf();
     let system_shell = shell_path(&decl.shell);
 
@@ -119,6 +120,8 @@ pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl) -> Result<(), crate
         p.run("users", Kind::Modify, format!("user root: shell {} -> {}", r.shell, system_shell), "usermod", vec!["-s".into(), system_shell.clone(), "root".into()]);
     }
 
+    // Memberships forge adds now only because the desktop asks for them (so they can be withdrawn with it).
+    let mut added: Vec<String> = Vec::new();
     for u in &decl.users {
         let want_shell = shell_path(u.shell.as_deref().unwrap_or(&decl.shell));
         match passwd.get(&u.name) {
@@ -126,14 +129,25 @@ pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl) -> Result<(), crate
                 for g in &u.groups {
                     need_group(p, g, &groups);
                 }
-                let mut args = vec!["-m".to_string(), "-s".to_string(), want_shell.clone()];
+                // A system account (the login screen's) has no home directory of its own to fill and no password.
+                let mut args = if u.system {
+                    vec!["-r".to_string(), "-M".to_string(), "-d".to_string(), format!("/var/lib/{}", u.name), "-s".to_string(), want_shell.clone()]
+                } else {
+                    vec!["-m".to_string(), "-s".to_string(), want_shell.clone()]
+                };
                 if !u.groups.is_empty() {
                     args.push("-G".into());
                     args.push(u.groups.join(","));
                 }
                 args.push(u.name.clone());
                 let with = if u.groups.is_empty() { String::new() } else { format!(", groups {}", u.groups.join(", ")) };
-                p.run("users", Kind::Add, format!("user {}: create (shell {want_shell}{with}); no password yet: run `sudo passwd {}`", u.name, u.name), "useradd", args);
+                let summary = if u.system {
+                    format!("system user {}: create (for the desktop{with})", u.name)
+                } else {
+                    format!("user {}: create (shell {want_shell}{with}); no password yet: run `sudo passwd {}`", u.name, u.name)
+                };
+                p.run("users", Kind::Add, summary, "useradd", args);
+                added.extend(u.implied_groups.iter().map(|g| format!("{}:{g}", u.name)));
                 // The group file changes once the user exists; later users see these memberships.
                 for g in &u.groups {
                     groups.entry(g.clone()).or_default().insert(u.name.clone());
@@ -149,9 +163,37 @@ pub(crate) fn plan_users(p: &mut Planner, decl: &SystemDecl) -> Result<(), crate
                         need_group(p, g, &groups);
                     }
                     p.run("users", Kind::Modify, format!("user {}: join {}", u.name, missing.join(", ")), "usermod", vec!["-a".into(), "-G".into(), missing.join(","), u.name.clone()]);
+                    added.extend(missing.iter().filter(|g| u.implied_groups.contains(g)).map(|g| format!("{}:{g}", u.name)));
                 }
             }
         }
     }
+
+    // What the desktop added is withdrawn when it goes: its memberships (unless the user declared the group themselves)
+    // and the accounts forge created for it. Nothing else is ever removed.
+    let now_implied: BTreeSet<String> = decl.users.iter().flat_map(|u| u.implied_groups.iter().map(|g| format!("{}:{g}", u.name))).collect();
+    let mut kept: BTreeSet<String> = old.managed_memberships.iter().filter(|m| now_implied.contains(*m)).cloned().collect();
+    kept.extend(added);
+    let wanted_users: BTreeSet<&str> = decl.users.iter().map(|u| u.name.as_str()).collect();
+    for m in old.managed_memberships.iter().filter(|m| !now_implied.contains(*m)) {
+        let Some((user, group)) = m.split_once(':') else { continue };
+        let declared = decl.users.iter().any(|u| u.name == user && u.groups.iter().any(|g| g == group));
+        if declared || !wanted_users.contains(user) || !groups.get(group).is_some_and(|members| members.contains(user)) {
+            continue;
+        }
+        p.changes.push(Change {
+            section: "users",
+            kind: Kind::Remove,
+            summary: format!("user {user}: leave {group} (it was added for the desktop)"),
+            op: Op::Run { program: under(&root, "/usr/bin/gpasswd"), args: vec!["-d".into(), user.into(), group.into()], best_effort: true },
+        });
+    }
+    for name in old.managed_users.iter().filter(|n| !wanted_users.contains(n.as_str())) {
+        if passwd.contains_key(name) {
+            p.run("users", Kind::Remove, format!("user {name}: remove (it was added for the desktop)"), "userdel", vec![name.clone()]);
+        }
+    }
+    new.managed_memberships = kept.into_iter().collect();
+    new.managed_users = decl.users.iter().filter(|u| u.system).map(|u| u.name.clone()).collect();
     Ok(())
 }

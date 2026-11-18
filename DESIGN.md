@@ -1085,3 +1085,12 @@ libblockdev, libatasmart and e2fsprogs-libs; libblockdev's mdraid, crypto and nv
 installed so udisks compiles, and the daemon logs that those plugins fail to load), tesseract (+ leptonica, English "fast" data
 from the `sources` release), ffmpeg (GPL, with x264, software only), wf-recorder 0.6 (PipeWire audio) and libnotify are
 tied to vesper too. Unverified: udisksd starting with the missing plugins.
+
+### The desktop is one declaration (2026-11-18)
+
+`SystemDecl::with_desktop()` derives everything the `vesper` package needs from the declaration, so it is withdrawn the moment the
+package is: `DESKTOP_SERVICES` (seatd, greetd, NetworkManager, bluetooth, upower, power-profiles-daemon, udisks2), a system
+account `greeter`, and `video`/`input`/`audio` for every declared user. `managed_for` switches forge's own network setup off
+for the desktop (OpenRC: the `network` runlevel link; systemd: the networkd link and the Wi-Fi udev rule) and puts it back
+otherwise. State gained `managed_users` and `managed_memberships`, so forge removes exactly the account and memberships it added
+(`userdel`, `gpasswd -d`; a group the user declared is kept). The greetd package no longer creates its user through sysusers.

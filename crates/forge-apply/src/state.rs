@@ -14,6 +14,12 @@ const STATE_PATH: &str = "var/lib/forge/state.toml";
 pub struct State {
     #[serde(default)]
     pub managed_services: Vec<String>,
+    /// Accounts forge added for the desktop (the login screen's `greeter`), removed again with it.
+    #[serde(default)]
+    pub managed_users: Vec<String>,
+    /// `user:group` memberships forge added for the desktop, withdrawn again with it.
+    #[serde(default)]
+    pub managed_memberships: Vec<String>,
     /// Highest serial seen in each signed repository (keyed as written in the
     /// declaration), so an older index is recognized as a rollback.
     #[serde(default)]

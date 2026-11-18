@@ -176,7 +176,7 @@ fn defaults(r: &mut Report, root: &Path, decl: Option<&forge_schema::SystemDecl>
         return;
     }
     let mut stale = Vec::new();
-    let all = decl.map_or_else(|| forge_schema::managed(system), forge_schema::managed_for);
+    let all = decl.map_or_else(|| forge_schema::managed(system), |d| forge_schema::managed_for(&d.with_desktop()));
     for m in all.into_iter().filter(|m| m.own == forge_schema::Own::Always) {
         let path = under(root, &m.path);
         let ok = match &m.entry {

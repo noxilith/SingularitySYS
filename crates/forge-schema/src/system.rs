@@ -69,6 +69,12 @@ pub struct UserAccount {
     /// The login shell as a program name or path (`fish`, `/usr/bin/fish`); the system's `shell` when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shell: Option<String>,
+    /// A system account forge itself adds (the login screen's `greeter`): no home directory, never a login.
+    #[serde(skip)]
+    pub system: bool,
+    /// Groups forge adds on its own (the desktop's `video`, `input`, `audio`), as opposed to the ones the user declared.
+    #[serde(skip)]
+    pub implied_groups: Vec<String>,
 }
 
 /// The login shell for root and for users who do not name their own: a program name (`bash`, `fish`). Anything
@@ -155,6 +161,44 @@ fn default_keymap() -> String {
 }
 
 impl SystemDecl {
+
+    /// Does the declaration install the Vesper desktop?
+    pub fn desktop(&self) -> bool {
+        self.packages.iter().any(|p| p == crate::DESKTOP_PACKAGE)
+    }
+
+    /// The declaration with what the desktop needs added: its services (and NetworkManager in place of forge's own
+    /// network setup), the `greeter` account of the login screen, and the `video`, `input` and `audio` groups for every
+    /// user. Take the desktop out of the packages and all of it is withdrawn again, because it is derived, not stored.
+    pub fn with_desktop(&self) -> SystemDecl {
+        let mut d = self.clone();
+        if !self.desktop() {
+            return d;
+        }
+        for s in crate::DESKTOP_SERVICES {
+            if !d.init.services.iter().any(|x| x == s) {
+                d.init.services.push((*s).to_string());
+            }
+        }
+        for u in &mut d.users {
+            for g in crate::DESKTOP_GROUPS {
+                if !u.groups.iter().any(|x| x == g) {
+                    u.groups.push((*g).to_string());
+                    u.implied_groups.push((*g).to_string());
+                }
+            }
+        }
+        if !d.users.iter().any(|u| u.name == crate::DESKTOP_USER) {
+            d.users.push(UserAccount {
+                name: crate::DESKTOP_USER.into(),
+                groups: vec!["video".into(), "input".into()],
+                shell: Some("/usr/sbin/nologin".into()),
+                system: true,
+                implied_groups: Vec::new(),
+            });
+        }
+        d
+    }
     pub fn parse(text: &str) -> Result<Self, SchemaError> {
         let mut decl: Self = toml::from_str(text)?;
         let extra = std::mem::take(&mut decl.services);

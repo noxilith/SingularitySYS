@@ -319,6 +319,10 @@ const MANAGED_HEADER: &str = "# managed by forge; edit /etc/forge/system.toml in
 
 /// Work out what has to change to match `decl`. Reads the machine, writes nothing.
 pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan, PlanError> {
+    // Everything the desktop needs is derived from the declaration here, so removing the package withdraws it all.
+    let effective = decl.with_desktop();
+    let desktop = effective.desktop();
+    let decl = &effective;
     check("hostname", &decl.hostname, &['-', '.'])?;
     check("timezone", &decl.timezone, &['/', '_', '+', '-'])?;
     if decl.timezone.contains("..") || decl.timezone.starts_with('/') {
@@ -387,17 +391,9 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     }
 
     let mut declared: Vec<String> = decl.init.services.clone();
-    // Installing the Vesper desktop turns on the system services it needs (their init scripts and units come with
-    // their packages, which are installed before these links are made).
-    let mut implied: Vec<String> = Vec::new();
-    if decl.packages.iter().any(|p| p == "vesper") {
-        for s in forge_schema::DESKTOP_SERVICES {
-            if !declared.iter().any(|d| d == s) {
-                declared.push((*s).to_string());
-                implied.push((*s).to_string());
-            }
-        }
-    }
+    // The desktop's services are in the declaration already (see `with_desktop`); their init scripts and units come with
+    // their packages, which are installed before these links are made, so they need not exist yet.
+    let implied: Vec<String> = if desktop { forge_schema::DESKTOP_SERVICES.iter().map(|s| (*s).to_string()).collect() } else { Vec::new() };
     declared.sort();
     declared.dedup();
     let mut new_state = old_state.clone();
@@ -445,7 +441,7 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     if openrc && (!p.opts.base.is_empty() || old_state.init.is_some()) {
         p.link("init", "/etc/runlevels/default/chronyd", "/etc/init.d/chronyd");
     }
-    users::plan_users(&mut p, decl)?;
+    users::plan_users(&mut p, decl, &old_state, &mut new_state)?;
     // The init link and the power commands are kept right on every apply (on a real system, which has /usr/sbin), not
     // only when the init system changes: whatever put something else there (an older forge, a package) is corrected.
     // The link points at the init system the declaration names; it takes effect at the next boot.
@@ -469,10 +465,10 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
         let stub = "/run/systemd/resolve/stub-resolv.conf";
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
         if systemd {
-            for (unit, target) in forge_schema::SYSTEMD_BASELINE {
+            for (unit, target) in forge_schema::SYSTEMD_BASELINE.iter().filter(|(u, _)| !(desktop && *u == "systemd-networkd.service")) {
                 p.link("init", &baseline(unit, target), &forge_schema::systemd_unit_file(unit));
             }
-            for (path, content) in forge_schema::SYSTEMD_NETWORK_FILES.iter().chain(forge_schema::SYSTEMD_WIFI_FILES.iter()) {
+            for (path, content) in forge_schema::SYSTEMD_NETWORK_FILES.iter().chain(forge_schema::SYSTEMD_WIFI_FILES.iter()).filter(|_| !desktop) {
                 p.file("init", path, content.to_string())?;
             }
             // resolved keeps /etc/resolv.conf pointing at its stub resolver.

@@ -1,9 +1,9 @@
 # greetd: the minimal login manager daemon, with the plain-text greeter `agreety` (its sample config is in
 # /usr/share/greetd/agreety.toml). The vesper package ships /etc/greetd/config.toml for Vesper's own login screen and forge
 # enables greetd when vesper is declared. Built from the vendored source tarball scripts/vendor-crate.sh makes (a forge
-# build has no network). The "greeter" user is created by sysusers (member of video and input).
+# build has no network). The "greeter" account is made by forge when the vesper desktop is declared.
 name        = "greetd"
-version     = "0.10.3_r1"
+version     = "0.10.3_r2"
 description = "Minimal and flexible login manager daemon"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -30,10 +30,9 @@ install -Dm644 config.toml "$DESTDIR/usr/share/greetd/agreety.toml"
 mkdir -p "$DESTDIR/usr/lib/systemd/system"
 printf '[Unit]\nDescription=Greeter daemon (login screen)\nAfter=systemd-user-sessions.service seatd.service dbus.service\nWants=seatd.service\nConflicts=getty@tty7.service\n\n[Service]\nType=simple\nExecStart=/usr/bin/greetd\nRestart=always\nIgnoreSIGPIPE=no\nSendSIGHUP=yes\nTimeoutStopSec=30s\n\n[Install]\nAlias=display-manager.service\n' > "$DESTDIR/usr/lib/systemd/system/greetd.service"
 install -Dm644 LICENSE "$DESTDIR/usr/share/licenses/greetd/LICENSE"
-mkdir -p "$DESTDIR/etc/pam.d" "$DESTDIR/etc/init.d" "$DESTDIR/usr/lib/sysusers.d"
+mkdir -p "$DESTDIR/etc/pam.d" "$DESTDIR/etc/init.d"
 printf 'auth     required pam_unix.so\naccount  required pam_unix.so\npassword required pam_unix.so\nsession  required pam_unix.so\n' > "$DESTDIR/etc/pam.d/greetd"
 printf '#!/sbin/openrc-run\ndescription="greetd login manager"\ncommand=/usr/bin/greetd\ncommand_background=true\npidfile=/run/greetd.pid\ndepend() { need dbus seatd; }\n' > "$DESTDIR/etc/init.d/greetd"
 chmod 755 "$DESTDIR/etc/init.d/greetd"
-printf 'u greeter - "greetd greeter" /var/lib/greetd /usr/sbin/nologin\nm greeter video\nm greeter input\n' > "$DESTDIR/usr/lib/sysusers.d/greetd.conf"
 test -x "$DESTDIR/usr/bin/greetd"
 '''
