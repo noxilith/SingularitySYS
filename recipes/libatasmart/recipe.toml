@@ -1,0 +1,23 @@
+# libatasmart: reads ATA SMART disk health data (udisks2 links it).
+name        = "libatasmart"
+version     = "0.19"
+description = "ATA S.M.A.R.T. reading and parsing library"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "systemd"]
+
+[[source]]
+url    = "http://0pointer.de/public/libatasmart-0.19.tar.xz"
+sha256 = "61f0ea345f63d28ab2ff0dc352c22271661b66bf09642db3a4049ac9dbdb0f8d"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/vala" "$DESTDIR/usr/share/doc"
+test -e "$DESTDIR/usr/lib/libatasmart.so.4"
+'''

@@ -1,0 +1,27 @@
+# Desktop notification library and notify-send
+name        = "libnotify"
+version     = "0.8.6"
+description = "Desktop notification library and notify-send"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "glib", "gdk-pixbuf", "libpng", "libffi", "pcre2", "zlib"]
+
+[[source]]
+url    = "https://download.gnome.org/sources/libnotify/0.8/libnotify-0.8.6.tar.xz"
+sha256 = "c5540aaefb60e1d63b1c587c05f2284ebe72ece7d0c0e5e4a778cfd5844b6b58"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=false -Dintrospection=disabled -Dman=false -Dgtk_doc=false -Ddocbook_docs=disabled
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/bin/notify-send"
+'''

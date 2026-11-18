@@ -1079,3 +1079,9 @@ fuse3 and gdk-pixbuf (the portal needs them). There is no gettext, so msgfmt is 
 the repository), Intel graphics, Vulkan, Bluetooth audio, a display manager. The kernel gained `FUSE_FS` (7.3.3-r8).
 OpenRC init scripts for seatd, bluetooth, NetworkManager, upower and power-profiles-daemon ship in the packages; on OpenRC
 `vesper-session` starts pipewire, wireplumber and pipewire-pulse itself.
+
+Later the same day: greetd (vendored with `scripts/vendor-crate.sh`, which makes the tarball for any Rust program), udisks2 (with
+libblockdev, libatasmart and e2fsprogs-libs; libblockdev's mdraid, crypto and nvme plugins are NOT built, their headers are
+installed so udisks compiles, and the daemon logs that those plugins fail to load), tesseract (+ leptonica, English "fast" data
+from the `sources` release), ffmpeg (GPL, with x264, software only), wf-recorder 0.6 (PipeWire audio) and libnotify are
+tied to vesper too. Unverified: udisksd starting with the missing plugins.

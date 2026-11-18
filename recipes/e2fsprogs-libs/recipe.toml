@@ -1,0 +1,30 @@
+# e2fsprogs-libs: libext2fs, libe2p, libcom_err and libss as shared libraries with headers and pkg-config files (libblockdev
+# reads ext file systems through them). The tools are in the e2fsprogs package, which keeps only the programs.
+name        = "e2fsprogs-libs"
+version     = "1.47.2"
+description = "ext2/3/4 file system libraries"
+license     = "GPL-2.0-only AND LGPL-2.0-only"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "util-linux"]
+
+[[source]]
+url    = "https://mirrors.edge.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.2/e2fsprogs-1.47.2.tar.gz"
+sha256 = "7a959221c1b1cc6e28b7d7a4e204a2ffd8ec6d8a2de4461c482b64c5f4463cca"
+
+[build]
+configure = '''
+./configure --prefix=/usr --libdir=/usr/lib --with-root-prefix=/usr --enable-elf-shlibs --disable-nls --disable-fsck \
+    --disable-uuidd --disable-libuuid --disable-libblkid --disable-e2initrd-helper --without-udev-rules-dir \
+    --without-crond-dir --without-systemd-unit-dir CFLAGS='-O2'
+'''
+compile = "make -j$JOBS"
+install = '''
+make install-libs DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.a
+rm -rf "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/etc"
+test -e "$DESTDIR/usr/lib/libext2fs.so.2"
+test -e "$DESTDIR/usr/lib/pkgconfig/ext2fs.pc"
+'''

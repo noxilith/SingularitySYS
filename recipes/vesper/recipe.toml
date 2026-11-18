@@ -5,9 +5,10 @@
 # Start it from a text console with `vesper-session` (needs a seat: systemd-logind, or `seatd` on OpenRC) or pick the
 # "Vesper" session in a display manager. Installing it pulls in everything it uses: Xwayland, the screen-sharing portals,
 # PipeWire and WirePlumber (volume), NetworkManager, BlueZ, brightnessctl, power-profiles-daemon, polkit, fonts, foot.
-# Not packaged: matugen, a display manager (greetd), the GTK portal backend (needs GTK).
+# Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
+# Not packaged: matugen, the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r2"
+version     = "0.1.0_r3"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -17,7 +18,7 @@ build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffu
 run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mesa", "wayland", "dbus", "linux-pam",
          "systemd", "fontconfig", "freetype", "font-jetbrains-mono-nerd", "font-dejavu", "font-noto-color-emoji",
          "xwayland", "xdg-desktop-portal", "xdg-desktop-portal-wlr", "pipewire", "wireplumber", "slurp",
-         "networkmanager", "bluez", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot"]
+         "networkmanager", "bluez", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
 url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-8ac63ba0fe7d49694ea1816d402cb8a64c88e15b-vendored.tar.gz"

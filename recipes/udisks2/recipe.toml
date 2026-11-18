@@ -1,0 +1,39 @@
+# Disk management service (mount and eject drives)
+name        = "udisks2"
+version     = "2.10.1"
+description = "Disk management service (mount and eject drives)"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "glib", "libgudev", "polkit", "libatasmart", "libblockdev", "util-linux", "systemd", "dbus", "kmod", "duktape", "expat", "libffi", "pcre2", "zlib", "linux-pam", "libcap"]
+
+[[source]]
+url    = "https://github.com/storaged-project/udisks/releases/download/udisks-2.10.1/udisks-2.10.1.tar.bz2"
+sha256 = "b75734ccf602540dedb4068bec206adcb508a4c003725e117ae8f994d92d8ece"
+
+[build]
+configure = '''
+export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages
+mkdir -p /build/shim
+for t in xgettext msgmerge msgcat; do printf '#!/bin/sh\nexit 0\n' > /build/shim/$t; chmod 755 /build/shim/$t; done
+cat > /build/shim/msgfmt <<'SH'
+#!/bin/sh
+tmpl=; out=
+while [ $# -gt 0 ]; do case "$1" in --template) tmpl=$2; shift;; -o) out=$2; shift;; --version) echo "msgfmt (shim) 0.22"; exit 0;; esac; shift; done
+if [ -n "$tmpl" ]; then cp "$tmpl" "$out"; elif [ -n "$out" ]; then : > "$out"; fi
+SH
+chmod 755 /build/shim/msgfmt
+./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --sbindir=/usr/bin --libexecdir=/usr/libexec --disable-nls --disable-man --disable-gtk-doc --disable-introspection --disable-lvm2 --disable-lsm --disable-btrfs --disable-zram --disable-iscsi --disable-bcache --disable-vdo --disable-smart --disable-available-modules --with-udevdir=/usr/lib/udev --with-systemdsystemunitdir=/usr/lib/systemd/system
+'''
+compile   = "export PATH=/build/shim:$PATH PYTHONPATH=/usr/lib/python3.12/site-packages; make -j$JOBS"
+install   = '''
+export PATH=/build/shim:$PATH
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/gtk-doc"
+mkdir -p "$DESTDIR/etc/init.d"
+printf "#!/sbin/openrc-run\ndescription=\"udisks2 disk manager\"\ncommand=/usr/libexec/udisks2/udisksd\ncommand_background=true\npidfile=/run/udisksd.pid\ndepend() { need dbus; }\n" > "$DESTDIR/etc/init.d/udisks2"
+chmod 755 "$DESTDIR/etc/init.d/udisks2"
+test -e "$DESTDIR/usr/libexec/udisks2/udisksd"
+'''

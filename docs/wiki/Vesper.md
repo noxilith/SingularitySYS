@@ -36,4 +36,16 @@ vesper-session
 
 | In | Not yet |
 |---|---|
-| Xwayland, screen-sharing portals, PipeWire/WirePlumber, NetworkManager (WPA-PSK Wi-Fi, Ethernet), BlueZ, brightnessctl, power-profiles-daemon, polkit, foot, fonts, FUSE | Intel graphics (Mesa's iris driver needs clang/SPIR-V), Vulkan, Bluetooth audio (needs `sbc`), 802.1X enterprise Wi-Fi (NetworkManager is built without a crypto library), the GTK portal backend (needs GTK), matugen, a display manager |
+| greetd, udisks2, tesseract, wf-recorder, ffmpeg, Xwayland, screen-sharing portals, PipeWire/WirePlumber, NetworkManager (WPA-PSK Wi-Fi, Ethernet), BlueZ, brightnessctl, power-profiles-daemon, polkit, foot, fonts, FUSE | Intel graphics (Mesa's iris driver needs clang/SPIR-V), Vulkan, Bluetooth audio (needs `sbc`), 802.1X enterprise Wi-Fi (NetworkManager is built without a crypto library), the GTK portal backend (needs GTK), matugen, udisks2 encryption/RAID/NVMe plugins (the daemon logs that they did not load) |
+
+## Login screen (greetd)
+
+`greetd` is installed but not enabled. For Vesper's own login screen create the unprivileged user, use its config and enable it:
+
+```bash
+sudo useradd -r -s /usr/bin/nologin greeter
+sudo cp /usr/share/vesper/greetd-vesper.toml /etc/greetd/config.toml
+sudo rc-update add greetd default        # systemd: sudo systemctl enable greetd
+```
+
+Skip it if you prefer to log in on the console and run `vesper-session`.

@@ -1,0 +1,22 @@
+# English language data for tesseract (the "fast" models).
+name        = "tesseract-data-eng"
+version     = "4.1.0"
+description = "Tesseract OCR English language data"
+license     = "Apache-2.0"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+run   = ["tesseract"]
+
+[[source]]
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/tessdata-fast-4.1.0.tar.gz"
+sha256 = "0d745f25d41ffdeca9ef9db49d0fa9760f9e46186ea5ce97f78d9179a68cf639"
+
+[build]
+install = '''
+mkdir -p "$DESTDIR/usr/share/tessdata" "$DESTDIR/usr/share/licenses/tesseract-data-eng"
+install -m 644 "$SRC/eng.traineddata" "$DESTDIR/usr/share/tessdata/"
+cp "$SRC/LICENSE" "$DESTDIR/usr/share/licenses/tesseract-data-eng/"
+test -s "$DESTDIR/usr/share/tessdata/eng.traineddata"
+'''

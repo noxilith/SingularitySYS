@@ -1,0 +1,27 @@
+# Block device library (udisks2)
+name        = "libblockdev"
+version     = "3.3.1_r1"
+description = "Block device library (udisks2)"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "systemd", "e2fsprogs-libs", "glib", "kmod", "util-linux", "libffi", "pcre2", "zlib"]
+
+[[source]]
+url    = "https://github.com/storaged-project/libblockdev/releases/download/3.3.1/libblockdev-3.3.1.tar.gz"
+sha256 = "a2e2e448a19d420480b8cce5e0752197482a65cb62a9ed55d88b237da36600d1"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --without-python3 --without-gi --without-lvm --without-lvm_dbus --without-btrfs --without-crypto --without-dm --without-mdraid --without-mpath --without-nvme --without-s390 --without-tools --without-escrow --without-nvdimm --without-smart --without-smartmontools --without-vdo --without-stratis"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+# udisks2 compiles against the headers of the mdraid, crypto and nvme plugins, which are not built here (no libbytesize,
+# cryptsetup or libnvme): install the headers; the plugin API stubs are in the core library and loading a missing plugin fails softly.
+for h in mdraid crypto nvme; do [ -f "$DESTDIR/usr/include/blockdev/$h.h" ] || install -m 644 "$(find src/plugins -name $h.h | head -1)" "$DESTDIR/usr/include/blockdev/$h.h"; done
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/gtk-doc"
+
+test -e "$DESTDIR/usr/lib/libblockdev.so.3"
+'''

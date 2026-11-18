@@ -1,0 +1,24 @@
+# Image processing library (tesseract)
+name        = "leptonica"
+version     = "1.85.0"
+description = "Image processing library (tesseract)"
+license     = "BSD-2-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "ninja", "libpng", "zlib"]
+
+[[source]]
+url    = "https://github.com/DanBloomberg/leptonica/releases/download/1.85.0/leptonica-1.85.0.tar.gz"
+sha256 = "3745ae3bf271a6801a2292eead83ac926e3a9bc1bf622e9cd4dd0f3786e17205"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBUILD_SHARED_LIBS=ON -DSW_BUILD=OFF
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
+test -e "$DESTDIR/usr/lib/libleptonica.so"
+'''

@@ -1,0 +1,27 @@
+# Screen recorder for Wayland
+name        = "wf-recorder"
+version     = "0.6.0"
+description = "Screen recorder for Wayland"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "ffmpeg", "x264", "wayland", "wayland-protocols", "libdrm", "mesa", "zlib", "expat", "libffi", "pixman", "pipewire", "systemd", "alsa-lib", "dbus", "glib"]
+
+[[source]]
+url    = "https://github.com/ammen99/wf-recorder/archive/refs/tags/v0.6.0.tar.gz"
+sha256 = "52d2c952506d63708f9a8f1aacd4d6ca176287caf3507c8ff2882fa0390cb391"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dpulse=disabled -Dpipewire=enabled -Ddefault_audio_backend=pipewire
+'''
+compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install   = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DESTDIR/run"
+
+test -e "$DESTDIR/usr/bin/wf-recorder"
+'''

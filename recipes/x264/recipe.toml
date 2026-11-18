@@ -1,0 +1,24 @@
+# H.264 video encoder
+name        = "x264"
+version     = "0.0.20261117"
+description = "H.264 video encoder"
+license     = "GPL-2.0-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "nasm"]
+
+[[source]]
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/x264-stable-20261117.tar.gz"
+sha256 = "1108b94cd4c6943bc569afff1f8ec8c6034594a80d2baebc2b043bb438847485"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib  --enable-shared --disable-cli --enable-pic"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+
+test -e "$DESTDIR/usr/lib/libx264.so"
+'''
