@@ -54,3 +54,13 @@ Packages are built from recipes in a sandbox. See [Building from source](Buildin
 Nothing here updates by itself, and nothing notifies you about updates. `forge install`, `forge remove`, `forge apply`
 and `forge edit` never change a package you already have; only `sudo forge upgrade` does, when you run it. See
 [First steps](First-steps).
+
+## Removing a package, and its settings
+
+`sudo forge remove NAME` removes the package and whatever only it needed, but **keeps its settings**: files it put under `/etc`
+(which you may have edited) and anything it saved in `/var`. That way installing it again picks up where you left off.
+
+`sudo forge remove --full NAME` also deletes those settings: the files the package installed under `/etc`, and its directories
+`/etc/NAME`, `/var/lib/NAME`, `/var/cache/NAME` and `/var/log/NAME`, for the package and for everything that was removed with it.
+The preview lists each one before you confirm. It never deletes forge's own files, anything a package that stays provides, or
+your home directory (`~/.config/...` is yours: delete it by hand if you want it gone).

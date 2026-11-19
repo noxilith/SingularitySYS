@@ -122,6 +122,9 @@ struct PkgArgs {
     /// Replace files in the system tree that forge did not put there
     #[arg(long)]
     adopt: bool,
+    /// With `remove`: also delete the settings the package leaves behind (its files under /etc and its directories in /var)
+    #[arg(long)]
+    full: bool,
 }
 
 #[derive(Args)]
@@ -230,6 +233,7 @@ fn edit_cmd(a: EditArgs) -> Result<()> {
         keys: a.keys,
         allow_unsigned: a.allow_unsigned,
         upgrade: false,
+        purge: false,
         adopt: a.adopt,
     })
 }
@@ -314,6 +318,9 @@ struct ApplyArgs {
     /// Set by `forge upgrade` only: move installed packages to the newest versions (apply and install never do)
     #[arg(skip)]
     upgrade: bool,
+    /// Set by `forge remove --full` only: delete the removed packages' settings too
+    #[arg(skip)]
+    purge: bool,
 }
 
 #[derive(Args)]
@@ -731,6 +738,9 @@ fn pkg(action: PkgAction) -> Result<()> {
         PkgAction::Add(a) => (a, true),
         PkgAction::Remove(a) => (a, false),
     };
+    if args.full && adding {
+        bail!("--full only goes with `forge remove` (it deletes the settings a removed package leaves behind)");
+    }
     // Packages are installed for the whole system by default when you are root, and into your own
     // declaration otherwise (per-user installs are not implemented yet, so that only records the wish).
     let system = args.system || (args.file.is_none() && (is_root() || args.root != Path::new("/")));
@@ -786,6 +796,7 @@ fn pkg(action: PkgAction) -> Result<()> {
             fetch: Default::default(),
             adopt: args.adopt,
             upgrade: false,
+            purge: args.full,
             base: base_packages(),
         };
         let decl = SystemDecl::parse(&edited.text).with_context(|| format!("in the edited {}", path.display()))?;
@@ -822,6 +833,7 @@ fn pkg(action: PkgAction) -> Result<()> {
         keys: args.keys,
         allow_unsigned: args.allow_unsigned,
         upgrade: false,
+        purge: args.full,
         adopt: args.adopt,
     })
 }
@@ -1018,6 +1030,7 @@ fn upgrade(a: UpgradeArgs) -> Result<()> {
         keys: a.keys,
         allow_unsigned: a.allow_unsigned,
         upgrade: true,
+        purge: false,
         adopt: a.adopt,
     })
 }
@@ -1117,6 +1130,7 @@ fn apply(a: ApplyArgs) -> Result<()> {
         fetch: Default::default(),
         adopt: a.adopt,
         upgrade: a.upgrade,
+        purge: a.purge,
         base: base_packages(),
     };
     let plan = forge_apply::plan_system(&decl, &a.root, opts)?;

@@ -35,7 +35,7 @@ fn trust_of(keys: &[&SecretKey]) -> Trust {
 }
 
 fn opts() -> Options {
-    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false, base: vec![], upgrade: false }
+    Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: Default::default(), adopt: false, base: vec![], upgrade: false, purge: false }
 }
 
 fn plan(d: &SystemDecl, r: &Path) -> Plan {
@@ -609,7 +609,7 @@ fn remote_decl(names: &[&str]) -> SystemDecl {
 
 fn remote_opts(r: &Path) -> (Options, Arc<Served>) {
     let served = Arc::new(Served { dir: r.join("srv/repo"), log: Default::default() });
-    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false, upgrade: false, base: vec![] };
+    let opts = Options { rebuild: false, trust: trust_of(&[&test_key()]), fetch: FetchHandle(served.clone()), adopt: false, upgrade: false, purge: false, base: vec![] };
     (opts, served)
 }
 
@@ -1063,4 +1063,31 @@ fn an_installed_package_stays_even_when_the_repository_no_longer_lists_its_versi
     // The owner asks for the newest.
     apply(&plan_system(&pkg_decl(&["a"]), r.path(), Options { upgrade: true, ..opts() }).unwrap()).unwrap();
     assert_eq!(read(r.path(), "usr/bin/a"), "new a");
+}
+
+#[test]
+fn remove_full_deletes_the_settings_a_removed_package_left_but_plain_remove_keeps_them() {
+    let r = root();
+    let a = publish(r.path(), "a", &[("etc/a/a.conf", "default"), ("usr/bin/a", "A")], &[]);
+    let _ = a;
+    publish(r.path(), "b", &[("etc/b.conf", "x"), ("usr/bin/b", "B")], &[]);
+    apply(&plan(&pkg_decl(&["a", "b"]), r.path())).unwrap();
+    fs::write(r.path().join("etc/a/a.conf"), "edited").unwrap();
+    fs::create_dir_all(r.path().join("var/lib/a")).unwrap();
+    fs::write(r.path().join("var/lib/a/state"), "s").unwrap();
+
+    // a plain remove leaves all of it
+    let p = plan(&pkg_decl(&["b"]), r.path());
+    assert!(!p.changes.iter().any(|c| c.section == "config"));
+    // --full lists the removed package's settings, not those of a package that stays
+    let full = |names: &[&str]| plan_system(&pkg_decl(names), r.path(), Options { purge: true, ..opts() }).unwrap();
+    let p = full(&["b"]);
+    let text: Vec<&str> = p.changes.iter().filter(|c| c.section == "config").map(|c| c.summary.as_str()).collect();
+    assert!(text.iter().any(|s| s.starts_with("/etc/a/a.conf")), "{text:?}");
+    assert!(text.iter().any(|s| s.starts_with("/var/lib/a ")), "{text:?}");
+    apply(&p).unwrap();
+    assert!(!r.path().join("etc/a").exists(), "the file and the directory it left empty are gone");
+    assert!(!r.path().join("var/lib/a").exists());
+    assert!(r.path().join("etc/b.conf").exists(), "b stays, so do its settings");
+    assert!(!r.path().join("usr/bin/a").exists());
 }

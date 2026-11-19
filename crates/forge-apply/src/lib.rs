@@ -77,6 +77,8 @@ enum Op {
     RemoveFile(PathBuf),
     Symlink { link: PathBuf, target: PathBuf },
     RemoveLink(PathBuf),
+    /// Delete a file, link or directory that belonged to a package being removed with `--full`, and the directories it leaves empty.
+    PurgePath(PathBuf),
     /// Verify an archive from a repository and install it into the store.
     /// `url` is set for a remote repository: the archive is downloaded first.
     Install { store_root: PathBuf, archive: PathBuf, url: Option<String>, fetch: FetchHandle, sha256: String, id: StoreId },
@@ -91,7 +93,7 @@ enum Op {
 impl Op {
     fn path(&self) -> &Path {
         match self {
-            Op::WriteFile { path, .. } | Op::RemoveFile(path) | Op::RemoveLink(path) | Op::Note(path) => path,
+            Op::WriteFile { path, .. } | Op::RemoveFile(path) | Op::RemoveLink(path) | Op::PurgePath(path) | Op::Note(path) => path,
             Op::Symlink { link, .. } => link,
             Op::Install { archive, .. } => archive,
             Op::Run { program, .. } => program,
@@ -191,6 +193,9 @@ pub struct Options {
     /// Move installed packages to the newest versions in the repositories. Off: what is installed stays at its version
     /// (new packages still get the newest), so only `forge upgrade` ever changes a package you already have.
     pub upgrade: bool,
+    /// Set by `forge remove --full` only: besides the packages, delete the settings they leave behind (their files under /etc and
+    /// their directories in /var/lib, /var/cache and /var/log).
+    pub purge: bool,
 }
 
 fn under(root: &Path, abs: &str) -> PathBuf {
@@ -788,6 +793,37 @@ fn plan_packages(
         });
     }
 
+    // `forge remove --full`: also delete the settings the removed packages leave behind. Never what a package that stays
+    // provides, what forge keeps in order itself, or forge's own directory.
+    if p.opts.purge {
+        let mut kept: BTreeSet<String> = BTreeSet::new();
+        for id in &target {
+            kept.extend(etc_paths(&store.path(id)));
+        }
+        let managed: BTreeSet<String> = forge_schema::managed_for(decl).into_iter().map(|m| m.path).collect();
+        let mut done: BTreeSet<String> = BTreeSet::new();
+        for id in current.difference(&target) {
+            let name = id.name().to_string();
+            let mut paths: Vec<String> = etc_paths(&store.path(id)).into_iter().collect();
+            paths.extend([format!("/etc/{name}"), format!("/var/lib/{name}"), format!("/var/cache/{name}"), format!("/var/log/{name}")]);
+            for path in paths {
+                let inside = format!("{path}/");
+                if path.starts_with("/etc/forge") || managed.contains(&path) || kept.iter().any(|k| *k == path || k.starts_with(&inside)) {
+                    continue;
+                }
+                let dest = under(root, &path);
+                if dest.symlink_metadata().is_ok() && done.insert(path.clone()) {
+                    p.changes.push(Change {
+                        section: "config",
+                        kind: Kind::Remove,
+                        summary: format!("{path} (settings of {name}, deleted by --full)"),
+                        op: Op::PurgePath(dest),
+                    });
+                }
+            }
+        }
+    }
+
     Ok((target != current).then(|| ProfileSwitch {
         root: root.to_path_buf(),
         store_root: store.root().to_path_buf(),
@@ -822,6 +858,7 @@ fn run(op: &Op) -> io::Result<()> {
     match op {
         Op::WriteFile { path, content, mode } => write_atomic(path, content, *mode),
         Op::RemoveFile(p) | Op::RemoveLink(p) => ignore_missing(fs::remove_file(p)),
+        Op::PurgePath(p) => purge_path(p),
         Op::Symlink { link, target } => {
             if let Some(dir) = link.parent() {
                 fs::create_dir_all(dir)?;
@@ -981,4 +1018,45 @@ impl Repo {
             }
         }
     }
+}
+
+/// Every file and link a package installs under `etc/`, as absolute paths (`/etc/...`).
+fn etc_paths(package_dir: &Path) -> BTreeSet<String> {
+    fn walk(dir: &Path, rel: &str, out: &mut BTreeSet<String>) {
+        let Ok(rd) = fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let rel = format!("{rel}/{name}");
+            match e.file_type() {
+                Ok(t) if t.is_dir() => walk(&e.path(), &rel, out),
+                Ok(_) => {
+                    out.insert(rel);
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(&package_dir.join("etc"), "/etc", &mut out);
+    out
+}
+
+/// Remove a file, link or directory tree, then the directories that are left empty above it (never `/etc` itself or the
+/// `/var` directories).
+fn purge_path(p: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(p) {
+        Ok(m) if m.is_dir() => fs::remove_dir_all(p)?,
+        Ok(_) => fs::remove_file(p)?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    let mut dir = p.parent();
+    while let Some(d) = dir {
+        let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if matches!(name.as_str(), "etc" | "var" | "lib" | "cache" | "log" | "") || fs::remove_dir(d).is_err() {
+            break;
+        }
+        dir = d.parent();
+    }
+    Ok(())
 }
