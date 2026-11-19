@@ -73,6 +73,11 @@ sh_ "graphics" 'ls -l /sys/class/drm /dev/dri 2>&1; echo; dmesg | grep -iE "drm|
 sh_ "gpu firmware present" 'ls /usr/lib/firmware 2>&1 | head -30'
 sh_ "input devices" 'cat /proc/bus/input/devices 2>&1 | grep -E "Name|Handlers" | head -40; ls -l /dev/input 2>&1'
 sh_ "memory and disks" 'free -m; echo; df -h; echo; lsblk -f 2>&1; echo; findmnt -t btrfs,vfat,ext4 2>&1 | head -20'
+sh_ "memory: where it goes" 'free -m; echo; cat /proc/meminfo | head -45; echo; echo "-- zram:"; zramctl 2>&1; swapon --show 2>&1'
+sh_ "memory: biggest processes (resident, MB)" 'ps -eo rss,pid,user,comm --sort=-rss | head -25 | awk "NR==1{print; next} {printf \"%6.1f  %s %s %s\\n\", \$1/1024, \$2, \$3, \$4}"'
+sh_ "memory: kernel allocations (biggest slab caches)" 'awk "NR>2 {printf \"%8.1f MB  %s\\n\", \$3*\$4/1048576, \$1}" /proc/slabinfo 2>/dev/null | sort -rn | head -15'
+sh_ "memory: biggest loaded modules" 'lsmod | sort -k2 -n -r | head -15'
+sh_ "memory: kernel boot-time reservations" 'dmesg | grep -iE "Memory:|reserved|crashkernel|CMA|swiotlb|zswap" | head -15'
 sh_ "network (MAC addresses masked)" 'ip -brief addr 2>&1 | sed -E "s/([0-9a-f]{2}:){5}[0-9a-f]{2}/xx:xx:xx:xx:xx:xx/g"; echo; ip route 2>&1; echo; nmcli general status 2>&1; nmcli -t -f DEVICE,TYPE,STATE device 2>&1'
 
 if [ "$INIT" = systemd ]; then

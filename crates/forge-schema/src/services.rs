@@ -6,13 +6,14 @@ use crate::managed::{Managed, Own, file, link, managed};
 use crate::system::SystemDecl;
 
 const ZRAM: &str = r#"#!/bin/sh
-# managed by forge: compressed swap in memory, half the size of the RAM (it holds about twice that after compression)
+# managed by forge: compressed swap in memory, half the size of the RAM but at most 4 GiB (it holds about twice that after compression;
+# the kernel's bookkeeping for it grows with its size, so a huge one would waste memory on a big machine)
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin; export PATH
 case "$1" in
 start)
 	grep -q '^/dev/zram' /proc/swaps 2>/dev/null && exit 0
 	modprobe zram 2>/dev/null
-	kb=$(awk '/^MemTotal:/ { print int($2 / 2) }' /proc/meminfo)
+	kb=$(awk '/^MemTotal:/ { k = int($2 / 2); if (k > 4194304) k = 4194304; print k }' /proc/meminfo)
 	dev=$(zramctl --find --size "${kb}K" --algorithm zstd 2>/dev/null) || dev=$(zramctl --find --size "${kb}K") || exit 1
 	mkswap "$dev" >/dev/null && swapon --priority 100 "$dev"
 	;;

@@ -2,7 +2,7 @@
 
 ## Swap
 
-`swap = "zram"` (the default) makes compressed swap in memory, half the size of your RAM, which holds roughly twice that
+`swap = "zram"` (the default) makes compressed swap in memory, half the size of your RAM (at most 4 GiB), which holds roughly twice that
 after compression. There is no swap file or partition, so hibernation is not supported. `swap = "none"` turns it off.
 
 ## Routine tasks

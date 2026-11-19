@@ -61,7 +61,7 @@ groups = ["wheel", "audio", "video"]
 | `packages` | What you chose. A list, or names separated by commas and new lines in one `"""` string. Lines may carry `#` comments. |
 | `services` | Services to start at boot (OpenRC service names, or systemd units). |
 | `kernel_modules` | Kernel modules to load at boot. |
-| `swap` | `zram` (compressed swap in memory, half the RAM, the default) or `none`. |
+| `swap` | `zram` (compressed swap in memory, half the RAM up to 4 GiB, the default) or `none`. |
 | `[firewall]` | See [Networking](Networking). On by default; inbound traffic is dropped unless allowed. |
 | `[maintenance]` | See [Maintenance](Maintenance). |
 | `[[users]]` | One block per user: `name`, `groups`, and optionally `shell`. Users and groups are created, and removed from groups, to match. |
