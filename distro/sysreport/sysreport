@@ -45,9 +45,9 @@ sh_()  { # title 'shell snippet'
     printf '$ %s\n' "$2" >>"$TMP"
     timeout 25 bash -c "$2" 2>&1 | tail -n "$CAP" >>"$TMP"
 }
-file_() { # path
+file_() { # path [lines]
     sect "file $1"
-    if [ -r "$1" ]; then tail -n "$CAP" "$1" >>"$TMP"; else echo "(missing or unreadable)" >>"$TMP"; fi
+    if [ -r "$1" ]; then tail -n "${2:-$CAP}" "$1" >>"$TMP"; else echo "(missing or unreadable)" >>"$TMP"; fi
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -143,10 +143,11 @@ file_ /etc/vesper/config.toml
 for h in /home/*; do
     [ -d "$h" ] || continue
     u=${h##*/}
+    file_ "$h/.local/state/vesper/vesper.log" 600
     file_ "$h/.local/state/vesper/session.log"
     for f in "$h"/.local/state/vesper/*.log; do
         [ -f "$f" ] || continue
-        [ "$f" = "$h/.local/state/vesper/session.log" ] && continue
+        case "$f" in */session.log|*/vesper.log) continue ;; esac
         file_ "$f"
     done
     file_ "$h/.cache/file-manager/settings.log"
