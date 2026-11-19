@@ -7,7 +7,7 @@
 #   sudo sysreport --yes       upload without asking
 #   sysreport --service NAME   dpaste (default, kept 7 days) or paste.rs (kept for good)
 #
-# What goes in: system and package versions, kernel messages, boot and service state, the desktop's logs, disks and graphics
+# What goes in: system and package versions, kernel messages, boot and service state, the desktop's logs (login screen, session, plugins, settings) and config, disks and graphics
 # hardware. What never goes in: password hashes, Wi-Fi passphrases, SSH keys, file contents of your home directory, saved
 # network connections. MAC addresses are masked. The link is public to anyone who has it: only share it with whoever is helping.
 set -u
@@ -138,10 +138,20 @@ fi
 sh_ "desktop processes" 'ps -eo pid,user,etime,pcpu,comm | grep -E "vesper|greetd|seatd|udevd|dbus-daemon|polkitd|NetworkManager|pipewire|wireplumber|Xwayland|upowerd|udisksd" | grep -v grep'
 file_ /etc/greetd/config.toml
 file_ /tmp/vesper-greeter.log
+sh_ "vesper version" 'vesper --version 2>&1; ls -l /usr/bin/vesper* 2>&1 | head -20'
+file_ /etc/vesper/config.toml
 for h in /home/*; do
     [ -d "$h" ] || continue
     u=${h##*/}
     file_ "$h/.local/state/vesper/session.log"
+    for f in "$h"/.local/state/vesper/*.log; do
+        [ -f "$f" ] || continue
+        [ "$f" = "$h/.local/state/vesper/session.log" ] && continue
+        file_ "$f"
+    done
+    file_ "$h/.cache/file-manager/settings.log"
+    file_ "$h/.config/vesper/config.toml"
+    sh_ "vesper state files of $u" "ls -la '$h/.local/state/vesper' '$h/.config/vesper' 2>&1 | head -40"
 done
 sh_ "runtime dirs" 'ls -ld /run/user /run/user/* /tmp/runtime-* 2>&1'
 sh_ "seat and greeter account" 'getent passwd greeter; id greeter 2>&1; ls -l /run/seatd.sock 2>&1'
