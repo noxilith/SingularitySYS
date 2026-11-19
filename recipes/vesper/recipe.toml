@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: matugen, the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r9"
+version     = "0.1.0_r10"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -49,9 +49,12 @@ cat > "$DESTDIR/usr/bin/vesper-greeter-session" <<'GREETER'
 export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Vesper LIBSEAT_BACKEND=seatd
 export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
-exec vesper --tty --greeter
+exec vesper --tty --greeter >/tmp/vesper-greeter.log 2>&1
 GREETER
 chmod 755 "$DESTDIR/usr/bin/vesper-greeter-session"
+# Keep the session's output in a log file even when it runs on a login-screen VT (sysreport collects it).
+sed -i 's/^if \[ ! -t 1 \]; then/if [ ! -t 1 ] || [ -n "${XDG_VTNR:-}" ]; then/' "$DESTDIR/usr/bin/vesper-session"
+grep -q XDG_VTNR "$DESTDIR/usr/bin/vesper-session"
 printf 'd /var/cache/vesper-greeter 0755 greeter greeter -\nd /var/lib/greeter 0755 greeter greeter -\n' > "$DESTDIR/usr/lib/tmpfiles.d/vesper-greeter.conf"
 mkdir -p "$DESTDIR/usr/lib/systemd/system"
 printf '[Unit]\nDescription=Seat management daemon\n\n[Service]\nType=simple\nExecStart=/usr/bin/seatd -g video\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\n' > "$DESTDIR/usr/lib/systemd/system/seatd.service"

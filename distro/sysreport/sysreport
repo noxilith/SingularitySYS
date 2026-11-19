@@ -1,0 +1,146 @@
+#!/bin/bash
+# sysreport: collect what is needed to diagnose a problem on this machine into one text report, and (only if you say yes)
+# upload it to a paste service and print the link, so it can be read from another computer.
+#
+#   sudo sysreport             collect, show what it is, ask, then upload and print the link
+#   sudo sysreport --save      collect into a file only (nothing leaves the machine); prints the path
+#   sudo sysreport --yes       upload without asking
+#   sysreport --service NAME   dpaste (default, kept 7 days) or paste.rs (kept for good)
+#
+# What goes in: system and package versions, kernel messages, boot and service state, the desktop's logs, disks and graphics
+# hardware. What never goes in: password hashes, Wi-Fi passphrases, SSH keys, file contents of your home directory, saved
+# network connections. MAC addresses are masked. The link is public to anyone who has it: only share it with whoever is helping.
+set -u
+export LC_ALL=C PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$PATH
+
+SERVICE=dpaste; YES=0; SAVE=0; OUT=
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --yes|-y) YES=1 ;;
+        --save) SAVE=1; if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then OUT=$2; shift; fi ;;
+        --service) SERVICE=${2:-}; shift ;;
+        -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "sysreport: unknown option $1 (try --help)" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+[ "$(id -u)" = 0 ] || echo "sysreport: not root, so some logs will be missing (run: sudo sysreport)" >&2
+
+TMP=$(mktemp /tmp/sysreport.XXXXXX) || exit 1
+trap 'rm -f "$TMP"' EXIT
+CAP=${SYSREPORT_LINES:-250}
+
+sect() { printf '\n\n===== %s =====\n' "$1" >>"$TMP"; }
+run()  { # title command...   (output capped)
+    local t=$1; shift
+    sect "$t"
+    printf '$ %s\n' "$*" >>"$TMP"
+    timeout 20 "$@" 2>&1 | tail -n "$CAP" >>"$TMP"
+}
+sh_()  { # title 'shell snippet'
+    sect "$1"
+    printf '$ %s\n' "$2" >>"$TMP"
+    timeout 25 bash -c "$2" 2>&1 | tail -n "$CAP" >>"$TMP"
+}
+file_() { # path
+    sect "file $1"
+    if [ -r "$1" ]; then tail -n "$CAP" "$1" >>"$TMP"; else echo "(missing or unreadable)" >>"$TMP"; fi
+}
+have() { command -v "$1" >/dev/null 2>&1; }
+
+INIT=openrc; [ -d /run/systemd/system ] && INIT=systemd
+
+{
+    echo "sysreport  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+    echo "host: $(hostname)   init: $INIT   running as uid $(id -u)"
+} >"$TMP"
+
+run "uname" uname -a
+sh_ "os release" 'cat /etc/os-release 2>/dev/null; echo; uptime'
+sh_ "kernel command line" 'cat /proc/cmdline'
+sh_ "forge packages" 'forge list 2>&1 | head -150'
+sh_ "forge doctor" 'forge doctor 2>&1'
+sh_ "forge generations" 'forge gen list 2>&1; forge gen current 2>&1'
+file_ /etc/forge/system.toml
+sh_ "forge state" 'cat /var/lib/forge/state.toml 2>&1'
+
+sh_ "kernel messages (last lines)" 'dmesg 2>&1 | tail -n 300'
+sh_ "kernel warnings and errors" 'dmesg --level=err,warn,crit,alert,emerg 2>&1 | tail -n 150'
+sh_ "loaded modules" 'lsmod | head -120'
+if have lspci; then run "pci devices and drivers" lspci -nnk; fi
+sh_ "graphics" 'ls -l /sys/class/drm /dev/dri 2>&1; echo; dmesg | grep -iE "drm|amdgpu|i915|nouveau|xe |firmware" | tail -n 60'
+sh_ "gpu firmware present" 'ls /usr/lib/firmware 2>&1 | head -30'
+sh_ "input devices" 'cat /proc/bus/input/devices 2>&1 | grep -E "Name|Handlers" | head -40; ls -l /dev/input 2>&1'
+sh_ "memory and disks" 'free -m; echo; df -h; echo; lsblk -f 2>&1; echo; findmnt -t btrfs,vfat,ext4 2>&1 | head -20'
+sh_ "network (MAC addresses masked)" 'ip -brief addr 2>&1 | sed -E "s/([0-9a-f]{2}:){5}[0-9a-f]{2}/xx:xx:xx:xx:xx:xx/g"; echo; ip route 2>&1; echo; nmcli general status 2>&1; nmcli -t -f DEVICE,TYPE,STATE device 2>&1'
+
+if [ "$INIT" = systemd ]; then
+    run "systemd state" systemctl is-system-running
+    run "failed units" systemctl --failed --no-pager
+    sh_ "systemd boot problems (this boot)" 'journalctl -b -p warning --no-pager 2>&1 | tail -n 300'
+    sh_ "systemd boot problems (previous boot)" 'journalctl -b -1 -p warning --no-pager 2>&1 | tail -n 300'
+    sh_ "systemd boot timing" 'systemd-analyze 2>&1; systemd-analyze blame 2>&1 | head -15'
+    for u in greetd seatd NetworkManager bluetooth upower power-profiles-daemon udisks2 polkit systemd-udevd systemd-logind; do
+        sh_ "journal: $u" "journalctl -u $u -b --no-pager 2>&1 | tail -n 60"
+    done
+    sh_ "sessions" 'loginctl list-sessions --no-pager 2>&1'
+else
+    run "openrc services" rc-status -a
+    sh_ "openrc: services that are not running" 'rc-status -a | grep -vE "started|^ *$|Runlevel|Dynamic" | head -40'
+    sh_ "openrc: dependency problems" 'for s in greetd seatd dbus polkit udev NetworkManager; do echo "== $s"; rc-service $s status 2>&1; done'
+    sh_ "runlevel links" 'ls -l /etc/runlevels/default 2>&1'
+fi
+
+sh_ "desktop processes" 'ps -eo pid,user,etime,pcpu,comm | grep -E "vesper|greetd|seatd|udevd|dbus-daemon|polkitd|NetworkManager|pipewire|wireplumber|Xwayland|upowerd|udisksd" | grep -v grep'
+file_ /etc/greetd/config.toml
+file_ /tmp/vesper-greeter.log
+for h in /home/*; do
+    [ -d "$h" ] || continue
+    u=${h##*/}
+    file_ "$h/.local/state/vesper/session.log"
+done
+sh_ "runtime dirs" 'ls -ld /run/user /run/user/* /tmp/runtime-* 2>&1'
+sh_ "seat and greeter account" 'getent passwd greeter; id greeter 2>&1; ls -l /run/seatd.sock 2>&1'
+sh_ "pam services for the login screen" 'cat /etc/pam.d/greetd 2>&1'
+
+# keep the upload within what the paste services accept
+LIMIT=900000
+if [ "$(wc -c <"$TMP")" -gt $LIMIT ]; then
+    head -c $LIMIT "$TMP" >"$TMP.cut"; echo; mv "$TMP.cut" "$TMP"
+    printf '\n\n(report cut at %s bytes)\n' $LIMIT >>"$TMP"
+fi
+
+SIZE=$(wc -c <"$TMP"); LINES=$(wc -l <"$TMP")
+echo "sysreport: collected $LINES lines ($SIZE bytes)."
+
+if [ $SAVE = 1 ]; then
+    OUT=${OUT:-/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt}
+    cp "$TMP" "$OUT" && echo "sysreport: saved to $OUT (nothing was uploaded)"
+    exit 0
+fi
+
+if [ $YES = 0 ]; then
+    echo "It contains system, package, boot and desktop log information (see 'sysreport --help' for what is left out)."
+    echo "Uploading makes it readable by anyone who has the link. Look at it first with: sysreport --save"
+    printf 'Upload it to %s now? [y/N] ' "$SERVICE"
+    read -r a
+    case "$a" in y|Y|yes) ;; *) OUT=/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt; cp "$TMP" "$OUT"; echo "not uploaded; saved to $OUT"; exit 0 ;; esac
+fi
+
+have curl || { echo "sysreport: curl is missing; saving instead"; OUT=/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt; cp "$TMP" "$OUT"; echo "saved to $OUT"; exit 1; }
+
+case "$SERVICE" in
+    dpaste)
+        URL=$(curl -fsS -m 60 -A sysreport -F "content=<$TMP" -F expiry_days=7 -F syntax=text https://dpaste.org/api/ 2>/dev/null | tr -d '"[:space:]')
+        RAW=${URL%/}/raw ;;
+    paste.rs)
+        URL=$(curl -fsS -m 60 -A sysreport --data-binary "@$TMP" https://paste.rs 2>/dev/null | tr -d '[:space:]')
+        RAW=$URL ;;
+    *) echo "sysreport: unknown service $SERVICE (dpaste or paste.rs)" >&2; exit 2 ;;
+esac
+case "$URL" in
+    https://*) echo; echo "Send this link:  $URL"; echo "(raw text:       $RAW)"; [ "$SERVICE" = dpaste ] && echo "It is deleted after 7 days." ;;
+    *) OUT=/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt; cp "$TMP" "$OUT"
+       echo "sysreport: the upload failed (no network?). The report is saved at $OUT: copy it to another computer (a USB stick works)."; exit 1 ;;
+esac
