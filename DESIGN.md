@@ -1094,3 +1094,15 @@ account `greeter`, and `video`/`input`/`audio` for every declared user. `managed
 for the desktop (OpenRC: the `network` runlevel link; systemd: the networkd link and the Wi-Fi udev rule) and puts it back
 otherwise. State gained `managed_users` and `managed_memberships`, so forge removes exactly the account and memberships it added
 (`userdel`, `gpasswd -d`; a group the user declared is kept). The greetd package no longer creates its user through sysusers.
+
+### Full-system test of the desktop on both inits (2026-11-19)
+
+Tested in QEMU (UEFI, from the alpha.1 ISO): `forge upgrade`, `forge install vesper`, reboot, log in through Vesper's greeter,
+`forge remove vesper`, and the OpenRC → systemd switch and back. Bugs found and fixed: OpenRC had no `dbus`, `polkit` or `udev`
+service (forge now writes them, with `rc_need` ordering in conf.d, and removes them with the desktop; without udev libinput sees no
+input devices); NetworkManager's OpenRC script pointed at the wrong binary and now `provide`s `net`; `udisksd` aborted when the
+mdraid/crypto/nvme plugins are missing (patched to warn); Xwayland died for lack of `xkbcomp` (now a run dependency). Verified
+working on both inits: the greeter, PAM login, the session (compositor, bar, wallpaper, notifications, polkit agent, PipeWire,
+WirePlumber, Xwayland), `wpctl`, `udisksctl`, `nmcli`, `foot`, removal (account, services, network setup restored). Seen but not
+fixed: the compositor uses 100% of a CPU in QEMU (simpledrm has no vblank; it loops on idle callbacks), on both inits.
+Not reproduced: the user's real-hardware systemd failure (systemd boots to `running` with no failed units in QEMU).

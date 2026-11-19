@@ -306,6 +306,11 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
         for (path, content) in crate::SYSTEMD_NETWORK_FILES.iter().chain(crate::SYSTEMD_WIFI_FILES.iter()) {
             v.push(file(path, content, 0o644, Own::Always));
         }
+    } else if init == "openrc" {
+        // The desktop is gone: so are the scripts and ordering files forge wrote for it.
+        for path in ["/etc/init.d/dbus", "/etc/init.d/polkit", "/etc/init.d/udev", "/etc/conf.d/NetworkManager", "/etc/conf.d/upower", "/etc/conf.d/power-profiles-daemon", "/etc/conf.d/udisks2"] {
+            v.push(Managed { path: path.into(), entry: Entry::Absent, own: Own::Always });
+        }
     }
     v
 }
