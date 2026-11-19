@@ -461,11 +461,15 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.plumb_in("defaults", &m.path, &m.entry);
         }
     }
-    // The network engine (dhcpcd) writes /etc/resolv.conf itself. A link to systemd-resolved's stub, left by an earlier version
-    // (or by a system that was running systemd), would point at a resolver that is not running: take it away.
-    let stub = "/run/systemd/resolve/stub-resolv.conf";
-    if !desktop && fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t == Path::new(stub)) {
+    // The network engine (dhcpcd) writes /etc/resolv.conf itself. A link to systemd-resolved's stub (made by an earlier version,
+    // or by systemd's own tmpfiles at boot) would point at a resolver that is not running: replace it by a plain file, which
+    // also keeps systemd from making the link again. (The desktop's NetworkManager manages the file on its own.)
+    let stub_link = fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t.to_string_lossy().ends_with("stub-resolv.conf"));
+    if !desktop && stub_link {
         p.unlink("init", "/etc/resolv.conf");
+        if systemd {
+            p.file("init", "/etc/resolv.conf", "# DHCP (dhcpcd) writes this file when the network comes up\n".to_string())?;
+        }
     }
     if switching {
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");

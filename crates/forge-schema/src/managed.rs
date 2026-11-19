@@ -133,6 +133,7 @@ stop_post() {
 const NETWATCH: &str = r#"#!/bin/sh
 # Keeps every network interface configured as it appears, until it is stopped: brings the link up,
 # starts wpa_supplicant on wireless ones (when a configuration exists), and runs DHCP on all of them.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin; export PATH
 [ -r /etc/conf.d/network ] && . /etc/conf.d/network
 RUN=/run/netwatch
 mkdir -p "$RUN"
@@ -321,7 +322,7 @@ pub fn managed(init: &str) -> Vec<Managed> {
         // machine that has network under one init has it under the other. systemd-networkd and -resolved are not used.
         v.push(file(
             "/etc/systemd/system/forge-network.service",
-            "# managed by forge\n[Unit]\nDescription=Network: DHCP on wired interfaces, wpa_supplicant and DHCP on Wi-Fi\nAfter=systemd-udevd.service systemd-modules-load.service\nBefore=network.target\nWants=network.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c 'for f in /sys/class/rfkill/rfkill*/soft; do [ -w \"$f\" ] && echo 0 > \"$f\"; done; mkdir -p /run/netwatch; true'\nExecStart=/usr/libexec/singularity/netwatch\nExecStopPost=/bin/sh -c 'dhcpcd -x >/dev/null 2>&1; for p in /run/netwatch/*; do [ -f \"$p\" ] && kill \"$(cat \"$p\")\" 2>/dev/null; done; true'\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n",
+            "# managed by forge\n[Unit]\nDescription=Network: DHCP on wired interfaces, wpa_supplicant and DHCP on Wi-Fi\nAfter=systemd-udevd.service systemd-modules-load.service\nBefore=network.target\nWants=network.target\n\n[Service]\nType=simple\nEnvironment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\nExecStartPre=/bin/sh -c 'for f in /sys/class/rfkill/rfkill*/soft; do [ -w \"$f\" ] && echo 0 > \"$f\"; done; mkdir -p /run/netwatch; true'\nExecStart=/usr/libexec/singularity/netwatch\nExecStopPost=/bin/sh -c 'dhcpcd -x >/dev/null 2>&1; for p in /run/netwatch/*; do [ -f \"$p\" ] && kill \"$(cat \"$p\")\" 2>/dev/null; done; true'\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n",
             0o644,
             Own::Always,
         ));
@@ -340,6 +341,10 @@ pub fn managed(init: &str) -> Vec<Managed> {
             "/etc/udev/rules.d/80-wifi.rules",
         ] {
             v.push(Managed { path: legacy.into(), entry: Entry::Absent, own: Own::Always });
+        }
+        // ... and mask the units, so nothing else (a socket, a preset, a dependency) can start them either.
+        for unit in ["systemd-networkd.service", "systemd-networkd.socket", "systemd-networkd-wait-online.service", "systemd-resolved.service"] {
+            v.push(link(format!("/etc/systemd/system/{unit}"), "/dev/null".into(), Own::Always));
         }
         // A login on a serial port only where the machine has one: without the port the unit would just fail at every boot.
         v.push(file(
