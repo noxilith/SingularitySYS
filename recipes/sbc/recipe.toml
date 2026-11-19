@@ -1,0 +1,22 @@
+# sbc: the Bluetooth audio codec (A2DP). Needed to play sound over Bluetooth headphones and speakers.
+name        = "sbc"
+version     = "2.1"
+description = "Bluetooth Subband Codec library"
+license     = "LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://www.kernel.org/pub/linux/bluetooth/sbc-2.1.tar.xz"
+sha256 = "426633cabd7c798236443516dfa8335b47e004b0ef37ff107e0c7ead3299fcc2"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-tester --disable-dependency-tracking CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+test -e "$DESTDIR/usr/lib/libsbc.so.1"
+'''

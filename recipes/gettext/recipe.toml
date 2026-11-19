@@ -1,0 +1,24 @@
+# GNU gettext: msgfmt, xgettext and friends, and libintl for the programs that translate their messages. Without the
+# optional extras (Java, C#, Emacs, OpenMP); its own copies of libxml2, libunistring and libcroco.
+name        = "gettext"
+version     = "0.26"
+description = "GNU internationalization utilities"
+license     = "GPL-3.0-or-later AND LGPL-2.1-or-later"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://mirrors.kernel.org/gnu/gettext/gettext-0.26.tar.xz"
+sha256 = "d1fb86e260cfe7da6031f94d2e44c0da55903dbae0a2fa0fae78c91ae1b56f00"
+
+[build]
+configure = "./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-java --disable-csharp --disable-openmp --disable-curses --without-emacs --without-git --without-cvs --with-included-libxml --with-included-libunistring --with-included-glib --with-included-libcroco --disable-dependency-tracking CFLAGS='-O2 -Wno-error=incompatible-pointer-types -Wno-incompatible-pointer-types'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info" "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/emacs"
+test -x "$DESTDIR/usr/bin/msgfmt"
+'''

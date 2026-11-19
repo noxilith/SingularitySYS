@@ -37,4 +37,10 @@ directories, `/var/lib/greeter` and `/var/cache/vesper-greeter`, may be left beh
 
 | In | Not yet |
 |---|---|
-| greetd, udisks2, tesseract, wf-recorder, ffmpeg, Xwayland, screen-sharing portals, PipeWire/WirePlumber, NetworkManager (WPA-PSK Wi-Fi, Ethernet), BlueZ, brightnessctl, power-profiles-daemon, polkit, foot, fonts, FUSE | Intel graphics (Mesa's iris driver needs clang/SPIR-V), Vulkan, Bluetooth audio (needs `sbc`), 802.1X enterprise Wi-Fi (NetworkManager is built without a crypto library), the GTK portal backend (needs GTK), matugen, udisks2 encryption/RAID/NVMe plugins (the daemon logs that they did not load) |
+| greetd, udisks2, tesseract, wf-recorder, ffmpeg, Xwayland, screen-sharing portals, PipeWire/WirePlumber, NetworkManager (WPA-PSK Wi-Fi, Ethernet), BlueZ, brightnessctl, power-profiles-daemon, polkit, foot, fonts, FUSE | Intel graphics (Mesa's iris driver needs clang/SPIR-V), Vulkan, 802.1X enterprise Wi-Fi (NetworkManager is built without a crypto library), the GTK portal backend (needs GTK), udisks2 encryption/RAID/NVMe plugins (the daemon logs that they did not load) |
+
+## Also installed with it now
+
+`matugen` (colour themes from your wallpaper), `rtkit` (real-time priority for audio), `linux-firmware-bluetooth` (Realtek and
+Qualcomm Bluetooth firmware), and Bluetooth audio (PipeWire is built with SBC support). `gettext` (translation tools) is available
+as its own package. Still not included: the GTK portal backend, Intel graphics, Vulkan, and Bluetooth codecs other than SBC.

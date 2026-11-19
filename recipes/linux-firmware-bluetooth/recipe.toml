@@ -1,0 +1,26 @@
+# Bluetooth firmware from the linux-firmware repository: Realtek (rtl_bt), Qualcomm/Atheros (qca, ath3k). Intel, Broadcom and
+# MediaTek Bluetooth firmware come with linux-firmware-wifi. Vesper installs it so Bluetooth adapters work.
+name        = "linux-firmware-bluetooth"
+version     = "20261019"
+description = "Bluetooth firmware from linux-firmware (Realtek, Qualcomm)"
+license     = "Redistributable firmware (see /usr/share/licenses/linux-firmware)"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
+
+[[source]]
+url    = "https://cdn.kernel.org/pub/linux/kernel/firmware/linux-firmware-20261019.tar.xz"
+sha256 = "a10d1ab5baf2c74ba92e8c7cf313e691696c26bddfa6df00db795e48d70cd4ca"
+
+[build]
+install = '''
+fw="$DESTDIR/usr/lib/firmware"
+mkdir -p "$fw"
+for d in rtl_bt qca; do [ -e "$d" ] && cp -R "$d" "$fw/$d"; done
+for f in ath3k-1.fw; do [ -e "$f" ] && cp "$f" "$fw/$f"; done
+mkdir -p "$DESTDIR/usr/share/licenses/linux-firmware-bluetooth"
+cp LICENCE.rtlwifi_firmware.txt LICENCE.atheros_firmware "$DESTDIR/usr/share/licenses/linux-firmware-bluetooth/" 2>/dev/null || true
+test -d "$fw/rtl_bt"
+test -e "$fw/rtl_bt/rtl8922au_fw.bin"
+'''

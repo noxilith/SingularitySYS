@@ -6,9 +6,9 @@
 # "Vesper" session in a display manager. Installing it pulls in everything it uses: Xwayland, the screen-sharing portals,
 # PipeWire and WirePlumber (volume), NetworkManager, BlueZ, brightnessctl, power-profiles-daemon, polkit, fonts, foot.
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
-# Not packaged: matugen, the GTK portal backend (needs GTK).
+# Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r12"
+version     = "0.1.0_r14"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -18,11 +18,11 @@ build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffu
 run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mesa", "wayland", "dbus", "linux-pam",
          "systemd", "fontconfig", "freetype", "font-jetbrains-mono-nerd", "font-dejavu", "font-noto-color-emoji",
          "xwayland", "xdg-desktop-portal", "xdg-desktop-portal-wlr", "pipewire", "wireplumber", "slurp",
-         "networkmanager", "bluez", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
+         "networkmanager", "bluez", "linux-firmware-bluetooth", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
-url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-fd8fc3ad955259a46be82592ee2065294c7bec85-vendored.tar.gz"
-sha256 = "74c918ed7a46c1243b23aab4e52ad80cb1d11a7326e2cb8168be2e23565a9dc7"
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-25461df5117b76a33e748212fe2f88f1b480008e-vendored.tar.gz"
+sha256 = "90d66cfcb08475bb346b0bad790f22b5fcf5c635066445a1d860aaff668d6859"
 
 [build]
 compile = '''

@@ -1,12 +1,12 @@
 # Audio and video server (screen sharing, sound)
 name        = "pipewire"
-version     = "1.4.7"
+version     = "1.4.7_r1"
 description = "Audio and video server (screen sharing, sound)"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
-build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "alsa-lib", "dbus", "systemd", "glib"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "alsa-lib", "dbus", "systemd", "glib", "sbc", "bluez"]
 
 [[source]]
 url    = "https://gitlab.freedesktop.org/pipewire/pipewire/-/archive/1.4.7/pipewire-1.4.7.tar.gz"
@@ -15,7 +15,7 @@ sha256 = "9d54f025e1e7ae73b980a6c8be2e8e6387e24d554d58478d6495734ce1ee5a93"
 [build]
 configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
-CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=disabled -Dexamples=disabled -Ddocs=disabled -Dman=disabled -Dsystemd=enabled -Dsession-managers=[] -Dbluez5=disabled -Djack=disabled -Dpipewire-jack=disabled -Dgstreamer=disabled -Dsndfile=disabled -Dvulkan=disabled -Dlibcamera=disabled -Dv4l2=disabled -Dpipewire-v4l2=disabled -Dlibusb=disabled -Dlv2=disabled -Davahi=disabled -Dflatpak=disabled -Dopus=disabled -Dlibpulse=disabled -Dreadline=disabled -Draop=disabled -Dsdl2=disabled -Dselinux=disabled -Dx11=disabled -Dx11-xfixes=disabled -Dlibmysofa=disabled -Dpw-cat=disabled -Dvideotestsrc=disabled -Dvideoconvert=enabled -Dcompress-offload=disabled -Dgsettings=disabled -Dsupport=enabled -Dlogind=enabled
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=disabled -Dexamples=disabled -Ddocs=disabled -Dman=disabled -Dsystemd=enabled -Dsession-managers=[] -Dbluez5=enabled -Dbluez5-codec-aac=disabled -Dbluez5-codec-aptx=disabled -Dbluez5-codec-ldac=disabled -Dbluez5-codec-lc3=disabled -Dbluez5-codec-opus=disabled -Dbluez5-codec-g722=disabled -Dbluez5-codec-lc3plus=disabled -Dbluez5-backend-ofono=disabled -Dbluez5-backend-hsphfpd=disabled -Djack=disabled -Dpipewire-jack=disabled -Dgstreamer=disabled -Dsndfile=disabled -Dvulkan=disabled -Dlibcamera=disabled -Dv4l2=disabled -Dpipewire-v4l2=disabled -Dlibusb=disabled -Dlv2=disabled -Davahi=disabled -Dflatpak=disabled -Dopus=disabled -Dlibpulse=disabled -Dreadline=disabled -Draop=disabled -Dsdl2=disabled -Dselinux=disabled -Dx11=disabled -Dx11-xfixes=disabled -Dlibmysofa=disabled -Dpw-cat=disabled -Dvideotestsrc=disabled -Dvideoconvert=enabled -Dcompress-offload=disabled -Dgsettings=disabled -Dsupport=enabled -Dlogind=enabled
 '''
 compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
 install   = '''

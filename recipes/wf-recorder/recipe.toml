@@ -1,6 +1,6 @@
 # Screen recorder for Wayland
 name        = "wf-recorder"
-version     = "0.6.0"
+version     = "0.6.0_r1"
 description = "Screen recorder for Wayland"
 license     = "MIT"
 libc        = ["glibc"]

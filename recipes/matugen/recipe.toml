@@ -1,0 +1,27 @@
+# matugen: makes a colour scheme from the wallpaper (Vesper's bar, launcher, notifications and lock screen take their colours from it).
+# Built from the vendored source tarball scripts/vendor-crate.sh makes (a forge build has no network).
+name        = "matugen"
+version     = "4.2.0"
+description = "Material You colour palette generator"
+license     = "GPL-2.0-only"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "rust"]
+
+[[source]]
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/matugen-4.2.0-vendored.tar.gz"
+sha256 = "c0bfd600f78027e76a274c5772372236cb7265009b983cd809c6be25b07e3fd4"
+
+[build]
+compile = '''
+export HOME=/build CARGO_HOME=/build/cargo
+cd "$SRC"
+cargo build --release --frozen -j $JOBS
+'''
+install = '''
+cd "$SRC"
+install -Dm755 target/release/matugen "$DESTDIR/usr/bin/matugen"
+install -Dm644 LICENSE "$DESTDIR/usr/share/licenses/matugen/LICENSE"
+test -x "$DESTDIR/usr/bin/matugen"
+'''

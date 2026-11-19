@@ -1,6 +1,6 @@
 # PipeWire session and policy manager (wpctl)
 name        = "wireplumber"
-version     = "0.5.10"
+version     = "0.5.10_r1"
 description = "PipeWire session and policy manager (wpctl)"
 license     = "MIT"
 libc        = ["glibc"]
