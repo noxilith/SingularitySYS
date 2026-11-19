@@ -1106,3 +1106,13 @@ working on both inits: the greeter, PAM login, the session (compositor, bar, wal
 WirePlumber, Xwayland), `wpctl`, `udisksctl`, `nmcli`, `foot`, removal (account, services, network setup restored). Seen but not
 fixed: the compositor uses 100% of a CPU in QEMU (simpledrm has no vblank; it loops on idle callbacks), on both inits.
 Not reproduced: the user's real-hardware systemd failure (systemd boots to `running` with no failed units in QEMU).
+
+### systemd uses the OpenRC network engine (2026-11-19)
+
+The first systemd setup used systemd-networkd and -resolved, which had only ever been tested without a DHCP server; on the owner's
+hardware neither Ethernet nor Wi-Fi came up after switching. Now both inits run `netwatch` (dhcpcd + wpa_supplicant), which is proven
+on real hardware: `forge-network.service` (managed file, PATH set explicitly because systemd's default PATH has no /usr/sbin),
+networkd/resolved masked and their old links, `.network` files and the udev Wi-Fi rule removed by managed `Absent` entries, and
+`/etc/resolv.conf` replaced by a plain file (systemd's tmpfiles would otherwise recreate the stub link every boot). Verified in
+QEMU: forge-network active, netwatch and dhcpcd running, link up, resolv.conf stays a file across reboot. Not verified: an actual
+DHCP lease under systemd (no DHCP server in the test rig).
