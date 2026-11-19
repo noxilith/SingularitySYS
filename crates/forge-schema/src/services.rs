@@ -288,24 +288,13 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
             v.push(file(&format!("/etc/conf.d/{s}"), "# managed by forge\nrc_need=\"dbus polkit\"\n", 0o644, Own::Always));
         }
     }
-    // The desktop brings NetworkManager, which must be the only thing configuring interfaces: forge's own network setup
-    // (the `network` service under OpenRC, systemd-networkd and the per-interface supplicant under systemd) is switched off
-    // while the desktop is installed and comes back, exactly as before, when it is removed.
-    let networkd_link = "/etc/systemd/system/multi-user.target.wants/systemd-networkd.service".to_string();
+    // The desktop brings NetworkManager, which must be the only thing configuring interfaces: forge's own network engine
+    // (the `network` service under OpenRC, `forge-network` under systemd) is switched off while the desktop is installed and
+    // comes back, exactly as before, when it is removed.
     if decl.desktop() {
-        if init == "openrc" {
-            for m in v.iter_mut().filter(|m| m.path == "/etc/runlevels/default/network") {
-                m.entry = Entry::Absent;
-            }
-        } else {
-            for path in [networkd_link.as_str(), "/etc/udev/rules.d/80-wifi.rules"] {
-                v.push(Managed { path: path.into(), entry: Entry::Absent, own: Own::Always });
-            }
-        }
-    } else if init != "openrc" {
-        v.push(link(networkd_link.clone(), "/usr/lib/systemd/system/systemd-networkd.service".into(), Own::Always));
-        for (path, content) in crate::SYSTEMD_NETWORK_FILES.iter().chain(crate::SYSTEMD_WIFI_FILES.iter()) {
-            v.push(file(path, content, 0o644, Own::Always));
+        let own = if init == "openrc" { "/etc/runlevels/default/network" } else { "/etc/systemd/system/multi-user.target.wants/forge-network.service" };
+        for m in v.iter_mut().filter(|m| m.path == own) {
+            m.entry = Entry::Absent;
         }
     } else if init == "openrc" {
         // The desktop is gone: so are the scripts and ordering files forge wrote for it.
@@ -335,11 +324,14 @@ mod tests {
         let rl = "/etc/runlevels/default/network";
         assert_eq!(find(&on("openrc"), rl).unwrap().entry, Entry::Absent);
         assert!(matches!(find(&off("openrc"), rl).unwrap().entry, Entry::Link(_)));
-        let nd = "/etc/systemd/system/multi-user.target.wants/systemd-networkd.service";
+        let nd = "/etc/systemd/system/multi-user.target.wants/forge-network.service";
         assert_eq!(find(&on("systemd"), nd).unwrap().entry, Entry::Absent);
         assert!(matches!(find(&off("systemd"), nd).unwrap().entry, Entry::Link(_)));
-        assert_eq!(find(&on("systemd"), "/etc/udev/rules.d/80-wifi.rules").unwrap().entry, Entry::Absent);
-        assert!(matches!(find(&off("systemd"), "/etc/udev/rules.d/80-wifi.rules").unwrap().entry, Entry::File { .. }));
+        // the old systemd-networkd setup is removed either way
+        for p in ["/etc/systemd/system/multi-user.target.wants/systemd-networkd.service", "/etc/udev/rules.d/80-wifi.rules"] {
+            assert_eq!(find(&on("systemd"), p).unwrap().entry, Entry::Absent);
+            assert_eq!(find(&off("systemd"), p).unwrap().entry, Entry::Absent);
+        }
     }
 
     #[test]

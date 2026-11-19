@@ -296,6 +296,8 @@ pub fn managed(init: &str) -> Vec<Managed> {
         file("/etc/inputrc", INPUTRC, 0o644, Own::Always),
         file("/usr/lib/modprobe.d/singularity-watchdog.conf", WATCHDOG, 0o644, Own::Always),
         file("/etc/wpa_supplicant/wpa_supplicant.conf", WPA_CONF, 0o600, Own::IfMissing),
+        file("/usr/libexec/singularity/netwatch", NETWATCH, 0o755, Own::Always),
+        file("/etc/conf.d/network", NETWORK_CONF, 0o644, Own::IfMissing),
         file("/usr/libexec/singularity/gpu-load", GPU_LOAD, 0o755, Own::Always),
         file("/usr/lib/modprobe.d/singularity-gpu.conf", GPU_MODPROBE, 0o644, Own::Always),
         file("/etc/protocols", PROTOCOLS, 0o644, Own::IfMissing),
@@ -304,8 +306,6 @@ pub fn managed(init: &str) -> Vec<Managed> {
     if init == "openrc" {
         v.push(file("/etc/init.d/network", NETWORK_SERVICE, 0o755, Own::Always));
         v.push(file("/etc/init.d/coldplug", COLDPLUG_SERVICE, 0o755, Own::Always));
-        v.push(file("/usr/libexec/singularity/netwatch", NETWATCH, 0o755, Own::Always));
-        v.push(file("/etc/conf.d/network", NETWORK_CONF, 0o644, Own::IfMissing));
         for (port, baud, term, opts) in AGETTY_PORTS {
             v.push(link(format!("/etc/init.d/agetty.{port}"), "agetty".into(), Own::Always));
             let conf = format!("baud=\"{baud}\"\nterm_type=\"{term}\"\nagetty_options=\"{opts}\"\n");
@@ -317,6 +317,30 @@ pub fn managed(init: &str) -> Vec<Managed> {
             }
         }
     } else {
+        // The network is brought up by the same small engine as under OpenRC (netwatch: dhcpcd, plus wpa_supplicant on Wi-Fi), so a
+        // machine that has network under one init has it under the other. systemd-networkd and -resolved are not used.
+        v.push(file(
+            "/etc/systemd/system/forge-network.service",
+            "# managed by forge\n[Unit]\nDescription=Network: DHCP on wired interfaces, wpa_supplicant and DHCP on Wi-Fi\nAfter=systemd-udevd.service systemd-modules-load.service\nBefore=network.target\nWants=network.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c 'for f in /sys/class/rfkill/rfkill*/soft; do [ -w \"$f\" ] && echo 0 > \"$f\"; done; mkdir -p /run/netwatch; true'\nExecStart=/usr/libexec/singularity/netwatch\nExecStopPost=/bin/sh -c 'dhcpcd -x >/dev/null 2>&1; for p in /run/netwatch/*; do [ -f \"$p\" ] && kill \"$(cat \"$p\")\" 2>/dev/null; done; true'\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n",
+            0o644,
+            Own::Always,
+        ));
+        v.push(link(
+            "/etc/systemd/system/multi-user.target.wants/forge-network.service".into(),
+            "/etc/systemd/system/forge-network.service".into(),
+            Own::Always,
+        ));
+        // What earlier versions used instead: take it away so it cannot fight the engine above.
+        for legacy in [
+            "/etc/systemd/system/multi-user.target.wants/systemd-networkd.service",
+            "/etc/systemd/system/multi-user.target.wants/systemd-resolved.service",
+            "/etc/systemd/network/20-wired.network",
+            "/etc/systemd/network/25-wireless.network",
+            "/etc/systemd/system/wpa_supplicant@.service",
+            "/etc/udev/rules.d/80-wifi.rules",
+        ] {
+            v.push(Managed { path: legacy.into(), entry: Entry::Absent, own: Own::Always });
+        }
         // A login on a serial port only where the machine has one: without the port the unit would just fail at every boot.
         v.push(file(
             "/etc/systemd/system/serial-getty@.service.d/10-forge.conf",

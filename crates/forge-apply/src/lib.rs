@@ -461,25 +461,21 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.plumb_in("defaults", &m.path, &m.entry);
         }
     }
+    // The network engine (dhcpcd) writes /etc/resolv.conf itself. A link to systemd-resolved's stub, left by an earlier version
+    // (or by a system that was running systemd), would point at a resolver that is not running: take it away.
+    let stub = "/run/systemd/resolve/stub-resolv.conf";
+    if !desktop && fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t == Path::new(stub)) {
+        p.unlink("init", "/etc/resolv.conf");
+    }
     if switching {
-        let stub = "/run/systemd/resolve/stub-resolv.conf";
         let baseline = |unit: &str, target: &str| format!("/etc/systemd/system/{target}.wants/{unit}");
         if systemd {
-            for (unit, target) in forge_schema::SYSTEMD_BASELINE.iter().filter(|(u, _)| !(desktop && *u == "systemd-networkd.service")) {
+            for (unit, target) in forge_schema::SYSTEMD_BASELINE {
                 p.link("init", &baseline(unit, target), &forge_schema::systemd_unit_file(unit));
             }
-            for (path, content) in forge_schema::SYSTEMD_NETWORK_FILES.iter().chain(forge_schema::SYSTEMD_WIFI_FILES.iter()).filter(|_| !desktop) {
-                p.file("init", path, content.to_string())?;
-            }
-            // resolved keeps /etc/resolv.conf pointing at its stub resolver.
-            p.link("init", "/etc/resolv.conf", stub);
         } else {
             for (unit, target) in forge_schema::SYSTEMD_BASELINE {
                 p.unlink("init", &baseline(unit, target));
-            }
-            // Leaving systemd: a resolv.conf that points at its (now gone) stub would break name lookups.
-            if fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t == Path::new(stub)) {
-                p.unlink("init", "/etc/resolv.conf");
             }
         }
         new_state.init = (system != "openrc" || old_state.init.is_some()).then(|| system.to_string());

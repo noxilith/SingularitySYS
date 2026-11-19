@@ -741,9 +741,11 @@ fn switching_to_systemd_swaps_the_packages_the_init_links_and_the_default_units(
     assert_eq!(link("etc/systemd/system/multi-user.target.wants/dbus.service"), Path::new("/usr/lib/systemd/system/dbus.service"));
     assert_eq!(link("etc/systemd/system/sockets.target.wants/dbus.socket"), Path::new("/usr/lib/systemd/system/dbus.socket"));
     assert_eq!(link("etc/systemd/system/multi-user.target.wants/sshd.service"), Path::new("/usr/lib/systemd/system/sshd.service"));
-    assert_eq!(link("etc/resolv.conf"), Path::new("/run/systemd/resolve/stub-resolv.conf"));
+    assert!(fs::read_link(r.path().join("etc/resolv.conf")).is_err(), "no link to systemd-resolved: dhcpcd writes resolv.conf");
     assert_eq!(read(r.path(), "etc/vconsole.conf"), "KEYMAP=us\n");
-    assert!(read(r.path(), "etc/systemd/network/20-wired.network").contains("DHCP=yes"));
+    assert!(read(r.path(), "etc/systemd/system/forge-network.service").contains("netwatch"), "the same network engine as under OpenRC");
+    assert_eq!(link("etc/systemd/system/multi-user.target.wants/forge-network.service"), Path::new("/etc/systemd/system/forge-network.service"));
+    assert!(!r.path().join("etc/systemd/system/multi-user.target.wants/systemd-networkd.service").exists(), "networkd is not used");
     assert!(read(r.path(), "var/lib/forge/state.toml").contains("init = \"systemd\""));
 
     // Nothing more to do the second time.
@@ -766,7 +768,7 @@ fn switching_back_to_openrc_restores_its_scripts_and_drops_systemd() {
     assert_eq!(fs::metadata(&reboot).unwrap().permissions().mode() & 0o777, 0o755);
     assert_eq!(fs::read_to_string(&reboot).unwrap(), forge_schema::power_script("reboot"));
     assert!(!r.path().join("etc/systemd/system/multi-user.target.wants/dbus.service").exists());
-    assert!(r.path().join("etc/resolv.conf").symlink_metadata().is_err(), "the stub link is gone, DHCP writes the file again");
+    assert!(fs::read_link(r.path().join("etc/resolv.conf")).is_err(), "no stub link, DHCP writes the file");
     assert!(plan(&init_decl("openrc", &["a"]), r.path()).is_empty());
 }
 

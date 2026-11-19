@@ -159,8 +159,6 @@ pub fn power_plumbing() -> Vec<(&'static str, Entry)> {
 pub const SYSTEMD_BASELINE: &[(&str, &str)] = &[
     ("dbus.socket", "sockets.target"),
     ("dbus.service", "multi-user.target"),
-    ("systemd-networkd.service", "multi-user.target"),
-    ("systemd-resolved.service", "multi-user.target"),
     ("systemd-timesyncd.service", "sysinit.target"),
     ("systemd-logind.service", "multi-user.target"),
     ("serial-getty@ttyS0.service", "getty.target"),
