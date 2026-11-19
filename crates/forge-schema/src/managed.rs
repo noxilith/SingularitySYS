@@ -350,7 +350,7 @@ pub fn managed(init: &str) -> Vec<Managed> {
         // A login on a serial port only where the machine has one: without the port the unit would just fail at every boot.
         v.push(file(
             "/etc/systemd/system/serial-getty@.service.d/10-forge.conf",
-            "# managed by forge: a serial console login only where this machine has the serial port\n[Unit]\nConditionPathExists=/sys/class/tty/%i/device\n",
+            "# managed by forge: a serial console login only where this machine has the serial port and the kernel was told to use it\n[Unit]\nConditionPathExists=/sys/class/tty/%i/device\n\n[Service]\nExecCondition=/bin/sh -c 'grep -q \"console=%i\" /proc/cmdline'\n",
             0o644,
             Own::Always,
         ));

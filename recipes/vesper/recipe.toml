@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: matugen, the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r11"
+version     = "0.1.0_r12"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -48,6 +48,7 @@ cat > "$DESTDIR/usr/bin/vesper-greeter-session" <<'GREETER'
 # Run by greetd as the "greeter" user: Vesper's compositor showing only the login screen.
 export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Vesper LIBSEAT_BACKEND=seatd
 export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-$(id -u)"
+export XDG_CACHE_HOME="$XDG_RUNTIME_DIR/cache"; mkdir -p "$XDG_CACHE_HOME"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 exec vesper --tty --greeter >/tmp/vesper-greeter.log 2>&1
 GREETER
