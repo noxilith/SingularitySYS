@@ -50,3 +50,19 @@ There is **no system logger** (decided against). Use `dmesg` for kernel messages
 
 Open an issue at <https://github.com/noxilith/SingularitySYS/issues> with the output of `sudo forge doctor`, what you ran,
 and what you expected.
+
+## Send a report with `sysreport`
+
+`sudo sysreport` gathers what is needed to diagnose a problem (versions, kernel messages, boot and service state, the desktop's
+logs, disks and graphics hardware) into one text report, shows how big it is, and asks before uploading it to a paste service
+(dpaste, kept for 7 days) and printing the link. Give that link to whoever is helping you.
+
+```bash
+sudo sysreport             # collect, ask, upload, print the link
+sudo sysreport --save      # only write the report to a file, nothing leaves the machine
+sudo sysreport --service paste.rs
+```
+
+Left out on purpose: password hashes, Wi-Fi passphrases, SSH keys, your files, saved network connections; MAC addresses are
+masked. Anyone with the link can read it, so share it only with the person helping. If there is no network the report is saved
+under `/tmp` so it can be copied over on a USB stick. It is part of the base system, so `sudo forge upgrade` brings it in.
