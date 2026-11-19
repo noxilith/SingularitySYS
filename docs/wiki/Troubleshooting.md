@@ -66,3 +66,7 @@ sudo sysreport --service paste.rs
 Left out on purpose: password hashes, Wi-Fi passphrases, SSH keys, your files, saved network connections; MAC addresses are
 masked. Anyone with the link can read it, so share it only with the person helping. If there is no network the report is saved
 under `/tmp` so it can be copied over on a USB stick. It is part of the base system, so `sudo forge upgrade` brings it in.
+
+If you went back to an older generation after something broke, run `sudo sysreport` from there: it also reads the logs of the
+other systems on the disk (the one that broke, kept old ones, recent generations), without changing them. Under systemd the
+journal is kept on disk (64 MB at most) so a boot that went wrong leaves its log behind.

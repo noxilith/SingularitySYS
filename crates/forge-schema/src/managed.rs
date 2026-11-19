@@ -324,6 +324,14 @@ pub fn managed(init: &str) -> Vec<Managed> {
             0o644,
             Own::Always,
         ));
+        // Keep the journal on disk (small), so the log of a boot that went wrong is still there after the reboot and
+        // `sysreport` can read it, even from another generation.
+        v.push(file(
+            "/etc/systemd/journald.conf.d/10-forge.conf",
+            "# managed by forge: keep the journal across reboots, but small\n[Journal]\nStorage=persistent\nSystemMaxUse=64M\nRuntimeMaxUse=32M\nMaxFileSec=1week\n",
+            0o644,
+            Own::Always,
+        ));
     }
     v
 }
