@@ -157,9 +157,10 @@ while :; do
 			fi
 		fi
 	done
+	# -A: no ARP probe of the offered address (saves about 5 seconds; a clash on a home network is very rare).
 	# One DHCP client (dhcpcd) looks after every interface, including ones that appear later (a Wi-Fi card whose
 	# firmware loads after boot), and waits for a carrier on its own. Started once; restarted if it ever dies.
-	pgrep -x dhcpcd >/dev/null 2>&1 || dhcpcd -b -q >/dev/null 2>&1
+	pgrep -x dhcpcd >/dev/null 2>&1 || dhcpcd -b -q -A >/dev/null 2>&1
 	sleep 3
 done
 "#;
