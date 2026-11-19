@@ -466,9 +466,11 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
     // also keeps systemd from making the link again. (The desktop's NetworkManager manages the file on its own.)
     let stub_link = fs::read_link(under(root, "/etc/resolv.conf")).is_ok_and(|t| t.to_string_lossy().ends_with("stub-resolv.conf"));
     if !desktop && stub_link {
-        p.unlink("init", "/etc/resolv.conf");
         if systemd {
+            // one write that replaces the link itself (the file is written next to it and renamed over it)
             p.file("init", "/etc/resolv.conf", "# DHCP (dhcpcd) writes this file when the network comes up\n".to_string())?;
+        } else {
+            p.unlink("init", "/etc/resolv.conf");
         }
     }
     if switching {
