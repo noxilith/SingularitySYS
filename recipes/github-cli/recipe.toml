@@ -1,0 +1,28 @@
+# github-cli: the `gh` command (pull requests, issues, releases, API calls from the terminal). Repackaged from the
+# official release tarball of the GitHub CLI project: it is written in Go and forge has no Go toolchain to build it
+# with. The binary is static (no libc needed); it reads the root certificates from ca-certificates.
+name        = "github-cli"
+version     = "2.105.0"
+description = "GitHub command line tool (gh)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which"]
+run   = ["ca-certificates"]
+
+[[source]]
+url    = "https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz"
+sha256 = "79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f"
+
+[build]
+compile = "true"
+install = '''
+cd "$SRC"
+install -Dm755 bin/gh "$DESTDIR/usr/bin/gh"
+install -Dm644 LICENSE "$DESTDIR/usr/share/licenses/github-cli/LICENSE"
+mkdir -p "$DESTDIR/usr/share/man/man1"
+install -m644 share/man/man1/*.1 "$DESTDIR/usr/share/man/man1/"
+test -x "$DESTDIR/usr/bin/gh"
+'''
