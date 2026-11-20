@@ -1,6 +1,6 @@
 # Fast, lightweight Wayland terminal emulator
 name        = "foot"
-version     = "1.25.0_r2"
+version     = "1.25.0_r3"
 description = "Fast, lightweight Wayland terminal emulator"
 license     = "MIT"
 libc        = ["glibc"]
@@ -30,7 +30,7 @@ cat > "$DESTDIR/etc/xdg/foot/foot.ini" <<'FOOTINI'
 font=JetBrainsMono Nerd Font Mono:size=11.5
 login-shell=yes
 
-[colors-dark]
+[colors]
 alpha=0.75
 foreground=e1e2e8
 background=111418
