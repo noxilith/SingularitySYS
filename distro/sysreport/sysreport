@@ -5,7 +5,7 @@
 #   sudo sysreport             collect, show what it is, ask, then upload and print the link
 #   sudo sysreport --save      collect into a file only (nothing leaves the machine); prints the path
 #   sudo sysreport --yes       upload without asking
-#   sysreport --service NAME   dpaste (default, kept 7 days) or paste.rs (kept for good)
+#   sysreport --service NAME   cnet (paste.c-net.org, the default, kept 180 days) or paste.rs (keeps only the first 384 KiB)
 #
 # What goes in: system and package versions, kernel messages, boot and service state, the desktop's logs (login screen, session, plugins, settings) and config, disks and graphics
 # hardware. What never goes in: password hashes, Wi-Fi passphrases, SSH keys, file contents of your home directory, saved
@@ -13,7 +13,7 @@
 set -u
 export LC_ALL=C PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$PATH
 
-SERVICE=dpaste; YES=0; SAVE=0; OUT=
+SERVICE=cnet; YES=0; SAVE=0; OUT=
 while [ $# -gt 0 ]; do
     case "$1" in
         --yes|-y) YES=1 ;;
@@ -184,17 +184,26 @@ fi
 
 have curl || { echo "sysreport: curl is missing; saving instead"; OUT=/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt; cp "$TMP" "$OUT"; echo "saved to $OUT"; exit 1; }
 
+ERRF=$(mktemp /tmp/sysreport-err.XXXXXX)
 case "$SERVICE" in
-    dpaste)
-        URL=$(curl -fsS -m 60 -A sysreport -F "content=<$TMP" -F expiry_days=7 -F syntax=text https://dpaste.org/api/ 2>/dev/null | tr -d '"[:space:]')
-        RAW=${URL%/}/raw ;;
-    paste.rs)
-        URL=$(curl -fsS -m 60 -A sysreport --data-binary "@$TMP" https://paste.rs 2>/dev/null | tr -d '[:space:]')
+    cnet)
+        # One upload that you asked for (the service's fair-use rule): never retried, never looped.
+        URL=$(curl -sS -m 120 -A sysreport --data-binary "@$TMP" -w '\n%{http_code}' https://paste.c-net.org/ 2>"$ERRF")
+        CODE=${URL##*$'\n'}; URL=$(printf '%s' "${URL%$'\n'*}" | tr -d '[:space:]')
+        [ "$CODE" = 200 ] || { [ "$CODE" = 429 ] && echo "sysreport: paste.c-net.org refused the upload (HTTP 429, too many uploads from your network). Not retrying; saving instead." >&2; URL=; }
         RAW=$URL ;;
-    *) echo "sysreport: unknown service $SERVICE (dpaste or paste.rs)" >&2; exit 2 ;;
+    paste.rs)
+        if [ "$SIZE" -gt 393216 ]; then
+            echo "sysreport: paste.rs keeps only the first 384 KiB and this report is $SIZE bytes; use the default service or --save." >&2; URL=
+        else
+            URL=$(curl -fsS -m 60 -A sysreport --data-binary "@$TMP" https://paste.rs 2>"$ERRF" | tr -d '[:space:]')
+        fi
+        RAW=$URL ;;
+    *) echo "sysreport: unknown service $SERVICE (cnet or paste.rs)" >&2; exit 2 ;;
 esac
 case "$URL" in
-    https://*) echo; echo "Send this link:  $URL"; echo "(raw text:       $RAW)"; [ "$SERVICE" = dpaste ] && echo "It is deleted after 7 days." ;;
+    https://*) echo; echo "Send this link:  $URL"; echo "(raw text:       $RAW)"; [ "$SERVICE" = cnet ] && echo "It is kept for 180 days (7 days if you upload from a cloud network)."; rm -f "$ERRF" ;;
     *) OUT=/tmp/sysreport-$(date -u +%Y%m%d-%H%M%S).txt; cp "$TMP" "$OUT"
+       [ -s "$ERRF" ] && { echo "sysreport: upload error:"; sed "s/^/    /" "$ERRF"; }; rm -f "$ERRF"
        echo "sysreport: the upload failed (no network?). The report is saved at $OUT: copy it to another computer (a USB stick works)."; exit 1 ;;
 esac
