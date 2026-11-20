@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r19"
+version     = "0.1.0_r21"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -80,6 +80,36 @@ for p in pipewire wireplumber pipewire-pulse; do
 done
 SNIP
 awk 'FNR==NR{s=s $0 "\n"; next} {print} /^export XDG_RUNTIME_DIR/{printf "%s", s}' /build/audio-snippet "$DESTDIR/usr/bin/vesper-session" > /build/vs && cat /build/vs > "$DESTDIR/usr/bin/vesper-session"
+# Bash prompt like the fish setup: two lines, rounded pills (Nerd Font glyphs) for user@host and the path. The pill
+# colours come from ~/.local/state/vesper/shell-colors.sh (written by matugen from the wallpaper); without it the
+# defaults below are used. Login shells read this through /etc/profile (foot starts its shell as a login shell).
+mkdir -p "$DESTDIR/etc/profile.d"
+cat > "$DESTDIR/etc/profile.d/vesper-prompt.sh" <<'VPROMPT'
+# Vesper's bash prompt (rounded pills, like the fish setup). Delete this file or set VESPER_PLAIN_PROMPT=1 to turn it off.
+[ -n "${BASH_VERSION:-}" ] || return 0
+case $- in *i*) ;; *) return 0 ;; esac
+[ "${TERM:-linux}" = linux ] && return 0
+[ -n "${VESPER_PLAIN_PROMPT:-}" ] && return 0
+
+__vp_rgb() { printf '%d;%d;%d' $((16#${1:0:2})) $((16#${1:2:2})) $((16#${1:4:2})); }
+__vp_prompt() {
+    local st=$?
+    local VESPER_PILL=32353a VESPER_USER=a3c9fe VESPER_CWD=d7e3f8 VESPER_ERR=ffb4ab
+    local f="${XDG_STATE_HOME:-$HOME/.local/state}/vesper/shell-colors.sh"
+    [ -r "$f" ] && . "$f"
+    local e=$'\e' cl=$'\xee\x82\xb6' cr=$'\xee\x82\xb4'
+    local pill user cwd err arrow
+    pill=$(__vp_rgb "$VESPER_PILL") user=$(__vp_rgb "$VESPER_USER") cwd=$(__vp_rgb "$VESPER_CWD") err=$(__vp_rgb "$VESPER_ERR")
+    if [ "$st" -eq 0 ]; then arrow=$user; else arrow=$err; fi
+    local cap="\[${e}[38;2;${pill}m\]" norm="\[${e}[0m\]"
+    local path='\w/'
+    [ "$PWD" = / ] && path='\w'
+    PS1="${cap}${cl}\[${e}[38;2;${user};48;2;${pill}m\]\u@\h${norm}${cap}${cr}${norm} ${cap}${cl}\[${e}[38;2;${cwd};48;2;${pill}m\]${path}${norm}${cap}${cr}${norm}\n\[${e}[38;2;${arrow}m\]> ${norm}"
+}
+case ";${PROMPT_COMMAND:-};" in *";__vp_prompt;"*) ;; *) PROMPT_COMMAND="__vp_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;; esac
+VPROMPT
+chmod 644 "$DESTDIR/etc/profile.d/vesper-prompt.sh"
+bash -n "$DESTDIR/etc/profile.d/vesper-prompt.sh"
 test -x "$DESTDIR/usr/bin/vesper"
 test -x "$DESTDIR/usr/bin/vesper-session"
 test -x "$DESTDIR/usr/bin/file-manager"
