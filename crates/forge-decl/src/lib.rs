@@ -151,6 +151,18 @@ pub fn remove_package(text: &str, name: &str) -> Result<Edited, EditError> {
     Ok(Edited { text: doc.to_string(), changed: true })
 }
 
+/// Add a repository to `repos` (no-op if it is already listed).
+pub fn add_repo(text: &str, repo: &str) -> Result<Edited, EditError> {
+    let mut doc: DocumentMut = text.parse()?;
+    let item = doc.entry("repos").or_insert(Item::Value(Value::Array(Array::new())));
+    let arr = item.as_array_mut().ok_or(EditError::BadPackages)?;
+    if arr.iter().any(|v| v.as_str() == Some(repo)) {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    }
+    arr.push(repo);
+    Ok(Edited { text: doc.to_string(), changed: true })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

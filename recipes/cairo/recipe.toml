@@ -1,12 +1,12 @@
 # 2D graphics library
 name        = "cairo"
-version     = "1.18.4"
+version     = "1.18.4_r1"
 description = "2D graphics library"
 license     = "LGPL-2.1-only OR MPL-1.1"
 libc        = ["glibc"]
 
 [depends]
-build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "pixman", "freetype", "fontconfig", "libpng", "zlib", "expat"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "pixman", "freetype", "fontconfig", "libpng", "zlib", "expat", "libX11", "libXrender", "libXext", "xorgproto", "libxcb", "libXau", "libXdmcp"]
 
 [[source]]
 url    = "https://cairographics.org/releases/cairo-1.18.4.tar.xz"
@@ -15,7 +15,7 @@ sha256 = "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb"
 [build]
 configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
-CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=disabled -Dxlib=disabled -Dxcb=disabled -Dglib=disabled -Dspectre=disabled -Dsymbol-lookup=disabled -Dgtk2-utils=disabled
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=disabled -Dxlib=enabled -Dxcb=disabled -Dglib=disabled -Dspectre=disabled -Dsymbol-lookup=disabled -Dgtk2-utils=disabled
 '''
 compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
 install   = '''

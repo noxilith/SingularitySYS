@@ -1,12 +1,12 @@
 # Select a region of a Wayland screen (screen sharing, screenshots)
 name        = "slurp"
-version     = "1.5.0"
+version     = "1.5.0_r1"
 description = "Select a region of a Wayland screen (screen sharing, screenshots)"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
-build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "cairo", "wayland", "wayland-protocols", "libxkbcommon", "pixman", "freetype", "fontconfig", "libpng", "zlib", "expat"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "cairo", "libX11", "libXrender", "libXext", "xorgproto", "libxcb", "libXau", "libXdmcp", "wayland", "wayland-protocols", "libxkbcommon", "pixman", "freetype", "fontconfig", "libpng", "zlib", "expat"]
 
 [[source]]
 url    = "https://github.com/emersion/slurp/releases/download/v1.5.0/slurp-1.5.0.tar.gz"

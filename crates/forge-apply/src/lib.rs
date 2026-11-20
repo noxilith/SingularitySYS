@@ -525,6 +525,20 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             p.changes.push(Change { section: "init", kind: Kind::Add, summary: summary.into(), op: Op::Run { program: PathBuf::from(tool), args, best_effort: true } });
         }
     }
+    // Packages made from Debian ones (`forge deb`) ship small scripts for what Debian's package scripts and triggers
+    // would have done (compiled GLib schemas, GDK-Pixbuf loader caches, the MIME database...). Best effort.
+    if root == Path::new("/") && (switching || profile_switch.is_some()) && package_names.iter().any(|n| n.starts_with("deb-")) {
+        p.changes.push(Change {
+            section: "init",
+            kind: Kind::Modify,
+            summary: "caches for the Debian packages (GLib schemas, icon and loader caches)".into(),
+            op: Op::Run {
+                program: PathBuf::from("/bin/sh"),
+                args: vec!["-c".to_string(), "for f in /usr/lib/forge/post-apply.d/*.sh; do [ -f \"$f\" ] && sh \"$f\"; done; true".to_string()],
+                best_effort: true,
+            },
+        });
+    }
     // The manual-page index (for `apropos` and `whatis`) follows the packages: rebuilt whenever they change. Best effort.
     if root == Path::new("/") && profile_switch.is_some() && package_names.iter().any(|n| n == "mandoc") {
         p.changes.push(Change {

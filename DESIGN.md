@@ -140,14 +140,16 @@ Installs kernel + initramfs, updates Limine entries, keeps older kernels for gen
 - Recipes are libc-parametrized from the start: `libc = "glibc" | "musl"`. Never hardcode glibc-specific paths (e.g. `ld-linux`) in `forge`.
 - `forge` itself must build statically for both libcs.
 
-## Deferred: foreign package files (`.deb`)
+## Debian packages (implemented: `forge-deb`, `forge deb`)
 
-Subspaces (isolated roots of other distros) are **not** part of the design for now. A way to use apps that only ship a `.deb` is wanted later. Options to revisit then:
+Software that only ships a `.deb` (Claude Desktop is the first) is installed natively, not in an isolated root. `forge deb` reads apt repositories and turns the packages into forge packages, so install, upgrade, removal, generations and rollback work as for any other package.
 
-- a subspace-style isolated Debian root (bubblewrap) with the `.deb` installed inside and its commands exported to a profile (robust, works on both libcs, costs disk space);
-- native extraction of self-contained `.deb` files into the store with `--isolate`, glibc ISO only (fast, but fragile: Debian dependency names, `postinst` scripts, glibc version, `/usr/lib/x86_64-linux-gnu` paths).
-
-The store, profile and `--isolate` design should not make either option impossible.
+- **Sources and trust.** `forge deb source add NAME URL SUITE COMPONENTS --key KEY` records a repository and its public key (`debian` and `anthropic` are presets). `forge deb update` downloads `InRelease` (or `Release` + `Release.gpg`), checks the OpenPGP signature against that key, refuses an expired `Valid-Until`, and checks every `Packages` file against the signed SHA-256 sums; each `.deb` is checked against its entry in `Packages`. The pure-Rust `pgp` crate does the checking (there is no gpg here).
+- **Resolving.** `Depends` and `Pre-Depends` are followed (alternatives: the first that exists), Recommends are not, except for a few that make the desktop stack work (GLib's schema tools, the GDK-Pixbuf tools, MIME data, icon themes). Never taken from Debian: libc and the dpkg machinery. Left to the system: a package whose name is also a forge package, and a library package whose shared libraries are all in `/usr/lib` already.
+- **Converting.** All the packages of one install become one forge package `deb-NAME`. Debian's `usr/lib/x86_64-linux-gnu` is flattened into `usr/lib` (symlinks rewritten; a small `deb-compat` package adds `usr/lib/x86_64-linux-gnu -> .` for paths programs have built in), `/bin`, `/sbin` and `/lib` are merged into `/usr`, documentation is dropped. A file the system already has is never replaced: the forge package that owns it is recorded as needed and declared by name (never pinned by build: a repository lists only the newest build of a package, so a pin would break every upgrade of it). Maintainer scripts are not run; compiled caches that matter (GLib schemas, GDK-Pixbuf loaders, MIME and icon caches, fonts) are rebuilt by `usr/lib/forge/post-apply.d/*.sh`, which `forge apply` runs.
+- **Checking.** Before the package is published, every undefined symbol of its programs and libraries is looked up in the package and in `/usr/lib`. A symbol nothing provides means one of the system's libraries was built without a feature Debian's has (GTK needs cairo's Xlib support and libepoxy's GLX entry points); `forge deb` says which files are affected. The fix is to build the system's library with the feature.
+- **Where things live.** `/etc/forge/deb/` (sources, their keys, the local signing key), `/var/cache/forge/deb/` (lists and downloaded `.deb` files), `/var/lib/forge/deb-repo` (the local repository, listed in `repos` and signed by the local key, which is trusted in `/etc/forge/keys`).
+- **Limits.** Debian's own setuid programs stay non-setuid (Electron uses user namespaces, which the kernel has); services and `postinst` actions are not set up; a Debian library whose ABI differs from this system's build of the same library cannot be told apart in advance (the symbol check catches the missing functions, not changed behaviour).
 
 ## Implementation language: Rust
 

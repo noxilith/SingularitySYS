@@ -1,0 +1,25 @@
+[package]
+name = "forge-deb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Install Debian packages from apt repositories as forge packages"
+
+[dependencies]
+forge-store.workspace = true
+forge-schema.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+tar.workspace = true
+ruzstd.workspace = true
+flate2.workspace = true
+lzma-rs.workspace = true
+bzip2.workspace = true
+serde.workspace = true
+toml.workspace = true
+pgp = { version = "0.16", default-features = false }
+object = { version = "0.36", default-features = false, features = ["read_core", "elf", "std"] }
+
+[dev-dependencies]
+tempfile.workspace = true

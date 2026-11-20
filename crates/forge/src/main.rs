@@ -7,6 +7,7 @@ use forge_kernel::Http as _;
 use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
+mod deb_cmd;
 mod doctor;
 mod maintenance;
 mod ui;
@@ -40,6 +41,8 @@ enum Cmd {
         #[command(subcommand)]
         action: PkgAction,
     },
+    /// Install packages from Debian (or any apt repository) that forge does not have
+    Deb(deb_cmd::DebArgs),
     /// Work with the package store: pack, publish, install, list, gc
     Store(StoreArgs),
     /// Create signing keys and manage which public keys are trusted
@@ -698,6 +701,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::List(a) => list_cmd(a),
         Cmd::Search(a) => search_cmd(a),
         Cmd::Pkg { action } => pkg(action),
+        Cmd::Deb(a) => deb_cmd::run(a),
         Cmd::Store(a) => store_cmd(a),
         Cmd::Key(a) => key_cmd(a),
         Cmd::Repo(a) => repo_cmd(a),
@@ -713,6 +717,19 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Build(a) => build_cmd(a),
         Cmd::SandboxChild { .. } | Cmd::SandboxProbe => unreachable!("handled in main"),
     }
+}
+
+/// Install packages into the system declaration and apply it (used by `forge deb`).
+fn pkg_add(names: Vec<String>, yes: bool, root: PathBuf) -> Result<()> {
+    pkg(PkgAction::Add(PkgArgs { names, system: true, file: None, no_apply: false, yes, root, keys: None, allow_unsigned: false, adopt: false, full: false }))
+}
+
+fn pkg_remove(names: Vec<String>, yes: bool, root: PathBuf) -> Result<()> {
+    pkg(PkgAction::Remove(PkgArgs { names, system: true, file: None, no_apply: false, yes, root, keys: None, allow_unsigned: false, adopt: false, full: false }))
+}
+
+fn upgrade_with(root: PathBuf, yes: bool) -> Result<()> {
+    upgrade(UpgradeArgs { dry_run: false, yes, root, keys: None, allow_unsigned: false, adopt: false })
 }
 
 fn todo_cmd(name: &str) -> Result<()> {

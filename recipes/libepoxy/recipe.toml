@@ -1,12 +1,12 @@
 # OpenGL function pointer management library
 name        = "libepoxy"
-version     = "1.5.10"
-description = "OpenGL function pointer management library"
+version     = "1.5.10_r1"
+description = "OpenGL function pointer management library (with the GLX entry points, which GTK needs)"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
-build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "mesa", "libdrm", "wayland", "expat", "zlib"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "mesa", "libdrm", "wayland", "expat", "zlib", "libX11", "xorgproto", "libxcb", "libXau", "libXdmcp"]
 
 [[source]]
 url    = "https://github.com/anholt/libepoxy/archive/refs/tags/1.5.10.tar.gz"
@@ -15,7 +15,7 @@ sha256 = "a7ced37f4102b745ac86d6a70a9da399cc139ff168ba6b8002b4d8d43c900c15"
 [build]
 configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
-CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=false -Dx11=false -Degl=yes -Dglx=no -Ddocs=false
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --sysconfdir=/etc --localstatedir=/var --buildtype=release -Dtests=false -Dx11=true -Degl=yes -Dglx=yes -Ddocs=false
 '''
 compile   = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
 install   = '''

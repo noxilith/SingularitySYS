@@ -1,0 +1,25 @@
+# X Rendering Extension client library
+name        = "libXrender"
+version     = "0.9.12"
+description = "X Rendering Extension client library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "xorgproto", "libX11", "libxcb", "libXau", "libXdmcp"]
+run   = ["libX11"]
+
+[[source]]
+url    = "https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.12.tar.xz"
+sha256 = "b832128da48b39c8d608224481743403ad1691bf4e554e4be9c174df171d1b97"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --disable-specs --without-xmlto --without-fop --without-xsltproc --without-doxygen --disable-docs CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+
+test -e "$DESTDIR/usr/lib/libXrender.so.1"
+'''
