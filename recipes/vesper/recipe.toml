@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r18"
+version     = "0.1.0_r19"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -69,6 +69,11 @@ if [ ! -d "$XDG_RUNTIME_DIR" ] || [ ! -w "$XDG_RUNTIME_DIR" ]; then
 fi
 # One seat provider on both init systems: the seatd daemon (forge enables it when vesper is declared).
 export LIBSEAT_BACKEND="${LIBSEAT_BACKEND:-seatd}"
+# Put the bundled wallpapers into ~/Pictures/Wallpapers (the folder the wallpaper changer lists) once per user.
+if [ -d /usr/share/vesper/wallpapers ] && [ -n "${HOME:-}" ] && [ ! -e "$HOME/.local/state/vesper/wallpapers-seeded" ]; then
+    mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.local/state/vesper" 2>/dev/null
+    cp -n /usr/share/vesper/wallpapers/* "$HOME/Pictures/Wallpapers/" 2>/dev/null && : > "$HOME/.local/state/vesper/wallpapers-seeded"
+fi
 # Start the audio stack with the session on both init systems (a login without logind has no user service manager).
 for p in pipewire wireplumber pipewire-pulse; do
     if command -v "$p" >/dev/null 2>&1 && ! pgrep -u "$(id -u)" -x "$p" >/dev/null 2>&1; then "$p" >/dev/null 2>&1 & fi
@@ -78,4 +83,6 @@ awk 'FNR==NR{s=s $0 "\n"; next} {print} /^export XDG_RUNTIME_DIR/{printf "%s", s
 test -x "$DESTDIR/usr/bin/vesper"
 test -x "$DESTDIR/usr/bin/vesper-session"
 test -x "$DESTDIR/usr/bin/file-manager"
+grep -q wallpapers-seeded "$DESTDIR/usr/bin/vesper-session"
+test -f "$DESTDIR/usr/share/vesper/wallpapers/singularity.jpg"
 '''
