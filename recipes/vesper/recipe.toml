@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r21"
+version     = "0.1.0_r22"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -21,8 +21,8 @@ run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mes
          "networkmanager", "bluez", "linux-firmware-bluetooth", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
-url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-fcf3e2e99c8b910480d158ccff5dbbba9431267c-vendored.tar.gz"
-sha256 = "4f4ba3961778c2d11600a2bcc69c6b6ff338e290ba23da172fe5f0d3cddc0387"
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-b8a4c53bfa64de11ec5973a0c68367269f293337-vendored.tar.gz"
+sha256 = "73839f688926cf57dbfceeae339dd3ec58199003724d367ad5ff8064ae801e13"
 
 [build]
 compile = '''
@@ -73,6 +73,13 @@ export LIBSEAT_BACKEND="${LIBSEAT_BACKEND:-seatd}"
 if [ -d /usr/share/vesper/wallpapers ] && [ -n "${HOME:-}" ] && [ ! -e "$HOME/.local/state/vesper/wallpapers-seeded" ]; then
     mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.local/state/vesper" 2>/dev/null
     cp -n /usr/share/vesper/wallpapers/* "$HOME/Pictures/Wallpapers/" 2>/dev/null && : > "$HOME/.local/state/vesper/wallpapers-seeded"
+fi
+# foot reads ONE config file: once ~/.config/foot/foot.ini exists (Vesper's wallpaper colouring creates it) the system
+# one is ignored. So a user file that holds nothing of its own gets an include of /etc/xdg/foot/foot.ini (font, opacity).
+f="$HOME/.config/foot/foot.ini"
+if [ -r /etc/xdg/foot/foot.ini ] && ! grep -qs '^include=/etc/xdg/foot/foot.ini' "$f" && ! grep -v -e '^#' -e '^$' -e 'vesper-colors.ini' "$f" 2>/dev/null | grep -q .; then
+    mkdir -p "$HOME/.config/foot"
+    { echo '# Defaults from /etc/xdg/foot/foot.ini (font, opacity); put your own settings below.'; echo 'include=/etc/xdg/foot/foot.ini'; cat "$f" 2>/dev/null || true; } > "$f.new" && mv "$f.new" "$f"
 fi
 # Start the audio stack with the session on both init systems (a login without logind has no user service manager).
 for p in pipewire wireplumber pipewire-pulse; do
