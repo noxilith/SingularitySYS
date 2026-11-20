@@ -1,7 +1,7 @@
 # JetBrains Mono patched with Nerd Font symbols: Vesper's default bar font (its icons are Nerd Font glyphs). Only the
-# proportional-symbol "NerdFont" family in all weights; the Mono and Propo variants are left out.
+# "NerdFont" family (the bar) and the single-width "NerdFont Mono" family (terminals) in all weights; Propo/NL are left out.
 name        = "font-jetbrains-mono-nerd"
-version     = "3.4.0"
+version     = "3.4.0_r1"
 description = "JetBrains Mono Nerd Font (TrueType)"
 license     = "OFL-1.1"
 libc        = ["glibc"]
@@ -17,7 +17,7 @@ sha256 = "ef552a3e638f25125c6ad4c51176a6adcdce295ab1d2ffacf0db060caf8c1582"
 install = '''
 cd "$SRC"
 mkdir -p "$DESTDIR/usr/share/fonts/jetbrains-mono-nerd"
-for f in JetBrainsMonoNerdFont-*.ttf; do install -m 644 "$f" "$DESTDIR/usr/share/fonts/jetbrains-mono-nerd/"; done
+for f in JetBrainsMonoNerdFont-*.ttf JetBrainsMonoNerdFontMono-*.ttf; do install -m 644 "$f" "$DESTDIR/usr/share/fonts/jetbrains-mono-nerd/"; done
 mkdir -p "$DESTDIR/usr/share/licenses/font-jetbrains-mono-nerd"
 for f in OFL.txt LICENSE* README.md; do [ -f "$f" ] && cp "$f" "$DESTDIR/usr/share/licenses/font-jetbrains-mono-nerd/"; done
 test -f "$DESTDIR/usr/share/fonts/jetbrains-mono-nerd/JetBrainsMonoNerdFont-Regular.ttf"
