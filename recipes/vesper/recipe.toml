@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r30"
+version     = "0.1.0_r31"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -71,6 +71,8 @@ if [ ! -d "$XDG_RUNTIME_DIR" ] || [ ! -w "$XDG_RUNTIME_DIR" ]; then
 fi
 # One seat provider on both init systems: the seatd daemon (forge enables it when vesper is declared).
 export LIBSEAT_BACKEND="${LIBSEAT_BACKEND:-seatd}"
+# The folder screenshots are saved to (Vesper's default) must exist.
+[ -n "${HOME:-}" ] && mkdir -p "$HOME/Pictures/Screenshots" 2>/dev/null
 # Put the bundled wallpapers into ~/Pictures/Wallpapers (the folder the wallpaper changer lists) once per user.
 if [ -d /usr/share/vesper/wallpapers ] && [ -n "${HOME:-}" ] && [ ! -e "$HOME/.local/state/vesper/wallpapers-seeded" ]; then
     mkdir -p "$HOME/Pictures/Wallpapers" "$HOME/.local/state/vesper" 2>/dev/null
@@ -123,5 +125,6 @@ test -x "$DESTDIR/usr/bin/vesper"
 test -x "$DESTDIR/usr/bin/vesper-session"
 test -x "$DESTDIR/usr/bin/file-manager"
 grep -q wallpapers-seeded "$DESTDIR/usr/bin/vesper-session"
+grep -q Pictures/Screenshots "$DESTDIR/usr/bin/vesper-session"
 test -f "$DESTDIR/usr/share/vesper/wallpapers/singularity.jpg"
 '''
