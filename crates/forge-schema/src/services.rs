@@ -195,6 +195,20 @@ depend() {
 }
 ";
 
+/// wpa_supplicant as the D-Bus daemon NetworkManager drives Wi-Fi through (systemd starts it through the package's unit).
+const OPENRC_WPA_SUPPLICANT: &str = "#!/sbin/openrc-run
+# managed by forge
+description=\"wpa_supplicant (D-Bus), used by NetworkManager\"
+command=/usr/sbin/wpa_supplicant
+command_args=\"-u -O /run/wpa_supplicant\"
+command_background=true
+pidfile=/run/wpa_supplicant.pid
+
+depend() {
+	need dbus
+}
+";
+
 /// Everything in [`managed`] plus what the declaration asks for: the firewall (and port forwarding), zram swap, routine
 /// maintenance and the SSH server. A service the declaration turns off is made absent.
 pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
@@ -284,8 +298,10 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
         v.push(file("/etc/init.d/dbus", OPENRC_DBUS, 0o755, Own::Always));
         v.push(file("/etc/init.d/polkit", OPENRC_POLKIT, 0o755, Own::Always));
         v.push(file("/etc/init.d/udev", OPENRC_UDEV, 0o755, Own::Always));
+        v.push(file("/etc/init.d/wpa_supplicant", OPENRC_WPA_SUPPLICANT, 0o755, Own::Always));
         for s in ["NetworkManager", "upower", "power-profiles-daemon", "udisks2"] {
-            v.push(file(&format!("/etc/conf.d/{s}"), "# managed by forge\nrc_need=\"dbus polkit\"\n", 0o644, Own::Always));
+            let need = if s == "NetworkManager" { "dbus polkit wpa_supplicant" } else { "dbus polkit" };
+            v.push(file(&format!("/etc/conf.d/{s}"), &format!("# managed by forge\nrc_need=\"{need}\"\n"), 0o644, Own::Always));
         }
     }
     // The desktop brings NetworkManager, which must be the only thing configuring interfaces: forge's own network engine
@@ -298,7 +314,7 @@ pub fn managed_for(decl: &SystemDecl) -> Vec<Managed> {
         }
     } else if init == "openrc" {
         // The desktop is gone: so are the scripts and ordering files forge wrote for it.
-        for path in ["/etc/init.d/dbus", "/etc/init.d/polkit", "/etc/init.d/udev", "/etc/conf.d/NetworkManager", "/etc/conf.d/upower", "/etc/conf.d/power-profiles-daemon", "/etc/conf.d/udisks2"] {
+        for path in ["/etc/init.d/dbus", "/etc/init.d/polkit", "/etc/init.d/udev", "/etc/init.d/wpa_supplicant", "/etc/conf.d/NetworkManager", "/etc/conf.d/upower", "/etc/conf.d/power-profiles-daemon", "/etc/conf.d/udisks2"] {
             v.push(Managed { path: path.into(), entry: Entry::Absent, own: Own::Always });
         }
     }
@@ -315,6 +331,16 @@ mod tests {
 
     fn find<'a>(v: &'a [Managed], p: &str) -> Option<&'a Managed> {
         v.iter().find(|m| m.path == p)
+    }
+
+    #[test]
+    fn the_desktop_under_openrc_runs_wpa_supplicant_for_networkmanager_and_takes_it_back() {
+        let on = managed_for(&decl("init = \"openrc\"\npackages = [\"vesper\"]").with_desktop());
+        let off = managed_for(&decl("init = \"openrc\""));
+        let script = find(&on, "/etc/init.d/wpa_supplicant").unwrap();
+        assert!(matches!(&script.entry, Entry::File { content, .. } if content.contains("-u -O /run/wpa_supplicant") && !content.contains(" -s ")));
+        assert!(matches!(&find(&on, "/etc/conf.d/NetworkManager").unwrap().entry, Entry::File { content, .. } if content.contains("wpa_supplicant")));
+        assert_eq!(find(&off, "/etc/init.d/wpa_supplicant").unwrap().entry, Entry::Absent);
     }
 
     #[test]

@@ -254,6 +254,6 @@ pub const DESKTOP_SERVICES: &[&str] = &["seatd", "greetd", "NetworkManager", "bl
 pub const DESKTOP_USER: &str = "greeter";
 pub const DESKTOP_GROUPS: &[&str] = &["video", "input", "audio"];
 
-/// Under OpenRC the desktop also needs udev (so libinput finds the input devices), the message bus and the authorization daemon; their packages ship no OpenRC
+/// Under OpenRC the desktop also needs udev (so libinput finds the input devices), the message bus, the authorization daemon and wpa_supplicant (its D-Bus daemon, which NetworkManager drives Wi-Fi through; systemd starts it through a unit from the package); their packages ship no OpenRC
 /// scripts, so forge writes them (see `managed_for`) and starts them first.
-pub const DESKTOP_OPENRC_SERVICES: &[&str] = &["udev", "dbus", "polkit"];
+pub const DESKTOP_OPENRC_SERVICES: &[&str] = &["udev", "dbus", "polkit", "wpa_supplicant"];
