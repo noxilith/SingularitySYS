@@ -45,7 +45,7 @@ enum DebAction {
 #[derive(Subcommand)]
 enum SourceAction {
     /// Add a repository. `forge deb source add debian` adds Debian (trixie, main) with its archive keys;
-    /// `forge deb source add anthropic` adds Anthropic's repository (Claude Desktop)
+    /// `forge deb source add anthropic` adds Anthropic's repository (Claude Desktop), `forge deb source add librewolf` the LibreWolf browser's
     Add {
         name: String,
         /// The repository, e.g. https://deb.debian.org/debian
@@ -170,6 +170,10 @@ fn source(cfg: &install::Config, root: &Path, action: SourceAction) -> Result<()
                 None if name == "anthropic" => {
                     let keys = if keys.is_empty() { vec!["https://downloads.claude.ai/keys/claude-code.asc".to_string()] } else { keys };
                     ("https://downloads.claude.ai/claude-desktop/apt/stable".to_string(), "stable".to_string(), vec!["main".to_string()], keys)
+                }
+                None if name == "librewolf" => {
+                    let keys = if keys.is_empty() { vec!["https://repo.librewolf.net/pubkey.gpg".to_string()] } else { keys };
+                    ("https://repo.librewolf.net".to_string(), "librewolf".to_string(), vec!["main".to_string()], keys)
                 }
                 None => bail!("give the repository address: forge deb source add {name} URL SUITE [COMPONENTS...] --key KEY"),
             };
