@@ -21,8 +21,8 @@ run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mes
          "networkmanager", "bluez", "linux-firmware-bluetooth", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
-url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-efc374e99241ee8f68f03c84db5935a909e4ce85-vendored.tar.gz"
-sha256 = "ddc66157d5797dfb243251a600bd9874ffaa74ad7cf03583f6a227d6de771df1"
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-666d7001fb26b1cf93f1483f644d7f0b3dd1674f-vendored.tar.gz"
+sha256 = "be331b1acc49a6d0044c166d068c3a69e90d0faac011e7034b780d56a4df7aee"
 
 [build]
 compile = '''
