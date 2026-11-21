@@ -1,7 +1,7 @@
 # wpa_supplicant 2.12 on OpenSSL: WPA2 personal, WPA3 (SAE, including WPA3-only networks), OWE, and the
 # common WPA-Enterprise methods (PEAP, TTLS, MSCHAPv2, GTC, TLS). nl80211 only.
 name        = "wpa_supplicant"
-version     = "2.12_r2"
+version     = "2.12_r3"
 description = "Wi-Fi supplicant (wpa_supplicant, wpa_cli, wpa_passphrase)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
@@ -50,9 +50,9 @@ strip "$DESTDIR"/usr/sbin/wpa_supplicant "$DESTDIR"/usr/sbin/wpa_cli "$DESTDIR"/
 # D-Bus interface: NetworkManager (the desktop's network manager) drives Wi-Fi through it. The bus starts the daemon on demand.
 mkdir -p "$DESTDIR/usr/share/dbus-1/system.d" "$DESTDIR/usr/share/dbus-1/system-services"
 install -m 644 wpa_supplicant/dbus/dbus-wpa_supplicant.conf "$DESTDIR/usr/share/dbus-1/system.d/wpa_supplicant.conf"
-printf "[D-BUS Service]\nName=fi.w1.wpa_supplicant1\nExec=/usr/sbin/wpa_supplicant -u -s -O /run/wpa_supplicant\nUser=root\nSystemdService=wpa_supplicant.service\n" > "$DESTDIR/usr/share/dbus-1/system-services/fi.w1.wpa_supplicant1.service"
+printf "[D-BUS Service]\nName=fi.w1.wpa_supplicant1\nExec=/usr/sbin/wpa_supplicant -u -O /run/wpa_supplicant\nUser=root\nSystemdService=wpa_supplicant.service\n" > "$DESTDIR/usr/share/dbus-1/system-services/fi.w1.wpa_supplicant1.service"
 # systemd: the bus activates the daemon through this unit (the setuid launch helper is not available in the store)
 mkdir -p "$DESTDIR/usr/lib/systemd/system"
-printf "[Unit]\nDescription=WPA supplicant (D-Bus, used by NetworkManager)\n\n[Service]\nType=dbus\nBusName=fi.w1.wpa_supplicant1\nExecStart=/usr/sbin/wpa_supplicant -u -s -O /run/wpa_supplicant\n" > "$DESTDIR/usr/lib/systemd/system/wpa_supplicant.service"
+printf "[Unit]\nDescription=WPA supplicant (D-Bus, used by NetworkManager)\n\n[Service]\nType=dbus\nBusName=fi.w1.wpa_supplicant1\nExecStart=/usr/sbin/wpa_supplicant -u -O /run/wpa_supplicant\n" > "$DESTDIR/usr/lib/systemd/system/wpa_supplicant.service"
 test -f "$DESTDIR/usr/share/dbus-1/system.d/wpa_supplicant.conf"
 '''
