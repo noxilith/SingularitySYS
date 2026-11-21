@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r33"
+version     = "0.1.0_r34"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -73,6 +73,11 @@ if [ ! -d "$XDG_RUNTIME_DIR" ] || [ ! -w "$XDG_RUNTIME_DIR" ]; then
 fi
 # One seat provider on both init systems: the seatd daemon (forge enables it when vesper is declared).
 export LIBSEAT_BACKEND="${LIBSEAT_BACKEND:-seatd}"
+# The login screen starts the session without LANG: terminals then warn that the C locale is not UTF-8. Use the system locale.
+case "${LC_ALL:-${LANG:-C}}" in
+    *UTF-8*|*utf8*) ;;
+    *) unset LC_ALL; LANG=en_US.UTF-8; [ -r /etc/locale.conf ] && . /etc/locale.conf; export LANG ;;
+esac
 # The folder screenshots are saved to (Vesper's default) must exist.
 [ -n "${HOME:-}" ] && mkdir -p "$HOME/Pictures/Screenshots" 2>/dev/null
 # Put the bundled wallpapers into ~/Pictures/Wallpapers (the folder the wallpaper changer lists) once per user.
@@ -128,5 +133,6 @@ test -x "$DESTDIR/usr/bin/vesper-session"
 test -x "$DESTDIR/usr/bin/file-manager"
 grep -q wallpapers-seeded "$DESTDIR/usr/bin/vesper-session"
 grep -q Pictures/Screenshots "$DESTDIR/usr/bin/vesper-session"
+grep -q "locale.conf" "$DESTDIR/usr/bin/vesper-session"
 test -f "$DESTDIR/usr/share/vesper/wallpapers/singularity.jpg"
 '''
