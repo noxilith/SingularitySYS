@@ -201,6 +201,9 @@ pub struct Request {
     pub extra_cmdline: String,
     /// Add a firmware (NVRAM) boot entry for UEFI installs.
     pub efi_entry: bool,
+    /// A portable install on a USB drive: wait for the drive at boot, gentler mount options for flash, and no
+    /// firmware boot entry (the drive boots on whatever computer it is plugged into).
+    pub portable: bool,
     pub accounts: Accounts,
 }
 
@@ -209,6 +212,22 @@ pub struct Request {
 /// Refuse to continue if a target device is missing, not a block device, or
 /// mounted. `mounts` is the content of `/proc/self/mounts`.
 pub fn preflight(plan: &Plan, mounts: &str, is_block: &dyn Fn(&str) -> bool) -> Result<(), StrapError> {
+    // A whole-disk (portable) install makes the partitions itself: the disk is what must exist and be idle.
+    if let Some(Step::PartitionDisk { disk }) = plan.steps.first() {
+        if !is_block(disk) {
+            return Err(StrapError::NotBlock(disk.clone()));
+        }
+        let in_use = |dev: &str| {
+            dev.strip_prefix(disk.as_str()).is_some_and(|rest| {
+                let rest = rest.strip_prefix('p').unwrap_or(rest);
+                rest.is_empty() || rest.bytes().all(|b| b.is_ascii_digit())
+            })
+        };
+        if let Some(dev) = mounts.lines().filter_map(|l| l.split_whitespace().next()).find(|d| in_use(d)) {
+            return Err(StrapError::Mounted(dev.into()));
+        }
+        return Ok(());
+    }
     for dev in [plan.root_dev.as_str(), plan.boot_dev.as_str()] {
         if !is_block(dev) {
             return Err(StrapError::NotBlock(dev.into()));
@@ -373,6 +392,16 @@ impl Exec<'_> {
         let plan = &self.req.plan;
         let (root_dev, boot_dev) = (plan.root_dev.clone(), plan.boot_dev.clone());
         match step {
+            Step::PartitionDisk { disk } => {
+                // GPT: 1 MiB BIOS boot (for Limine on BIOS machines), 512 MiB EFI system partition, the rest for btrfs.
+                let script = "label: gpt\nsize=1MiB, type=21686148-6449-6E6F-744E-656564454649\nsize=512MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\ntype=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n";
+                self.cmd(&Cmd::new("wipefs", &["-a"]).arg(disk))?;
+                self.cmd(&Cmd::new("sfdisk", &["--wipe", "always", "--wipe-partitions", "always"]).arg(disk).stdin(script.to_string()))?;
+                // the partition devices appear a moment after the table is written
+                let last = crate::partition_name(disk, 3);
+                let wait = format!("for i in $(seq 1 30); do [ -b {last} ] && exit 0; sleep 1; done; exit 1");
+                self.cmd(&Cmd::new("sh", &["-c"]).arg(wait))?;
+            }
             Step::FormatBoot { dev, .. } => {
                 self.cmd(&Cmd::new("mkfs.vfat", &["-F", "32", "-n", "SINGULARITY"]).arg(dev))?;
                 if plan.firmware == Firmware::Uefi
@@ -455,8 +484,10 @@ impl Exec<'_> {
         let boot_uuid = self.uuid(&self.req.plan.boot_dev.clone())?;
 
         let mut fstab = String::from("# /etc/fstab: written by forge strap\n");
+        // A flash drive: compress (fewer writes, more room) and write out to the drive less often.
+        let opts = if self.req.portable { "noatime,compress=zstd:1,commit=120" } else { "noatime" };
         for (sv, dir) in [("@", "/"), ("@snapshots", "/.snapshots"), ("@home", "/home"), ("@store", "/forge/store")] {
-            fstab.push_str(&format!("UUID={root_uuid} {dir} btrfs subvol={sv},noatime 0 0\n"));
+            fstab.push_str(&format!("UUID={root_uuid} {dir} btrfs subvol={sv},{opts} 0 0\n"));
         }
         fstab.push_str(&format!("UUID={boot_uuid} /boot vfat umask=0077 0 2\n"));
         write_file(&mp.join("etc/fstab"), &fstab)?;
@@ -504,14 +535,14 @@ impl Exec<'_> {
             let p = self.req.limine_dir.join(name);
             if p.is_file() { Ok(p) } else { Err(StrapError::LimineMissing(p)) }
         };
-        match fw {
-            Firmware::Uefi => {
+        if matches!(fw, Firmware::Uefi | Firmware::Both) {
+            {
                 let efi = limine("BOOTX64.EFI")?;
                 let dst = boot.join("EFI/BOOT/BOOTX64.EFI");
                 fs::create_dir_all(dst.parent().expect("has parent")).map_err(io_ctx("creating EFI/BOOT"))?;
                 // The fallback path works even if the firmware entry below fails.
                 fs::copy(&efi, &dst).map_err(io_ctx(format!("copying {}", efi.display())))?;
-                if self.req.efi_entry
+                if self.req.efi_entry && !self.req.portable
                     && let Some((disk, part)) = split_partition(&self.req.plan.boot_dev) {
                         let c = Cmd::new("efibootmgr", &["--create", "--label", "Singularity", "--disk"])
                             .arg(&disk)
@@ -526,7 +557,9 @@ impl Exec<'_> {
                         }
                     }
             }
-            Firmware::Bios => {
+        }
+        if matches!(fw, Firmware::Bios | Firmware::Both) {
+            {
                 let sys = limine("limine-bios.sys")?;
                 fs::copy(&sys, boot.join("limine-bios.sys")).map_err(io_ctx(format!("copying {}", sys.display())))?;
                 let (disk, _) = split_partition(&self.req.plan.boot_dev)
@@ -541,6 +574,8 @@ impl Exec<'_> {
                 let disk = split_partition(&self.req.plan.boot_dev).map(|(d, _)| d).unwrap_or_default();
                 format!("firmware = \"bios\"\ndisk = \"{disk}\"\n")
             }
+            // a drive that moves between computers has no fixed device name: forge finds the disk from /boot when it updates
+            Firmware::Both => "firmware = \"both\"\n".to_string(),
         };
         let etc = self.mp().join("etc/forge");
         fs::create_dir_all(&etc).map_err(io_ctx("creating /etc/forge"))?;
@@ -561,6 +596,10 @@ impl Exec<'_> {
         // A quiet boot: only kernel errors and warnings, so OpenRC is the first thing on screen. The Limine menu
         // also gets a verbose entry (forge-gen adds it) for when something goes wrong.
         cmdline.push_str(" quiet loglevel=3");
+        if self.req.portable {
+            // a USB drive shows up a little after the kernel starts: wait for it instead of giving up
+            cmdline.push_str(" rootwait");
+        }
         let extra = self.req.extra_cmdline.trim();
         if !extra.is_empty() {
             cmdline.push(' ');

@@ -502,9 +502,16 @@ struct StrapArgs {
     #[arg(long)]
     bios: bool,
     /// Target root partition, e.g. /dev/sda2 (becomes btrfs; ERASED)
-    root: String,
+    root: Option<String>,
     /// Boot partition, e.g. /dev/sda1 (becomes FAT32; ERASED)
-    boot: String,
+    boot: Option<String>,
+    /// Install onto a whole USB or flash drive, e.g. --usb /dev/sdb: partitions it (ERASING everything on it) and sets it up
+    /// to boot on UEFI and BIOS computers alike, so you can plug it into any machine
+    #[arg(long, value_name = "DEVICE", conflicts_with_all = ["root", "boot", "uefi", "bios"])]
+    usb: Option<String>,
+    /// With --usb: also accept a drive that does not look removable (an internal disk)
+    #[arg(long, requires = "usb")]
+    allow_internal: bool,
     /// Directory to copy the system from
     #[arg(long, default_value = "/")]
     source: PathBuf,
@@ -895,7 +902,17 @@ fn strap(a: StrapArgs) -> Result<()> {
     } else {
         Firmware::Bios
     };
-    let plan = forge_strap::plan(firmware, &a.root, Some(&a.boot))?;
+    let plan = match (&a.usb, &a.root, &a.boot) {
+        (Some(disk), _, _) => forge_strap::plan_portable(disk)?,
+        (None, Some(root), Some(boot)) => forge_strap::plan(firmware, root, Some(boot))?,
+        _ => bail!("name the root and boot partitions (forge strap --uefi ROOT BOOT), or a whole drive with --usb DEVICE"),
+    };
+    if let Some(disk) = &a.usb
+        && !a.allow_internal
+        && !looks_removable(disk)
+    {
+        bail!("{disk} does not look like a USB or flash drive (it is not removable and not on the USB bus): check the name, or add --allow-internal if you really mean it");
+    }
     println!("Install plan ({:?}):", plan.firmware);
     for (i, step) in plan.steps.iter().enumerate() {
         println!("  {}. {step}", i + 1);
@@ -918,9 +935,18 @@ fn strap(a: StrapArgs) -> Result<()> {
 
     if !a.yes {
         println!();
-        println!("This will ERASE {} and {}.", plan.root_dev, plan.boot_dev);
-        let typed = prompt_line(&format!("Type {} to continue: ", plan.root_dev))?;
-        if typed.trim() != plan.root_dev {
+        let confirm = match &a.usb {
+            Some(disk) => {
+                println!("This will ERASE EVERYTHING on {disk} ({}).", describe_drive(disk));
+                disk.clone()
+            }
+            None => {
+                println!("This will ERASE {} and {}.", plan.root_dev, plan.boot_dev);
+                plan.root_dev.clone()
+            }
+        };
+        let typed = prompt_line(&format!("Type {confirm} to continue: "))?;
+        if typed.trim() != confirm {
             println!("aborted: nothing was changed");
             return Ok(());
         }
@@ -940,14 +966,42 @@ fn strap(a: StrapArgs) -> Result<()> {
         initramfs: a.initramfs,
         extra_cmdline: a.cmdline_extra,
         efi_entry: !a.no_efi_entry,
+        portable: a.usb.is_some(),
         accounts,
         plan,
     };
     forge_strap::execute(&req, &mut forge_strap::SystemRunner, &mut TermUi)?;
     println!();
-    println!("Installed. Remove the live media and reboot.");
+    if a.usb.is_some() {
+        println!("Installed on the drive. Plug it into any computer and pick it in the boot menu (often F12, F8 or Esc at power-on).");
+    } else {
+        println!("Installed. Remove the live media and reboot.");
+    }
     println!("After the first boot, run `forge apply` to converge the system to /etc/forge/system.toml.");
     Ok(())
+}
+
+/// Is this disk a USB or flash drive (removable, or attached through the USB bus)?
+fn looks_removable(disk: &str) -> bool {
+    let name = disk.trim_start_matches("/dev/");
+    let sys = Path::new("/sys/block").join(name);
+    let removable = std::fs::read_to_string(sys.join("removable")).is_ok_and(|s| s.trim() == "1");
+    let usb = std::fs::canonicalize(&sys).is_ok_and(|p| p.to_string_lossy().contains("/usb"));
+    removable || usb
+}
+
+/// "SanDisk Ultra, 29.8 GiB" for the confirmation question.
+fn describe_drive(disk: &str) -> String {
+    let name = disk.trim_start_matches("/dev/");
+    let sys = Path::new("/sys/block").join(name);
+    let model = std::fs::read_to_string(sys.join("device/model")).map(|s| s.trim().to_string()).unwrap_or_default();
+    let sectors: u64 = std::fs::read_to_string(sys.join("size")).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    let gib = sectors as f64 * 512.0 / (1u64 << 30) as f64;
+    match (model.is_empty(), sectors) {
+        (true, 0) => "unknown drive".into(),
+        (true, _) => format!("{gib:.1} GiB"),
+        (false, _) => format!("{model}, {gib:.1} GiB"),
+    }
 }
 
 struct TermUi;

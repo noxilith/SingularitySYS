@@ -99,6 +99,7 @@ impl Fixture {
             initramfs: None,
             extra_cmdline: "quiet".into(),
             efi_entry: true,
+            portable: false,
             accounts: Accounts::default(),
         }
     }
@@ -439,4 +440,30 @@ fn the_starter_declaration_points_at_the_projects_repository() {
     let decl = fs::read_to_string(f.mp().join("etc/forge/system.toml")).unwrap();
     assert!(decl.contains(&format!("repos = [\"{}\"]", forge_schema::DEFAULT_REPO_URL)), "{decl}");
     assert!(forge_schema::SystemDecl::parse(&decl).unwrap().repos == [forge_schema::DEFAULT_REPO_URL], "and it parses");
+}
+
+#[test]
+fn a_portable_install_partitions_the_drive_and_boots_on_uefi_and_bios_machines() {
+    let f = Fixture::new();
+    let mut req = f.request(Firmware::Both);
+    req.plan = crate::plan_portable("/dev/sdb").unwrap();
+    req.portable = true;
+    let (res, r, ui) = run(&req);
+    res.unwrap();
+    assert!(ui.warnings.is_empty(), "{:?}", ui.warnings);
+    // the drive is partitioned before anything is formatted
+    let p = r.programs();
+    let pos = |name: &str| p.iter().position(|x| *x == name).unwrap();
+    assert!(pos("wipefs") < pos("sfdisk") && pos("sfdisk") < pos("mkfs.vfat"));
+    assert_eq!(r.find("mkfs.vfat")[0].to_string(), "mkfs.vfat -F 32 -n SINGULARITY /dev/sdb2");
+    assert_eq!(r.find("mkfs.btrfs")[0].to_string(), "mkfs.btrfs -f -L singularity /dev/sdb3");
+    // both boot paths, and no firmware entry (the drive moves between computers)
+    assert!(f.mp().join("boot/EFI/BOOT/BOOTX64.EFI").is_file());
+    assert_eq!(fs::read_to_string(f.mp().join("boot/limine-bios.sys")).unwrap(), "bios");
+    assert_eq!(r.find("limine")[0].to_string(), "limine bios-install /dev/sdb");
+    assert!(r.find("efibootmgr").is_empty());
+    assert_eq!(fs::read_to_string(f.mp().join("etc/forge/boot.toml")).unwrap().lines().last(), Some("firmware = \"both\""));
+    // gentle on flash, and the kernel waits for the USB drive
+    assert!(fs::read_to_string(f.mp().join("etc/fstab")).unwrap().contains("btrfs subvol=@,noatime,compress=zstd:1,commit=120"));
+    assert!(fs::read_to_string(f.mp().join("boot/limine.conf")).unwrap().contains("rootwait"));
 }

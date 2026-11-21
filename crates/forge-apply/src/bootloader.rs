@@ -12,7 +12,7 @@ use crate::{Change, Kind, Op, Planner, under};
 /// `/etc/forge/boot.toml`.
 #[derive(Debug, Deserialize)]
 pub struct BootRecord {
-    /// `uefi` or `bios`.
+    /// `uefi`, `bios` or `both` (a portable install).
     pub firmware: String,
     /// BIOS only: the disk Limine's boot sector was written to.
     #[serde(default)]
@@ -51,9 +51,11 @@ pub(crate) fn plan(p: &mut Planner, limine_installed: bool, packages_changing: b
         }
         return;
     }
-    if firmware == "uefi" {
+    // `both`: a portable install (a USB drive) that boots on UEFI and BIOS machines.
+    if firmware == "uefi" || firmware == "both" {
         files.push((share.join("BOOTX64.EFI"), uefi_dest));
-    } else {
+    }
+    if firmware != "uefi" {
         files.push((share.join("limine-bios.sys"), bios_dest));
     }
 
@@ -71,6 +73,23 @@ pub(crate) fn plan(p: &mut Planner, limine_installed: bool, packages_changing: b
         }
     }
     // The BIOS boot sector must match limine-bios.sys: write it again whenever the file changes.
+    // A portable drive has no fixed device name (it is sdb on one computer and sda on another): find the disk that holds
+    // /boot now. Best effort: the boot sector only matters on BIOS machines.
+    if changed && firmware == "both" && p.root == std::path::Path::new("/") {
+        p.changes.push(Change {
+            section: "boot",
+            kind: Kind::Modify,
+            summary: "Limine's boot sector on the drive that holds /boot".into(),
+            op: Op::Run {
+                program: PathBuf::from("/bin/sh"),
+                args: vec![
+                    "-c".into(),
+                    "src=$(awk '$2==\"/boot\"{print $1}' /proc/mounts | tail -n 1); n=${src#/dev/}; d=$(basename \"$(readlink -f /sys/class/block/$n/..)\"); [ -b \"/dev/$d\" ] && limine bios-install \"/dev/$d\"; true".into(),
+                ],
+                best_effort: true,
+            },
+        });
+    }
     if changed && firmware == "bios" && p.root == std::path::Path::new("/") {
         if let Some(disk) = record.and_then(|r| r.disk) {
             p.changes.push(Change {

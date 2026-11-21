@@ -17,6 +17,8 @@ pub use exec::{
 pub enum Firmware {
     Uefi,
     Bios,
+    /// A portable install (a USB stick): boots on UEFI and on BIOS machines alike.
+    Both,
 }
 
 /// Btrfs subvolumes created on the root partition.
@@ -32,10 +34,14 @@ pub enum PlanError {
     BootRequired,
     #[error("`{0}` looks like a whole disk, not a partition")]
     WholeDisk(String),
+    #[error("`{0}` is not a whole disk (give the drive itself, like /dev/sdb, not a partition)")]
+    NotAWholeDisk(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
+    /// Make a new GPT on a whole disk: 1 MiB BIOS boot, 512 MiB EFI system partition, the rest for btrfs.
+    PartitionDisk { disk: String },
     FormatBoot { dev: String, fs: &'static str },
     FormatRoot { dev: String, fs: &'static str },
     CreateSubvolumes(Vec<&'static str>),
@@ -51,6 +57,7 @@ pub enum Step {
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Step::PartitionDisk { disk } => write!(f, "partition {disk}: BIOS boot, EFI system and btrfs partitions (ERASES the whole disk)"),
             Step::FormatBoot { dev, fs } => write!(f, "format {dev} as {fs} (ERASES the partition)"),
             Step::FormatRoot { dev, fs } => write!(f, "format {dev} as {fs} (ERASES the partition)"),
             Step::CreateSubvolumes(v) => write!(f, "create btrfs subvolumes: {}", v.join(", ")),
@@ -63,6 +70,9 @@ impl fmt::Display for Step {
                 write!(f, "install Limine (UEFI) and add a firmware boot entry")
             }
             Step::InstallLimine(Firmware::Bios) => write!(f, "install Limine (BIOS) to the disk"),
+            Step::InstallLimine(Firmware::Both) => {
+                write!(f, "install Limine for UEFI and BIOS (no firmware boot entry: the drive boots on any computer)")
+            }
             Step::WriteLimineConf => write!(f, "write limine.conf with the first boot entry"),
             Step::CreateUsers => write!(f, "create the user and set passwords you entered"),
             Step::Finish => write!(f, "sync and unmount the target"),
@@ -133,6 +143,39 @@ pub fn plan(firmware: Firmware, root_dev: &str, boot_dev: Option<&str>) -> Resul
     Ok(Plan { root_dev: root_dev.into(), boot_dev: boot.into(), firmware, steps })
 }
 
+/// `/dev/sdb`, `/dev/vdb`, `/dev/nvme0n1`, `/dev/mmcblk0`: a disk, not one of its partitions.
+pub fn is_whole_disk(dev: &str) -> bool {
+    let Some(name) = dev.strip_prefix("/dev/") else { return false };
+    let letters_only = |rest: &str| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_lowercase());
+    for p in ["sd", "vd", "hd", "xvd"] {
+        if let Some(rest) = name.strip_prefix(p) {
+            return letters_only(rest);
+        }
+    }
+    let numbers = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    if let Some(rest) = name.strip_prefix("nvme") {
+        return rest.split_once('n').is_some_and(|(c, n)| numbers(c) && numbers(n));
+    }
+    name.strip_prefix("mmcblk").is_some_and(numbers)
+}
+
+/// The partition device for number `n` of `disk`: `/dev/sdb` -> `/dev/sdb2`, `/dev/nvme0n1` -> `/dev/nvme0n1p2`.
+pub fn partition_name(disk: &str, n: u32) -> String {
+    if disk.bytes().last().is_some_and(|b| b.is_ascii_digit()) { format!("{disk}p{n}") } else { format!("{disk}{n}") }
+}
+
+/// A whole-disk install for a portable drive: partition it, then install like `plan` with the boot loader set up for
+/// both UEFI and BIOS machines.
+pub fn plan_portable(disk: &str) -> Result<Plan, PlanError> {
+    if !is_whole_disk(disk) {
+        return Err(PlanError::NotAWholeDisk(disk.into()));
+    }
+    let (boot, root) = (partition_name(disk, 2), partition_name(disk, 3));
+    let mut p = plan(Firmware::Both, &root, Some(&boot))?;
+    p.steps.insert(0, Step::PartitionDisk { disk: disk.into() });
+    Ok(p)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +231,19 @@ mod tests {
         }
         assert!(plan(Firmware::Bios, "/dev/nvme0n1p2", Some("/dev/nvme0n1p1")).is_ok());
         assert!(plan(Firmware::Bios, "/dev/mmcblk0p2", Some("/dev/mmcblk0p1")).is_ok());
+    }
+
+    #[test]
+    fn a_portable_plan_partitions_the_disk_first_and_boots_both_ways() {
+        let p = plan_portable("/dev/sdb").unwrap();
+        assert_eq!(p.steps[0], Step::PartitionDisk { disk: "/dev/sdb".into() });
+        assert_eq!((p.boot_dev.as_str(), p.root_dev.as_str(), p.firmware), ("/dev/sdb2", "/dev/sdb3", Firmware::Both));
+        assert!(p.steps.contains(&Step::InstallLimine(Firmware::Both)));
+        assert_eq!(plan_portable("/dev/nvme1n1").unwrap().root_dev, "/dev/nvme1n1p3");
+        assert!(plan_portable("sdb").is_err());
+        for part in ["/dev/sdb1", "/dev/nvme0n1p2", "/dev/mmcblk0p1", "/dev/loop0", "/dev/"] {
+            assert!(plan_portable(part).is_err(), "{part}");
+        }
     }
 
     #[test]
