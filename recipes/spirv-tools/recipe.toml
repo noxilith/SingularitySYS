@@ -1,0 +1,26 @@
+# SPIRV-Tools: SPIR-V assembler, disassembler, validator and optimizer (Mesa's SPIR-V to NIR path uses the library).
+name        = "spirv-tools"
+version     = "1.4.328.1"
+description = "SPIR-V assembler, disassembler, validator and optimizer"
+license     = "Apache-2.0"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "python", "ninja", "spirv-headers"]
+
+[[source]]
+url    = "https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/vulkan-sdk-1.4.328.1.tar.gz"
+sha256 = "d00dc47df7163c2bacd70f090441e8fad96234f0e3b96c54ee9091a49e627adb"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DPython3_EXECUTABLE=/usr/bin/python3 \
+    -DSPIRV-Headers_SOURCE_DIR=/usr -DSPIRV_SKIP_TESTS=ON -DSPIRV_WERROR=OFF -DSPIRV_TOOLS_BUILD_STATIC=ON
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+test -f "$DESTDIR/usr/lib/pkgconfig/SPIRV-Tools.pc"
+test -x "$DESTDIR/usr/bin/spirv-val"
+'''

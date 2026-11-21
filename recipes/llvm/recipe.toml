@@ -1,15 +1,17 @@
-# LLVM: the compiler library Mesa's radeonsi and llvmpipe drivers use to compile shaders. Only the x86 and AMD GPU
-# targets, as one shared library; no clang, no tools beyond llvm-config, no static libraries.
+# LLVM: the compiler library Mesa's radeonsi, llvmpipe and (through mesa_clc) iris builds use. Only the x86 and AMD
+# GPU targets, as one shared library, with clang (libclang-cpp and the clang driver) because Mesa's build of the Intel
+# (iris) driver compiles its OpenCL C built-ins with mesa_clc, which links clang. Of the tools only llvm-config, clang
+# and the few libclc needs (llvm-as, llvm-dis, llvm-link, opt) are kept; no static libraries.
 name        = "llvm"
-version     = "20.1.8"
-description = "LLVM compiler infrastructure library (x86 and AMDGPU targets)"
+version     = "20.1.8_r1"
+description = "LLVM compiler infrastructure library with clang (x86 and AMDGPU targets)"
 license     = "Apache-2.0 WITH LLVM-exception"
 libc        = ["glibc"]
 
 [depends]
 build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "python", "ninja", "zlib", "zstd"]
 
-# $SRC is the first source: llvm.
+# $SRC is the first source: llvm. cmake and clang are unpacked next to it (LLVM looks for ../cmake and ../clang).
 [[source]]
 url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/llvm-20.1.8.src.tar.xz"
 sha256 = "e1363888216b455184dbb8a74a347bf5612f56a3f982369e1cba6c7e0726cde1"
@@ -18,15 +20,22 @@ sha256 = "e1363888216b455184dbb8a74a347bf5612f56a3f982369e1cba6c7e0726cde1"
 url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/cmake-20.1.8.src.tar.xz"
 sha256 = "3319203cfd1172bbac50f06fa68e318af84dcb5d65353310c0586354069d6634"
 
+[[source]]
+url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang-20.1.8.src.tar.xz"
+sha256 = "b7a1b7b0af7b9c7596af6bd46e36d11321926eaa66a7a7dc957ab0a1375ee4b0"
+
 [build]
 prepare = '''
 cd /build/extract
 tar -o -xf /sources/cmake-20.1.8.src.tar.xz && mv cmake-20.1.8.src cmake
+tar -o -xf /sources/clang-20.1.8.src.tar.xz && mv clang-20.1.8.src clang
 '''
 configure = '''
 cd "$SRC"
 cmake -S . -B /build/llvm-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+    -DLLVM_ENABLE_PROJECTS=clang -DCLANG_LINK_CLANG_DYLIB=ON -DCLANG_ENABLE_ARCMT=OFF -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
+    -DCLANG_INCLUDE_TESTS=OFF -DCLANG_INCLUDE_DOCS=OFF -DCLANG_ENABLE_OBJC_REWRITER=OFF \
     -DLLVM_TARGETS_TO_BUILD="X86;AMDGPU" -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_ENABLE_RTTI=ON \
     -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF \
     -DLLVM_ENABLE_ZLIB=ON -DLLVM_ENABLE_ZSTD=ON -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_TERMINFO=OFF \
@@ -36,11 +45,24 @@ cmake -S . -B /build/llvm-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INST
 compile = "cmake --build /build/llvm-build -j $JOBS"
 install = '''
 DESTDIR=$DESTDIR cmake --install /build/llvm-build
-# Mesa links the shared library; keep llvm-config and drop the rest of the tools and every static library.
+# Mesa links the shared libraries; keep llvm-config, clang and what libclc needs, drop the rest of the tools and
+# every static library.
 cd "$DESTDIR/usr"
-find bin -type f ! -name llvm-config -delete
+find bin -type f ! -name llvm-config ! -name 'clang-[0-9]*' ! -name llvm-as ! -name llvm-dis ! -name llvm-link ! -name opt -delete
+find bin -xtype l -delete
+ln -sf clang-20 bin/clang
+ln -sf clang bin/clang++
 rm -f lib/*.a
-rm -rf share/doc share/man
+# The CMake export files still list those static libraries and abort when one is missing; only the shared libraries
+# are used (LLVM_LINK_LLVM_DYLIB), so turn that existence check off for tools that call find_package(LLVM).
+for f in lib/cmake/llvm/LLVMExports.cmake lib/cmake/clang/ClangTargets.cmake; do
+    sed -i 's/if(NOT EXISTS "${_cmake_file}")/if(FALSE)/' "$f"
+    if grep -q 'if(NOT EXISTS "${_cmake_file}")' "$f"; then echo "export check still present in $f" >&2; exit 1; fi
+done
+rm -rf share/doc share/man share/clang share/opt-viewer share/scan-build share/scan-view
 test -x bin/llvm-config
+test -x bin/clang-20
+test -x bin/opt
 ls lib/libLLVM*.so* >/dev/null
+ls lib/libclang-cpp.so* >/dev/null
 '''

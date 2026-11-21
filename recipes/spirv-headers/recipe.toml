@@ -1,0 +1,24 @@
+# SPIRV-Headers: the SPIR-V machine-readable grammar and C/C++ headers (SPIRV-Tools, SPIRV-LLVM-Translator, Mesa's
+# Intel driver build need them). Headers only.
+name        = "spirv-headers"
+version     = "1.4.328.1"
+description = "SPIR-V headers and grammar files"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "ninja"]
+
+[[source]]
+url    = "https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-1.4.328.1.tar.gz"
+sha256 = "602364ab7bf404a7f352df7da5c645f1c4558a9c92616f8ee33422b04d5e35b7"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+test -f "$DESTDIR/usr/include/spirv/unified1/spirv.hpp"
+'''

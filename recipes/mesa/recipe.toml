@@ -1,9 +1,9 @@
-# Mesa: OpenGL ES/EGL and GBM for Wayland compositors, with the radeonsi (AMD), nouveau (NVIDIA, older open driver),
-# llvmpipe and softpipe (software, on any GPU) drivers. No X11/GLX, no Vulkan and no Intel (iris) driver yet: Intel
-# needs the OpenCL compiler stack (clang, SPIR-V) this repository does not have.
+# Mesa: OpenGL ES/EGL and GBM for Wayland compositors, with the iris (Intel), radeonsi (AMD), nouveau (NVIDIA, older open),
+# llvmpipe and softpipe (software, on any GPU) drivers. No X11/GLX and no Vulkan. iris needs mesa_clc at build time
+# (clang from llvm, libclc, SPIRV-LLVM-Translator, SPIRV-Tools); none of that is needed to run it.
 name        = "mesa"
-version     = "25.2.5"
-description = "Mesa 3D graphics library (EGL, GLES, GBM; radeonsi, nouveau, llvmpipe, softpipe)"
+version     = "25.2.5_r1"
+description = "Mesa 3D graphics library (EGL, GLES, GBM; iris, radeonsi, nouveau, llvmpipe, softpipe)"
 license     = "MIT"
 libc        = ["glibc"]
 
@@ -11,7 +11,7 @@ libc        = ["glibc"]
 build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
          "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "bison",
          "flex", "m4", "python-mako", "python-packaging", "python-pyyaml", "python-markupsafe", "llvm", "libdrm",
-         "wayland", "wayland-protocols", "expat", "zlib", "zstd", "libelf"]
+         "wayland", "wayland-protocols", "expat", "zlib", "zstd", "libelf", "libclc", "spirv-llvm-translator", "spirv-tools", "spirv-headers"]
 
 [[source]]
 url    = "https://archive.mesa3d.org/mesa-25.2.5.tar.xz"
@@ -21,7 +21,7 @@ sha256 = "bb6243e7a6f525febfa1e6ab50827ca4d4bfdad73812377b0ca9b6c50998b03e"
 configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
 CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --buildtype=release -Db_ndebug=true \
-    -Dplatforms=wayland -Dgallium-drivers=radeonsi,nouveau,llvmpipe,softpipe -Dvulkan-drivers= \
+    -Dplatforms=wayland -Dgallium-drivers=iris,radeonsi,nouveau,llvmpipe,softpipe -Dvulkan-drivers= \
     -Dglx=disabled -Degl=enabled -Dgbm=enabled -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dglvnd=disabled \
     -Dllvm=enabled -Dshared-llvm=enabled -Dvideo-codecs= -Dlibunwind=disabled -Dlmsensors=disabled -Dvalgrind=disabled \
     -Dzstd=enabled -Dxlib-lease=disabled -Dbuild-tests=false -Dgallium-va=disabled -Dgallium-vdpau=disabled \
