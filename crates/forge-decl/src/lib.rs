@@ -163,10 +163,59 @@ pub fn add_repo(text: &str, repo: &str) -> Result<Edited, EditError> {
     Ok(Edited { text: doc.to_string(), changed: true })
 }
 
+/// Flatpak entries are `application.id` or `remote:application.id`.
+fn check_flatpak(entry: &str) -> Result<(), EditError> {
+    let id = entry.rsplit(':').next().unwrap_or("");
+    let ok = id.contains('.') && entry.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'));
+    if ok { Ok(()) } else { Err(EditError::BadName(entry.into())) }
+}
+
+/// Add a Flatpak application to `flatpaks` (no-op if already listed).
+pub fn add_flatpak(text: &str, entry: &str) -> Result<Edited, EditError> {
+    check_flatpak(entry)?;
+    let mut doc: DocumentMut = text.parse()?;
+    let item = doc.entry("flatpaks").or_insert(Item::Value(Value::Array(Array::new())));
+    let arr = item.as_array_mut().ok_or(EditError::BadPackages)?;
+    if arr.iter().any(|v| v.as_str() == Some(entry)) {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    }
+    arr.push(entry);
+    Ok(Edited { text: doc.to_string(), changed: true })
+}
+
+/// Remove a Flatpak application from `flatpaks` (no-op if absent).
+pub fn remove_flatpak(text: &str, entry: &str) -> Result<Edited, EditError> {
+    check_flatpak(entry)?;
+    let mut doc: DocumentMut = text.parse()?;
+    let Some(arr) = doc.get_mut("flatpaks").and_then(|i| i.as_array_mut()) else {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    };
+    let Some(idx) = arr.iter().position(|v| v.as_str() == Some(entry)) else {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    };
+    arr.remove(idx);
+    Ok(Edited { text: doc.to_string(), changed: true })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use forge_schema::UserDecl;
+
+    #[test]
+    fn flatpaks_are_added_removed_and_parse() {
+        let src = "hostname = \"x\"\nlibc = \"glibc\"\n# apps\n";
+        let a = add_flatpak(src, "org.mozilla.firefox").unwrap();
+        assert!(a.changed && a.text.contains("# apps"));
+        let b = add_flatpak(&a.text, "org.mozilla.firefox").unwrap();
+        assert!(!b.changed);
+        let c = add_flatpak(&a.text, "other:com.example.App").unwrap();
+        let decl = forge_schema::SystemDecl::parse(&c.text).unwrap();
+        assert_eq!(decl.flatpaks, ["org.mozilla.firefox", "other:com.example.App"]);
+        let d = remove_flatpak(&c.text, "org.mozilla.firefox").unwrap();
+        assert_eq!(forge_schema::SystemDecl::parse(&d.text).unwrap().flatpaks, ["other:com.example.App"]);
+        assert!(add_flatpak(src, "not an id").is_err());
+    }
 
     #[test]
     fn adds_to_empty_file() {

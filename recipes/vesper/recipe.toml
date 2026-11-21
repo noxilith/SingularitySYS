@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r35"
+version     = "0.1.0_r36"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -78,6 +78,11 @@ case "${LC_ALL:-${LANG:-C}}" in
     *UTF-8*|*utf8*) ;;
     *) unset LC_ALL; LANG=en_US.UTF-8; [ -r /etc/locale.conf ] && . /etc/locale.conf; export LANG ;;
 esac
+# Launchers and icons of Flatpak applications (`forge flatpak install`) live in these two directories.
+for d in /var/lib/flatpak/exports/share "$HOME/.local/share/flatpak/exports/share"; do
+    case ":${XDG_DATA_DIRS:-}:" in *":$d:"*) ;; *) XDG_DATA_DIRS="$d:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" ;; esac
+done
+export XDG_DATA_DIRS
 # The folder screenshots are saved to (Vesper's default) must exist.
 [ -n "${HOME:-}" ] && mkdir -p "$HOME/Pictures/Screenshots" 2>/dev/null
 # Put the bundled wallpapers into ~/Pictures/Wallpapers (the folder the wallpaper changer lists) once per user.
@@ -134,6 +139,7 @@ test -x "$DESTDIR/usr/bin/file-manager"
 grep -q wallpapers-seeded "$DESTDIR/usr/bin/vesper-session"
 grep -q Pictures/Screenshots "$DESTDIR/usr/bin/vesper-session"
 grep -q "locale.conf" "$DESTDIR/usr/bin/vesper-session"
+grep -q "flatpak/exports/share" "$DESTDIR/usr/bin/vesper-session"
 test -f "$DESTDIR/etc/sudoers.d/50-vesper-power"
 test -f "$DESTDIR/usr/share/vesper/wallpapers/singularity.jpg"
 '''

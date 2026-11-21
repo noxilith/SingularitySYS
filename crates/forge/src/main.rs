@@ -8,6 +8,7 @@ use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
 mod deb_cmd;
+mod flatpak_cmd;
 mod doctor;
 mod maintenance;
 mod ui;
@@ -43,6 +44,8 @@ enum Cmd {
     },
     /// Install packages from Debian (or any apt repository) that forge does not have
     Deb(deb_cmd::DebArgs),
+    /// Install and update Flatpak applications (Astralis and others from Flathub)
+    Flatpak(flatpak_cmd::FlatpakArgs),
     /// Work with the package store: pack, publish, install, list, gc
     Store(StoreArgs),
     /// Create signing keys and manage which public keys are trusted
@@ -697,18 +700,33 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Remove(a) => pkg(PkgAction::Remove(a)),
         Cmd::Doctor(a) => doctor_cmd(a),
         Cmd::Edit(a) => edit_cmd(a),
-        Cmd::Upgrade(a) => upgrade(a),
+        Cmd::Upgrade(a) => {
+            let live = a.root == Path::new("/") && !a.dry_run;
+            upgrade(a)?;
+            if live {
+                flatpak_cmd::upgrade_declared();
+            }
+            Ok(())
+        }
         Cmd::List(a) => list_cmd(a),
         Cmd::Search(a) => search_cmd(a),
         Cmd::Pkg { action } => pkg(action),
         Cmd::Deb(a) => deb_cmd::run(a),
+        Cmd::Flatpak(a) => flatpak_cmd::run(a),
         Cmd::Store(a) => store_cmd(a),
         Cmd::Key(a) => key_cmd(a),
         Cmd::Repo(a) => repo_cmd(a),
         Cmd::Iso(a) => iso_cmd(a),
         Cmd::Check { kind, file } => check(kind, &file),
         Cmd::Strap(a) => strap(a),
-        Cmd::Apply(a) => apply(a),
+        Cmd::Apply(a) => {
+            let live = a.root == Path::new("/") && !a.dry_run && matches!(a.category, Category::System);
+            apply(a)?;
+            if live {
+                flatpak_cmd::sync_declared();
+            }
+            Ok(())
+        }
         Cmd::Gen(a) => gen_cmd(a),
         Cmd::Maintenance(a) => maintenance_cmd(a),
         Cmd::Secureboot(a) => secureboot_cmd(a),

@@ -349,3 +349,16 @@ fn upgrade_cmd(cfg: &install::Config, root: &Path, yes: bool) -> Result<()> {
     declare_repo(root, &cfg.repo_dir())?;
     crate::upgrade_with(root.to_path_buf(), yes)
 }
+
+/// Make sure a Debian package is installed (adding and reading the Debian source first when there is none): what
+/// `forge flatpak setup` uses to get Flatpak itself.
+pub fn ensure_installed(name: &str, yes: bool) -> Result<()> {
+    let root = Path::new("/");
+    need_root(root)?;
+    let cfg = install::Config::new(root);
+    if !cfg.sources()?.sources.iter().any(|s| s.name == "debian") {
+        source(&cfg, root, SourceAction::Add { name: "debian".into(), url: None, suite: None, components: Vec::new(), keys: Vec::new() })?;
+    }
+    update(&cfg)?;
+    install_cmd(&cfg, root, InstallArgs { names: vec![name.to_string()], yes })
+}

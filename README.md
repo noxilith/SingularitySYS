@@ -153,6 +153,7 @@ from the Limine menu.
 | `forge upgrade` | Move every package to the newest version in the repositories. The only command that changes a package you already have: nothing updates by itself |
 | `forge list` · `forge search [TERM]` | What is installed · what the repositories offer |
 | `forge deb source add \| update \| install NAME \| upgrade \| remove NAME` | Install packages that forge does not have from Debian (or any apt repository, such as Anthropic's for Claude Desktop): their dependencies come along, and they become the forge package `deb-NAME` (see [Debian packages](https://github.com/noxilith/SingularitySYS/wiki/Debian-packages)) |
+| `forge flatpak setup \| install APP \| remove APP \| list \| search TERM \| upgrade \| remote add NAME URL` | Install and update Flatpak applications (Flathub, or your own remote): Flatpak itself comes from Debian through `forge deb`, the applications are listed in `flatpaks` of `system.toml`, `forge apply` installs missing ones and `forge upgrade` updates them (see [Flatpak](https://github.com/noxilith/SingularitySYS/wiki/Flatpak)) |
 | `forge doctor` | Check the system over (init link, boot entries, base packages, users, services, clock, microcode) and say what to run about any problem |
 | `sudo forge edit` | Open `/etc/forge/system.toml` in your editor (micro by default); when you close it, it is checked and applied |
 | `forge apply` | Converge the machine to `/etc/forge/system.toml` (`--dry-run` shows the plan) |

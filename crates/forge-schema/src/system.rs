@@ -144,6 +144,10 @@ pub struct SystemDecl {
     pub firewall: crate::extras::FirewallDecl,
     #[serde(default)]
     pub maintenance: crate::extras::MaintenanceDecl,
+    /// Flatpak applications (`org.mozilla.firefox`, or `remote:id` for a remote other than flathub): `forge flatpak`
+    /// installs them and keeps them updated, and `forge apply` installs the ones that are missing.
+    #[serde(default)]
+    pub flatpaks: Vec<String>,
 }
 
 fn default_swap() -> String {
