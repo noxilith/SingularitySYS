@@ -166,7 +166,7 @@ pub fn write_live_root(root: &Path, hostname: &str, password_hash: &str) -> Resu
     put(
         "etc/issue",
         0o644,
-        "\nSingularitySYS live system\nLog in as root (password: root), partition the disk with cfdisk,\nthen run: forge strap <root-partition> <boot-partition>\n\n".into(),
+        "\nSingularitySYS live system\nLog in as root (password: root), partition the disk with cfdisk,\nthen run: forge strap <root-partition> <boot-partition>\n\nTo install onto a whole USB or flash drive that boots on any computer:\n  forge strap --usb /dev/sdX   (erases the drive; find its name with: cat /proc/partitions)\n\n".into(),
     )?;
     put(
         "etc/profile",

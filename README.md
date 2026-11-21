@@ -162,6 +162,7 @@ from the Limine menu.
 | `forge maintenance status \| run` | Trim, scrub, prune generations, clean the store (also runs by itself in the background) |
 | `forge kernel list \| build \| install` | Find, build and install kernels |
 | `forge strap ROOT BOOT` | Install onto partitions you made (from the live ISO) |
+| `forge strap --usb /dev/sdX` | Install onto a whole USB or flash drive that boots on any computer (UEFI or BIOS); erases the drive |
 | `forge iso` | Build the live ISO |
 | `forge build RECIPE` | Build a package from source, in the sandbox |
 | `forge store`, `forge repo`, `forge key` | The package store, repositories and signing keys (`forge key sign` and `forge key verify` sign and check files such as the ISO) |
