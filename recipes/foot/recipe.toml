@@ -1,6 +1,6 @@
 # Fast, lightweight Wayland terminal emulator
 name        = "foot"
-version     = "1.25.0_r6"
+version     = "1.25.0_r7"
 description = "Fast, lightweight Wayland terminal emulator"
 license     = "MIT"
 libc        = ["glibc"]
@@ -29,11 +29,6 @@ cat > "$DESTDIR/etc/xdg/foot/foot.ini" <<'FOOTINI'
 # Vesper's wallpaper palette). Copy to ~/.config/foot/foot.ini to change it.
 font=JetBrainsMono Nerd Font Mono:size=11.5
 login-shell=yes
-locale-override=en_US.UTF-8
-
-[mouse-bindings]
-# select with a plain drag even when a program (a TUI, tmux) has asked for mouse events; holding Shift sends them to it instead
-selection-override-modifiers=none
 
 [colors]
 alpha=0.75
