@@ -539,6 +539,23 @@ pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan
             },
         });
     }
+    // Packages drop rules into /etc/sudoers.d (Vesper's power buttons); the image's /etc/sudoers predates that directory, so
+    // make sure it reads it. Appending keeps the file's mode and whatever the administrator wrote. Best effort.
+    if root == Path::new("/") && (switching || profile_switch.is_some()) && package_names.iter().any(|n| n == "vesper") {
+        p.changes.push(Change {
+            section: "init",
+            kind: Kind::Modify,
+            summary: "sudo reads /etc/sudoers.d (power buttons of the desktop)".into(),
+            op: Op::Run {
+                program: PathBuf::from("/bin/sh"),
+                args: vec![
+                    "-c".to_string(),
+                    "[ -f /etc/sudoers ] && ! grep -q '^[@#]includedir /etc/sudoers.d' /etc/sudoers && printf '\\n@includedir /etc/sudoers.d\\n' >> /etc/sudoers; true".to_string(),
+                ],
+                best_effort: true,
+            },
+        });
+    }
     // The manual-page index (for `apropos` and `whatis`) follows the packages: rebuilt whenever they change. Best effort.
     if root == Path::new("/") && profile_switch.is_some() && package_names.iter().any(|n| n == "mandoc") {
         p.changes.push(Change {

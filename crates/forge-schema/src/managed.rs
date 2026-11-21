@@ -355,9 +355,24 @@ pub fn managed(init: &str) -> Vec<Managed> {
             v.push(Managed { path: legacy.into(), entry: Entry::Absent, own: Own::Always });
         }
         // ... and mask the units, so nothing else (a socket, a preset, a dependency) can start them either.
-        for unit in ["systemd-networkd.service", "systemd-networkd.socket", "systemd-networkd-wait-online.service", "systemd-resolved.service"] {
+        // (The Varlink sockets of the two services would otherwise be listened on at every boot and logged as "Failed to
+        // listen ... Socket service ... not loaded, refusing".)
+        for unit in [
+            "systemd-networkd.service",
+            "systemd-networkd.socket",
+            "systemd-networkd-wait-online.service",
+            "systemd-networkd-varlink.socket",
+            "systemd-networkd-varlink-metrics.socket",
+            "systemd-networkd-resolve-hook.socket",
+            "systemd-resolved.service",
+            "systemd-resolved-varlink.socket",
+            "systemd-resolved-monitor.socket",
+        ] {
             v.push(link(format!("/etc/systemd/system/{unit}"), "/dev/null".into(), Own::Always));
         }
+        // The generator that finds partitions by their GPT type cannot work with a btrfs root (it reports a pseudo-device
+        // /dev/root and fails at every boot); the system names its partitions in fstab and on the kernel command line.
+        v.push(link("/etc/systemd/system-generators/systemd-gpt-auto-generator".into(), "/dev/null".into(), Own::Always));
         // A login on a serial port only where the machine has one: without the port the unit would just fail at every boot.
         v.push(file(
             "/etc/systemd/system/serial-getty@.service.d/10-forge.conf",
