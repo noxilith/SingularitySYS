@@ -325,7 +325,8 @@ const MANAGED_HEADER: &str = "# managed by forge; edit /etc/forge/system.toml in
 /// Work out what has to change to match `decl`. Reads the machine, writes nothing.
 pub fn plan_system(decl: &SystemDecl, root: &Path, opts: Options) -> Result<Plan, PlanError> {
     // Everything the desktop needs is derived from the declaration here, so removing the package withdraws it all.
-    let effective = decl.with_desktop();
+    let wants = std::fs::read_to_string(root.join(forge_schema::WANTS_FILE)).map(|t| forge_schema::parse_wants(&t)).unwrap_or_default();
+    let effective = decl.with_wants(&wants).with_desktop();
     let desktop = effective.desktop();
     let decl = &effective;
     check("hostname", &decl.hostname, &['-', '.'])?;

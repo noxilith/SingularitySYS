@@ -270,6 +270,7 @@ fn build_one(cfg: &install::Config, root: &Path, name: &str) -> Result<install::
     let indexes = forge_indexes(root);
     let say = |m: &str| println!("{m}");
     let b = install::build(cfg, name, &indexes, &say)?;
+    record_needs(root, &b.forge_name, &b.needs)?;
     ui::ok(&format!(
         "{} {} made from {} Debian package(s): {} files, {} (kept the system's own for {} files)",
         b.forge_name,
@@ -292,6 +293,57 @@ fn build_one(cfg: &install::Config, root: &Path, name: &str) -> Result<install::
     Ok(b)
 }
 
+/// Remember which forge packages (libraries) a Debian-made package was converted against, outside the declaration: the
+/// declaration lists only the applications, and `forge apply` adds these for as long as the application is declared.
+fn record_needs(root: &Path, forge_name: &str, needs: &[String]) -> Result<()> {
+    let path = root.join(forge_schema::WANTS_FILE);
+    let mut wants = std::fs::read_to_string(&path).map(|t| forge_schema::parse_wants(&t)).unwrap_or_default();
+    let needs: Vec<String> = needs.iter().filter(|n| !crate::is_base_name(n)).cloned().collect();
+    if needs.is_empty() {
+        wants.remove(forge_name);
+    } else {
+        wants.insert(forge_name.to_string(), needs);
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let mut text = String::from("# written by forge deb: the libraries each Debian-made package needs (added by forge apply while it is declared)\n");
+    for (k, v) in &wants {
+        text.push_str(&format!("{k} = [{}]\n", v.iter().map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")));
+    }
+    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+}
+
+/// Take the libraries that earlier versions of `forge deb` wrote into the declaration out again (they are added from
+/// the recorded needs now, while the application that needs them is declared).
+fn tidy_declaration(root: &Path) -> Result<()> {
+    let path = root.join("etc/forge/system.toml");
+    let Ok(mut text) = std::fs::read_to_string(&path) else { return Ok(()) };
+    let wants = std::fs::read_to_string(root.join(forge_schema::WANTS_FILE)).map(|t| forge_schema::parse_wants(&t)).unwrap_or_default();
+    let declared = declared_packages(root);
+    let mut removed = Vec::new();
+    for (app, needs) in &wants {
+        if !declared.contains(app) {
+            continue;
+        }
+        for n in needs {
+            // another Debian-made application stays listed: you chose it (it only happens to hold a library too)
+            if declared.contains(n) && !n.starts_with(install::PREFIX) {
+                let e = forge_decl::remove_package(&text, n)?;
+                if e.changed {
+                    text = e.text;
+                    removed.push(n.clone());
+                }
+            }
+        }
+    }
+    if !removed.is_empty() {
+        std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
+        ui::info(&format!("took the libraries {} out of the declaration: they stay installed for as long as the application that needs them is declared", removed.join(", ")));
+    }
+    Ok(())
+}
+
 fn declared_packages(root: &Path) -> Vec<String> {
     let path = root.join("etc/forge/system.toml");
     std::fs::read_to_string(path).ok().and_then(|t| forge_schema::SystemDecl::parse(&t).ok()).map(|d| d.packages).unwrap_or_default()
@@ -300,7 +352,6 @@ fn declared_packages(root: &Path) -> Vec<String> {
 fn install_cmd(cfg: &install::Config, root: &Path, i: InstallArgs) -> Result<()> {
     let declared = declared_packages(root);
     let mut names: Vec<String> = Vec::new();
-    let mut needed: Vec<String> = Vec::new();
     let mut rebuilt = false;
     for n in &i.names {
         let b = build_one(cfg, root, n)?;
@@ -308,17 +359,10 @@ fn install_cmd(cfg: &install::Config, root: &Path, i: InstallArgs) -> Result<()>
         if !names.contains(&b.forge_name) {
             names.push(b.forge_name.clone());
         }
-        for need in b.needs {
-            if !crate::is_base_name(&need) && !needed.contains(&need) && !declared.contains(&need) {
-                needed.push(need);
-            }
-        }
-    }
-    if !needed.is_empty() {
-        ui::info(&format!("these forge packages hold libraries the new package uses, so they are installed on purpose too: {}", needed.join(", ")));
     }
     declare_repo(root, &cfg.repo_dir())?;
-    let new: Vec<String> = names.into_iter().filter(|n| !declared.contains(n)).chain(needed).collect();
+    tidy_declaration(root)?;
+    let new: Vec<String> = names.into_iter().filter(|n| !declared.contains(n)).collect();
     if !new.is_empty() {
         crate::pkg_add(new, i.yes, root.to_path_buf())?;
     }
@@ -347,6 +391,7 @@ fn upgrade_cmd(cfg: &install::Config, root: &Path, yes: bool) -> Result<()> {
         return Ok(());
     }
     declare_repo(root, &cfg.repo_dir())?;
+    tidy_declaration(root)?;
     crate::upgrade_with(root.to_path_buf(), yes)
 }
 

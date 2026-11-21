@@ -33,7 +33,8 @@ enum Action {
         #[arg(long, short = 'y')]
         yes: bool,
     },
-    /// Install applications and keep them in the system declaration (a remote other than flathub: REMOTE:APP)
+    /// Install applications and keep them in the system declaration: an id from Flathub, REMOTE:ID from another
+    /// remote, or a downloaded bundle (APP.flatpak) or reference (APP.flatpakref, a file or an address)
     Install {
         /// Application ids, e.g. org.mozilla.firefox
         #[arg(required = true)]
@@ -81,6 +82,10 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
             need_root()?;
             present()?;
             for entry in &apps {
+                if entry.ends_with(".flatpak") || entry.ends_with(".flatpakref") {
+                    install_file(entry)?;
+                    continue;
+                }
                 let (remote, id) = split(entry);
                 flatpak(&["install", "--system", "-y", "--noninteractive", remote, id])?;
                 edit_decl(|t| forge_decl::add_flatpak(t, entry))?;
@@ -128,6 +133,44 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
             }
         },
     }
+}
+
+/// The ids of the applications installed in the system installation.
+fn installed_apps() -> Vec<String> {
+    match Command::new(FLATPAK).args(["list", "--system", "--app", "--columns=application"]).output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// `forge flatpak install FILE.flatpak` (a bundle) or `FILE.flatpakref` (a file or address that says where the
+/// application comes from): install it, then record what was installed and the remote it came from, so `forge apply`
+/// can get it again.
+fn install_file(file: &str) -> Result<()> {
+    let before = installed_apps();
+    let how = if file.ends_with(".flatpakref") { "--from" } else { "--bundle" };
+    flatpak(&["install", "--system", "-y", "--noninteractive", how, file])?;
+    let new: Vec<String> = installed_apps().into_iter().filter(|a| !before.contains(a)).collect();
+    if new.is_empty() {
+        ui::info("that application was already installed (updated in place); the declaration is as it was");
+        return Ok(());
+    }
+    for id in new {
+        let origin = Command::new(FLATPAK)
+            .args(["info", "--system", "--show-origin", &id])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        let entry = if origin.is_empty() || origin == DEFAULT_REMOTE { id.clone() } else { format!("{origin}:{id}") };
+        edit_decl(|t| forge_decl::add_flatpak(t, &entry))?;
+        ui::ok(&format!("installed {id} (recorded as {entry})"));
+        if file.ends_with(".flatpak") {
+            ui::info("a bundle file has no repository to update from unless it names one: install a newer .flatpak the same way to update it");
+        }
+    }
+    Ok(())
 }
 
 /// `forge upgrade`: update the applications too (only when Flatpak is installed and something is installed with it).

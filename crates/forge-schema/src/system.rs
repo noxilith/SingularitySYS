@@ -171,6 +171,21 @@ impl SystemDecl {
         self.packages.iter().any(|p| p == crate::DESKTOP_PACKAGE)
     }
 
+    /// The declaration with the forge packages that declared packages need added: the libraries a `deb-*` package was
+    /// converted against are kept in `var/lib/forge/deb/needs.toml` (package -> names), not in the declaration, so the
+    /// declaration lists only what you chose and taking a package out withdraws what only it needed.
+    pub fn with_wants(&self, wants: &std::collections::BTreeMap<String, Vec<String>>) -> SystemDecl {
+        let mut d = self.clone();
+        for p in &self.packages {
+            for w in wants.get(p).into_iter().flatten() {
+                if !d.packages.iter().any(|x| x == w) {
+                    d.packages.push(w.clone());
+                }
+            }
+        }
+        d
+    }
+
     /// The declaration with what the desktop needs added: its services (and NetworkManager in place of forge's own
     /// network setup), the `greeter` account of the login screen, and the `video`, `input` and `audio` groups for every
     /// user. Take the desktop out of the packages and all of it is withdrawn again, because it is derived, not stored.
@@ -270,6 +285,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn needs_of_declared_packages_are_added_and_withdrawn_with_them() {
+        let wants = parse_wants("deb-flatpak = [\"fuse3\", \"json-glib\"]\ndeb-other = [\"libXau\"]\n");
+        let d = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = [\"deb-flatpak\", \"fuse3\"]\n").unwrap();
+        assert_eq!(d.with_wants(&wants).packages, ["deb-flatpak", "fuse3", "json-glib"]);
+        let without = SystemDecl::parse("hostname = \"x\"\nlibc = \"glibc\"\npackages = [\"htop\"]\n").unwrap();
+        assert_eq!(without.with_wants(&wants).packages, ["htop"]);
+        assert!(parse_wants("not toml [").is_empty());
+    }
+
+    #[test]
     fn parses_minimal_system() {
         let d = SystemDecl::parse("hostname = \"singularity\"\nlibc = \"musl\"\n").unwrap();
         assert_eq!(d.libc, Libc::Musl);
@@ -357,4 +382,12 @@ mod tests {
     fn user_decl_defaults_empty() {
         assert!(UserDecl::parse("").unwrap().packages.is_empty());
     }
+}
+
+/// Where (below the root) the libraries each Debian-made package needs are recorded: `deb-NAME = ["fuse3", ...]`.
+pub const WANTS_FILE: &str = "var/lib/forge/deb/needs.toml";
+
+/// Read that file's text (a damaged file counts as empty).
+pub fn parse_wants(text: &str) -> std::collections::BTreeMap<String, Vec<String>> {
+    toml::from_str(text).unwrap_or_default()
 }
