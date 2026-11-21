@@ -1,14 +1,14 @@
 # wpa_supplicant 2.12 on OpenSSL: WPA2 personal, WPA3 (SAE, including WPA3-only networks), OWE, and the
 # common WPA-Enterprise methods (PEAP, TTLS, MSCHAPv2, GTC, TLS). nl80211 only.
 name        = "wpa_supplicant"
-version     = "2.12"
+version     = "2.12_r1"
 description = "Wi-Fi supplicant (wpa_supplicant, wpa_cli, wpa_passphrase)"
 license     = "BSD-3-Clause"
 libc        = ["glibc"]
 
 [depends]
 build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
-         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libnl", "openssl"]
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "libnl", "openssl", "dbus"]
 
 [[source]]
 url    = "https://w1.fi/releases/wpa_supplicant-2.12.tar.gz"
@@ -21,6 +21,8 @@ cat > .config <<'CONF'
 CONFIG_DRIVER_NL80211=y
 CONFIG_LIBNL32=y
 CONFIG_CTRL_IFACE=y
+CONFIG_CTRL_IFACE_DBUS_NEW=y
+CONFIG_CTRL_IFACE_DBUS_INTRO=y
 CONFIG_BACKEND=file
 CONFIG_TLS=openssl
 CONFIG_SAE=y
@@ -45,4 +47,9 @@ mkdir -p "$DESTDIR/usr/sbin" "$DESTDIR/usr/bin"
 install -m 755 wpa_supplicant/wpa_supplicant wpa_supplicant/wpa_cli "$DESTDIR/usr/sbin/"
 install -m 755 wpa_supplicant/wpa_passphrase "$DESTDIR/usr/bin/"
 strip "$DESTDIR"/usr/sbin/wpa_supplicant "$DESTDIR"/usr/sbin/wpa_cli "$DESTDIR"/usr/bin/wpa_passphrase
+# D-Bus interface: NetworkManager (the desktop's network manager) drives Wi-Fi through it. The bus starts the daemon on demand.
+mkdir -p "$DESTDIR/usr/share/dbus-1/system.d" "$DESTDIR/usr/share/dbus-1/system-services"
+install -m 644 wpa_supplicant/dbus/dbus-wpa_supplicant.conf "$DESTDIR/usr/share/dbus-1/system.d/wpa_supplicant.conf"
+printf "[D-BUS Service]\nName=fi.w1.wpa_supplicant1\nExec=/usr/sbin/wpa_supplicant -u -s -O /run/wpa_supplicant\nUser=root\n" > "$DESTDIR/usr/share/dbus-1/system-services/fi.w1.wpa_supplicant1.service"
+test -f "$DESTDIR/usr/share/dbus-1/system.d/wpa_supplicant.conf"
 '''
