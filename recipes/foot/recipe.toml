@@ -1,6 +1,6 @@
 # Fast, lightweight Wayland terminal emulator
 name        = "foot"
-version     = "1.25.0_r4"
+version     = "1.25.0_r6"
 description = "Fast, lightweight Wayland terminal emulator"
 license     = "MIT"
 libc        = ["glibc"]
@@ -31,12 +31,14 @@ font=JetBrainsMono Nerd Font Mono:size=11.5
 login-shell=yes
 locale-override=en_US.UTF-8
 
+[mouse-bindings]
+# select with a plain drag even when a program (a TUI, tmux) has asked for mouse events; holding Shift sends them to it instead
+selection-override-modifiers=none
+
 [colors]
 alpha=0.75
 foreground=e1e2e8
 background=111418
-selection-foreground=00315b
-selection-background=a3c9fe
 cursor=00315b a3c9fe
 urls=d8bde3
 regular0=32353a

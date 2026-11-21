@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r31"
+version     = "0.1.0_r33"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -30,6 +30,8 @@ export HOME=/build CARGO_HOME=/build/cargo
 cd "$SRC"
 # foot 1.25 has no [colors-dark] section (that is foot 1.26+): the generated foot colours go in [colors].
 sed -i 's/^\[colors-dark\]/[colors]/' crates/vesper-config/src/foot.template.ini
+# selected text uses the wallpaper colours too (the template has no selection colours, so foot would keep its fixed blue)
+printf '\nselection-foreground={{colors.on_primary_container.default.hex_stripped}}\nselection-background={{colors.primary_container.default.hex_stripped}}\n' >> crates/vesper-config/src/foot.template.ini
 cargo build --release --frozen -j $JOBS
 cargo build --release --frozen -j $JOBS --manifest-path file-manager/Cargo.toml
 '''
