@@ -1,0 +1,26 @@
+# libclc: the OpenCL C library as LLVM bitcode / SPIR-V. Mesa's mesa_clc compiles the Intel (iris) driver's built-in
+# shaders with it at build time, so this is a build-time dependency of mesa only.
+name        = "libclc"
+version     = "20.1.8"
+description = "OpenCL C library (SPIR-V flavours for Mesa)"
+license     = "Apache-2.0 WITH LLVM-exception"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "python", "ninja", "llvm", "spirv-llvm-translator", "spirv-headers", "spirv-tools"]
+
+[[source]]
+url    = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/libclc-20.1.8.src.tar.xz"
+sha256 = "ecd83a52859742f71f4c332538f8bee54a6743374a233b5a85017de22d75c227"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_DATADIR=share \
+    -DPython3_EXECUTABLE=/usr/bin/python3 -DLLVM_DIR=/usr/lib/cmake/llvm \
+    -DLIBCLC_TARGETS_TO_BUILD="spirv-mesa3d-;spirv64-mesa3d-"
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+test -f "$DESTDIR/usr/share/pkgconfig/libclc.pc"
+'''

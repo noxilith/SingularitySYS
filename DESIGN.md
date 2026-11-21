@@ -1062,8 +1062,8 @@ does no user or host-name lookups. It has a built-in SingularitySYS logo and was
 `forge install vesper` installs the user's Vesper desktop (noxilith/VesperDE), built from source in the sandbox. That needed a
 graphics stack the repository did not have, now added as recipes: rust (the official release tarballs repackaged), wayland,
 wayland-protocols, libdrm, libpciaccess, xkeyboard-config, libxkbcommon, libevdev, mtdev, libinput, seatd, cmake, llvm
-(x86 + AMDGPU only, shared), mesa (EGL, GLES, GBM; radeonsi, nouveau, llvmpipe, softpipe; **no Intel iris**: it needs
-clang and SPIR-V tooling; no Vulkan), linux-pam (pam_unix; `usr/bin/unix_chkpwd` is now in `SETUID_FILES`), two font packages
+(x86 + AMDGPU only, shared), mesa (EGL, GLES, GBM; iris, radeonsi, nouveau, llvmpipe, softpipe; iris is built with mesa_clc, which needs
+clang (now part of llvm), libclc, spirv-llvm-translator, spirv-tools and spirv-headers; no Vulkan), linux-pam (pam_unix; `usr/bin/unix_chkpwd` is now in `SETUID_FILES`), two font packages
 and three pure-Python modules for Mesa's build. A forge build has no network, so the source is a tarball with every crate vendored
 (`scripts/vendor-vesper.sh`, uploaded to the `sources` release of this repository); the recipe pins its SHA-256 and the commit.
 The package ships `/etc/pam.d/vesper-lock` (pam_unix) and an OpenRC `seatd` service. Checked: every Vesper binary links and
@@ -1078,7 +1078,7 @@ BlueZ, brightnessctl, power-profiles-daemon and UPower, polkit (duktape; `pkexec
 tllist), fontconfig/freetype/libpng, Noto Color Emoji (served from the `sources` release because the font is a bare file),
 fuse3 and gdk-pixbuf (the portal needs them). There is no gettext, so msgfmt is a shim in the recipes that need it
 (the .mo files are empty and removed; translations are not installed). Not included: the GTK portal backend (GTK is not in
-the repository), Intel graphics, Vulkan, Bluetooth audio, a display manager. The kernel gained `FUSE_FS` (7.3.3-r8).
+the repository), Vulkan, Bluetooth audio, a display manager. The kernel gained `FUSE_FS` (7.3.3-r8).
 OpenRC init scripts for seatd, bluetooth, NetworkManager, upower and power-profiles-daemon ship in the packages; on OpenRC
 `vesper-session` starts pipewire, wireplumber and pipewire-pulse itself.
 

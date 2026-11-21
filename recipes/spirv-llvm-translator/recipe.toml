@@ -1,0 +1,28 @@
+# SPIRV-LLVM-Translator: LLVM IR <-> SPIR-V (libLLVMSPIRVLib for Mesa's mesa_clc, and llvm-spirv for libclc).
+# The release branch must match the LLVM version (20.1.x for llvm 20.1.8).
+name        = "spirv-llvm-translator"
+version     = "20.1.8"
+description = "LLVM to SPIR-V translator (libLLVMSPIRVLib, llvm-spirv)"
+license     = "Apache-2.0 WITH LLVM-exception"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "python", "ninja", "llvm", "spirv-headers", "spirv-tools"]
+
+[[source]]
+url    = "https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/refs/tags/v20.1.8.tar.gz"
+sha256 = "7b2f24440cb8b24f20d88e838c12fed486c5a00956a368b17b12b2c0431639c0"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DPython3_EXECUTABLE=/usr/bin/python3 \
+    -DLLVM_DIR=/usr/lib/cmake/llvm -DBUILD_SHARED_LIBS=ON -DLLVM_BUILD_TOOLS=ON -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_SPIRV_INCLUDE_TESTS=OFF -DLLVM_EXTERNAL_SPIRV_HEADERS_SOURCE_DIR=/usr
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+test -x "$DESTDIR/usr/bin/llvm-spirv"
+test -f "$DESTDIR/usr/lib/pkgconfig/LLVMSPIRVLib.pc"
+'''
