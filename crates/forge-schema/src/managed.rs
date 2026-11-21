@@ -47,6 +47,16 @@ pub fn profile_script() -> String {
         .to_string()
 }
 
+/// `/etc/profile.d/zz-user-shell.sh` (read last): login shells (terminals, TTYs) skip ~/.bashrc and ~/.local/bin, which is where
+/// installers (Claude Code, pipx, cargo-style tools) put programs and ask you to `echo` a line into ~/.bashrc.
+const USER_SHELL: &str = "# managed by forge\n\
+if [ -d \"$HOME/.local/bin\" ]; then\n\
+\x20   case \":$PATH:\" in *\":$HOME/.local/bin:\"*) ;; *) PATH=\"$HOME/.local/bin:$PATH\"; export PATH ;; esac\n\
+fi\n\
+if [ -n \"$BASH_VERSION\" ]; then\n\
+\x20   case $- in *i*) [ -r \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\" ;; esac\n\
+fi\n";
+
 const INPUTRC: &str = "# managed by forge. Line editing: arrow keys, history, Home/End/Delete on the Linux console and in terminal\n\
 # emulators, and no bracketed-paste escape codes (the console would show them as text).\n\
 set enable-bracketed-paste off\nset bell-style none\n\
@@ -296,6 +306,7 @@ pub fn managed(init: &str) -> Vec<Managed> {
     let mut v = vec![
         file("/usr/bin/wifi", WIFI_COMMAND, 0o755, Own::Always),
         file("/etc/inputrc", INPUTRC, 0o644, Own::Always),
+        file("/etc/profile.d/zz-user-shell.sh", USER_SHELL, 0o644, Own::Always),
         file("/usr/lib/modprobe.d/singularity-watchdog.conf", WATCHDOG, 0o644, Own::Always),
         file("/etc/wpa_supplicant/wpa_supplicant.conf", WPA_CONF, 0o600, Own::IfMissing),
         file("/usr/libexec/singularity/netwatch", NETWATCH, 0o755, Own::Always),
