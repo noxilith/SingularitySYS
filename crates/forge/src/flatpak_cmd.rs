@@ -19,6 +19,14 @@ const DECL: &str = "/etc/forge/system.toml";
 const DEFAULT_REMOTE: &str = "flathub";
 const FLATHUB_REPO: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
 
+/// Applications forge knows by a short name: (name, remote, the remote's .flatpakrepo file, application id).
+const KNOWN: &[(&str, &str, &str, &str)] = &[(
+    "astralis",
+    "astralis",
+    "https://noxilith.github.io/Astralis/astralis.flatpakrepo",
+    "app.astralis.desktop",
+)];
+
 #[derive(Args)]
 pub struct FlatpakArgs {
     #[command(subcommand)]
@@ -73,15 +81,23 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
             if !Path::new(FLATPAK).exists() {
                 crate::deb_cmd::ensure_installed("flatpak", yes)?;
             }
-            flatpak(&["remote-add", "--system", "--if-not-exists", DEFAULT_REMOTE, FLATHUB_REPO])?;
+            ensure_remote(DEFAULT_REMOTE, FLATHUB_REPO)?;
             ui::ok("Flatpak is ready: install applications with `sudo forge flatpak install APP` (find them with `forge flatpak search NAME`)");
             ui::info("log out and in again once, so the launcher sees the applications (/var/lib/flatpak/exports/share)");
             Ok(())
         }
         Action::Install { apps } => {
             need_root()?;
-            present()?;
+            ensure_flatpak()?;
             for entry in &apps {
+                let known = known(entry);
+                let entry = &match known {
+                    Some((_, remote, repo, id)) => {
+                        ensure_remote(remote, repo)?;
+                        format!("{remote}:{id}")
+                    }
+                    None => entry.clone(),
+                };
                 if entry.ends_with(".flatpak") || entry.ends_with(".flatpakref") {
                     install_file(entry)?;
                     continue;
@@ -97,6 +113,7 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
             need_root()?;
             present()?;
             for entry in &apps {
+                let entry = &known(entry).map(|(_, remote, _, id)| format!("{remote}:{id}")).unwrap_or_else(|| entry.clone());
                 let (_, id) = split(entry);
                 flatpak(&["uninstall", "--system", "-y", "--noninteractive", id])?;
                 // the declaration may list it with or without a remote
@@ -191,6 +208,9 @@ pub fn sync_declared() {
     }
     for entry in declared() {
         let (remote, id) = split(&entry);
+        if let Some((_, r, repo, _)) = KNOWN.iter().find(|k| k.1 == remote) {
+            let _ = ensure_remote(r, repo);
+        }
         let have = Command::new(FLATPAK).args(["info", "--system", id]).output().map(|o| o.status.success()).unwrap_or(false);
         if have {
             continue;
@@ -206,6 +226,26 @@ fn upgrade_all() -> Result<()> {
     flatpak(&["update", "--system", "-y", "--noninteractive"])?;
     let _ = flatpak(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
     Ok(())
+}
+
+/// A short name (`astralis`) for an application forge knows.
+fn known(name: &str) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+    KNOWN.iter().find(|k| k.0 == name.to_lowercase()).copied()
+}
+
+/// Add a remote for the whole system unless it is there (a .flatpakrepo file carries the signing key).
+fn ensure_remote(name: &str, repo: &str) -> Result<()> {
+    flatpak(&["remote-add", "--system", "--if-not-exists", name, repo])
+}
+
+/// Install Flatpak itself (from Debian) and the Flathub remote when that has not been done: a first
+/// `forge flatpak install` does it without a separate setup step.
+fn ensure_flatpak() -> Result<()> {
+    if !Path::new(FLATPAK).exists() {
+        ui::info("Flatpak is not installed yet: setting it up first");
+        crate::deb_cmd::ensure_installed("flatpak", false)?;
+    }
+    ensure_remote(DEFAULT_REMOTE, FLATHUB_REPO)
 }
 
 fn need_root() -> Result<()> {

@@ -349,7 +349,34 @@ fn declared_packages(root: &Path) -> Vec<String> {
     std::fs::read_to_string(path).ok().and_then(|t| forge_schema::SystemDecl::parse(&t).ok()).map(|d| d.packages).unwrap_or_default()
 }
 
+/// Packages whose own repository forge knows: `forge deb install claude-desktop` adds the source by itself.
+const KNOWN_SOURCES: &[(&str, &str)] = &[("claude-desktop", "anthropic"), ("librewolf", "librewolf")];
+
+/// Add the Debian source (where dependencies come from) and the repository of every named package that has a known one,
+/// when they are not there yet, and read their lists.
+fn ensure_sources(cfg: &install::Config, root: &Path, names: &[String]) -> Result<()> {
+    let mut wanted: Vec<&str> = vec!["debian"];
+    for n in names {
+        if let Some((_, s)) = KNOWN_SOURCES.iter().find(|(p, _)| *p == n.as_str()) {
+            wanted.push(s);
+        }
+    }
+    let have = cfg.sources()?.sources;
+    let mut added = false;
+    for w in wanted {
+        if !have.iter().any(|s| s.name == w) {
+            source(cfg, root, SourceAction::Add { name: w.to_string(), url: None, suite: None, components: Vec::new(), keys: Vec::new() })?;
+            added = true;
+        }
+    }
+    if added {
+        update(cfg)?;
+    }
+    Ok(())
+}
+
 fn install_cmd(cfg: &install::Config, root: &Path, i: InstallArgs) -> Result<()> {
+    ensure_sources(cfg, root, &i.names)?;
     let declared = declared_packages(root);
     let mut names: Vec<String> = Vec::new();
     let mut rebuilt = false;
