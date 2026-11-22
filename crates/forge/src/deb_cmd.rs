@@ -352,6 +352,27 @@ fn declared_packages(root: &Path) -> Vec<String> {
 /// Packages whose own repository forge knows: `forge deb install claude-desktop` adds the source by itself.
 const KNOWN_SOURCES: &[(&str, &str)] = &[("claude-desktop", "anthropic"), ("librewolf", "librewolf")];
 
+/// Is this a package forge knows the repository of (`claude-desktop`, `librewolf`)? `forge install` sends those to `forge deb`.
+pub fn is_known(name: &str) -> bool {
+    KNOWN_SOURCES.iter().any(|(p, _)| *p == name)
+}
+
+/// `forge install claude-desktop`: what `forge deb install` does.
+pub fn install_known(names: &[String], yes: bool) -> Result<()> {
+    let root = Path::new("/");
+    need_root(root)?;
+    let cfg = install::Config::new(root);
+    install_cmd(&cfg, root, InstallArgs { names: names.to_vec(), yes })
+}
+
+/// `forge remove claude-desktop`: what `forge deb remove` does.
+pub fn remove_known(names: &[String], yes: bool) -> Result<()> {
+    let root = Path::new("/");
+    need_root(root)?;
+    let names: Vec<String> = names.iter().map(|n| format!("{}{n}", install::PREFIX)).collect();
+    crate::pkg_remove(names, yes, root.to_path_buf())
+}
+
 /// Add the Debian source (where dependencies come from) and the repository of every named package that has a known one,
 /// when they are not there yet, and read their lists.
 fn ensure_sources(cfg: &install::Config, root: &Path, names: &[String]) -> Result<()> {
@@ -433,4 +454,13 @@ pub fn ensure_installed(name: &str, yes: bool) -> Result<()> {
     }
     update(&cfg)?;
     install_cmd(&cfg, root, InstallArgs { names: vec![name.to_string()], yes })
+}
+
+#[cfg(test)]
+mod known_tests {
+    #[test]
+    fn claude_desktop_and_librewolf_are_known_by_name() {
+        assert!(super::is_known("claude-desktop") && super::is_known("librewolf"));
+        assert!(!super::is_known("htop") && !super::is_known("discord"));
+    }
 }

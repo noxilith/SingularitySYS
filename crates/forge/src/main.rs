@@ -782,6 +782,15 @@ fn pkg(action: PkgAction) -> Result<()> {
     };
     // Applications forge knows as Flatpaks (`forge install discord vesktop`) go through `forge flatpak`; the rest are packages.
     if args.file.is_none() && args.root == Path::new("/") {
+        // Packages forge knows the Debian repository of (claude-desktop, librewolf) go through `forge deb`.
+        let (debs, rest): (Vec<String>, Vec<String>) = args.names.iter().cloned().partition(|n| deb_cmd::is_known(n));
+        if !debs.is_empty() {
+            if adding { deb_cmd::install_known(&debs, args.yes)? } else { deb_cmd::remove_known(&debs, args.yes)? }
+            args.names = rest;
+            if args.names.is_empty() {
+                return Ok(());
+            }
+        }
         let (apps, rest): (Vec<String>, Vec<String>) = args.names.iter().cloned().partition(|n| flatpak_cmd::is_known(n));
         if !apps.is_empty() {
             if adding { flatpak_cmd::install_apps(&apps)? } else { flatpak_cmd::remove_apps(&apps)? }
