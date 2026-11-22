@@ -102,9 +102,15 @@ fn publish(repo: &LocalRepo, tree: &Path, name: &str, version: &str, deps: Vec<S
         let archive = work.join(format!("{name}-{ver}.tar.zst"));
         let packed = pack_dir(tree, &PackOptions { name: name.to_string(), version: ver.clone(), libc: forge_schema::Libc::Glibc, hash: None, deps: deps.clone() }, &archive).map_err(|e| anyhow!("{e}"))?;
         let existing = repo.index_unverified().ok().map(|i| i.packages).unwrap_or_default();
-        // The same content is already there: nothing to do.
+        // The same content is already there: nothing to do, unless a later revision of the package (an older build with
+        // other content) is there too. The newest version is the one that gets installed, so this one would never be used.
         if let Some(e) = existing.iter().find(|e| e.name == name && e.id().ok().as_ref() == Some(&packed.id)) {
-            return Ok(e.clone());
+            let superseded = existing.iter().any(|x| x.name == name && forge_store::version_cmp(&x.version, &e.version) == std::cmp::Ordering::Greater);
+            if !superseded {
+                return Ok(e.clone());
+            }
+            ver = format!("{version}_r{rev}");
+            continue;
         }
         // The same name and version with different content: this is a new revision.
         if existing.iter().any(|e| e.name == name && e.version == ver) {
