@@ -776,10 +776,21 @@ fn decl_path(system: bool, file: Option<PathBuf>) -> Result<PathBuf> {
 }
 
 fn pkg(action: PkgAction) -> Result<()> {
-    let (args, adding) = match action {
+    let (mut args, adding) = match action {
         PkgAction::Add(a) => (a, true),
         PkgAction::Remove(a) => (a, false),
     };
+    // Applications forge knows as Flatpaks (`forge install discord vesktop`) go through `forge flatpak`; the rest are packages.
+    if args.file.is_none() && args.root == Path::new("/") {
+        let (apps, rest): (Vec<String>, Vec<String>) = args.names.iter().cloned().partition(|n| flatpak_cmd::is_known(n));
+        if !apps.is_empty() {
+            if adding { flatpak_cmd::install_apps(&apps)? } else { flatpak_cmd::remove_apps(&apps)? }
+            args.names = rest;
+            if args.names.is_empty() {
+                return Ok(());
+            }
+        }
+    }
     if args.full && adding {
         bail!("--full only goes with `forge remove` (it deletes the settings a removed package leaves behind)");
     }

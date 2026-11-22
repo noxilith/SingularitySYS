@@ -85,45 +85,8 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
             ui::info("log out and in again once, so the launcher sees the applications (/var/lib/flatpak/exports/share)");
             Ok(())
         }
-        Action::Install { apps } => {
-            need_root()?;
-            ensure_flatpak()?;
-            for entry in &apps {
-                let known = known(entry);
-                let entry = &match known {
-                    Some((_, remote, repo, id)) => {
-                        ensure_remote(remote, repo)?;
-                        format!("{remote}:{id}")
-                    }
-                    None => entry.clone(),
-                };
-                if entry.ends_with(".flatpak") || entry.ends_with(".flatpakref") {
-                    install_file(entry)?;
-                    continue;
-                }
-                let (remote, id) = split(entry);
-                flatpak(&["install", "--system", "-y", "--noninteractive", remote, id])?;
-                edit_decl(|t| forge_decl::add_flatpak(t, entry))?;
-                ui::ok(&format!("installed {id}"));
-            }
-            Ok(())
-        }
-        Action::Remove { apps } => {
-            need_root()?;
-            present()?;
-            for entry in &apps {
-                let entry = &known(entry).map(|(_, remote, _, id)| format!("{remote}:{id}")).unwrap_or_else(|| entry.clone());
-                let (_, id) = split(entry);
-                flatpak(&["uninstall", "--system", "-y", "--noninteractive", id])?;
-                // the declaration may list it with or without a remote
-                for e in declared().into_iter().filter(|e| split(e).1 == id) {
-                    edit_decl(|t| forge_decl::remove_flatpak(t, &e))?;
-                }
-                ui::ok(&format!("removed {id}"));
-            }
-            let _ = flatpak(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
-            Ok(())
-        }
+        Action::Install { apps } => install_apps(&apps),
+        Action::Remove { apps } => remove_apps(&apps),
         Action::List => {
             present()?;
             flatpak(&["list", "--system", "--app", "--columns=application,version,origin"])
@@ -225,6 +188,55 @@ fn upgrade_all() -> Result<()> {
     flatpak(&["update", "--system", "-y", "--noninteractive"])?;
     let _ = flatpak(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
     Ok(())
+}
+
+/// Install Flatpak applications and record them in the declaration (`forge flatpak install`, and `forge install` for the
+/// short names forge knows).
+pub fn install_apps(apps: &[String]) -> Result<()> {
+    need_root()?;
+    ensure_flatpak()?;
+    for entry in apps {
+        let known = known(entry);
+        let entry = &match known {
+            Some((_, remote, repo, id)) => {
+                ensure_remote(remote, repo)?;
+                format!("{remote}:{id}")
+            }
+            None => entry.clone(),
+        };
+        if entry.ends_with(".flatpak") || entry.ends_with(".flatpakref") {
+            install_file(entry)?;
+            continue;
+        }
+        let (remote, id) = split(entry);
+        flatpak(&["install", "--system", "-y", "--noninteractive", remote, id])?;
+        edit_decl(|t| forge_decl::add_flatpak(t, entry))?;
+        ui::ok(&format!("installed {id}"));
+    }
+    Ok(())
+}
+
+/// Remove Flatpak applications and their entries in the declaration.
+pub fn remove_apps(apps: &[String]) -> Result<()> {
+    need_root()?;
+    present()?;
+    for entry in apps {
+        let entry = &known(entry).map(|(_, remote, _, id)| format!("{remote}:{id}")).unwrap_or_else(|| entry.clone());
+        let (_, id) = split(entry);
+        flatpak(&["uninstall", "--system", "-y", "--noninteractive", id])?;
+        // the declaration may list it with or without a remote
+        for e in declared().into_iter().filter(|e| split(e).1 == id) {
+            edit_decl(|t| forge_decl::remove_flatpak(t, &e))?;
+        }
+        ui::ok(&format!("removed {id}"));
+    }
+    let _ = flatpak(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
+    Ok(())
+}
+
+/// Is this one of the application names forge knows (`discord`, `vesktop`, `astralis`)?
+pub fn is_known(name: &str) -> bool {
+    known(name).is_some()
 }
 
 /// A short name (`astralis`) for an application forge knows.
