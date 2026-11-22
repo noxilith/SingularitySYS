@@ -1,6 +1,6 @@
 # xdg-desktop-portal backend for wlroots-style compositors (screen sharing)
 name        = "xdg-desktop-portal-wlr"
-version     = "0.8.1_r3"
+version     = "0.8.1_r4"
 description = "xdg-desktop-portal backend for wlroots-style compositors (screen sharing)"
 license     = "MIT"
 libc        = ["glibc"]

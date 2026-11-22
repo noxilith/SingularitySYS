@@ -1,0 +1,25 @@
+# X11 XFree86-VidMode extension library
+name        = "libXxf86vm"
+version     = "1.1.6"
+description = "X11 XFree86-VidMode extension library"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "xorgproto", "libX11", "libXext", "libxcb", "libXau", "libXdmcp"]
+run   = ["libX11", "libXext"]
+
+[[source]]
+url    = "https://xorg.freedesktop.org/archive/individual/lib/libXxf86vm-1.1.6.tar.xz"
+sha256 = "96af414c73ce1d5449ad04be7f9f27fa8330f844b6dda843ef22e3e1befb3ee3"
+
+[build]
+configure = "export PYTHONPATH=/usr/lib/python3.12/site-packages; ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --localstatedir=/var --disable-static --disable-dependency-tracking --disable-specs --without-xmlto --without-fop --without-xsltproc --without-doxygen --disable-docs CFLAGS='-O2'"
+compile   = "make -j$JOBS"
+install   = '''
+make install DESTDIR=$DESTDIR
+rm -f "$DESTDIR"/usr/lib/*.la
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/info"
+
+test -e "$DESTDIR/usr/lib/libXxf86vm.so.1"
+'''
