@@ -152,6 +152,20 @@ pub fn duration(d: Duration) -> String {
 
 /// A line that shows work in progress (a spinner and the elapsed time on a terminal) and is replaced by a
 /// result line when done. Piped output gets just the result line.
+/// The Flatpak applications that have an update, in the same style as the package list: (application, installed version,
+/// new version). An empty installed version is shown as just the new one.
+pub fn print_flatpak_updates(rows: &[(String, String, String)]) {
+    let u = ui();
+    heading("Flatpak applications");
+    let width = rows.iter().map(|r| r.0.len()).max().unwrap_or(0);
+    for (name, old, new) in rows {
+        let rest = if old.is_empty() || old == new { new.clone() } else { format!("{} {} {new}", u.dim(old), u.arrow()) };
+        println!("  {} {name:<width$}  {rest}", u.kind_mark(Kind::Modify));
+    }
+    println!();
+    println!("{}", u.bold(&format!("{} to upgrade", rows.len())));
+}
+
 pub struct Spinner {
     msg: String,
     start: Instant,

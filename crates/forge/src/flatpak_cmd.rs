@@ -5,6 +5,7 @@
 //! /etc/forge/system.toml, so the declaration stays the single source of truth: `forge apply` installs the ones that are
 //! missing and `forge upgrade` brings them up to date together with the packages.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -98,7 +99,7 @@ pub fn run(a: FlatpakArgs) -> Result<()> {
         Action::Upgrade => {
             need_root()?;
             present()?;
-            upgrade_all()
+            upgrade_listed(true)
         }
         Action::Remote { action } => match action {
             RemoteAction::Add { name, url } => {
@@ -157,9 +158,74 @@ pub fn upgrade_declared() {
     if !Path::new(FLATPAK).exists() || declared().is_empty() {
         return;
     }
-    ui::heading("Flatpak applications");
-    if let Err(e) = upgrade_all() {
+    // Nothing is printed unless something has an update: flatpak's own output is full of notes about end-of-life runtimes
+    // and refs that are no longer on the remote, which are not news at every upgrade.
+    if let Err(e) = upgrade_listed(false) {
         ui::warn(&format!("the Flatpak applications were not updated: {e:#}"));
+    }
+}
+
+/// Run flatpak with its output collected; the error carries the last lines it printed.
+fn flatpak_quiet(args: &[&str]) -> Result<String> {
+    let out = Command::new(FLATPAK).args(args).output().with_context(|| format!("running {FLATPAK}"))?;
+    if !out.status.success() {
+        let text = String::from_utf8_lossy(&out.stderr);
+        let tail: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).rev().take(4).collect();
+        bail!("`flatpak {}` failed ({}): {}", args.join(" "), out.status, tail.into_iter().rev().collect::<Vec<_>>().join(" / "));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The installed applications and runtimes with an update on their remote: (id, installed version, new version).
+fn pending_updates() -> Vec<(String, String, String)> {
+    let Ok(list) = flatpak_quiet(&["remote-ls", "--system", "--updates", "--columns=application,version"]) else { return Vec::new() };
+    let installed: BTreeMap<String, String> = flatpak_quiet(&["list", "--system", "--columns=application,version"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let mut c = l.split('\t');
+            Some((c.next()?.trim().to_string(), c.next().unwrap_or("").trim().to_string()))
+        })
+        .collect();
+    let mut rows: Vec<(String, String, String)> = list
+        .lines()
+        .filter_map(|l| {
+            let mut c = l.split('\t');
+            let id = c.next()?.trim().to_string();
+            if id.is_empty() {
+                return None;
+            }
+            let new = c.next().unwrap_or("").trim().to_string();
+            Some((id.clone(), installed.get(&id).cloned().unwrap_or_default(), new))
+        })
+        .collect();
+    rows.sort();
+    rows.dedup();
+    rows
+}
+
+/// Update what has an update and say so in the package-list style; with `say_none` also say when nothing needs it.
+fn upgrade_listed(say_none: bool) -> Result<()> {
+    let rows = pending_updates();
+    if rows.is_empty() {
+        if say_none {
+            ui::ok("the Flatpak applications are up to date");
+        }
+        return Ok(());
+    }
+    ui::print_flatpak_updates(&rows);
+    println!();
+    let spin = ui::Spinner::start("updating the Flatpak applications");
+    match flatpak_quiet(&["update", "--system", "-y", "--noninteractive"]) {
+        Ok(_) => {
+            let _ = flatpak_quiet(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
+            spin.finish();
+            Ok(())
+        }
+        Err(e) => {
+            spin.fail();
+            Err(e)
+        }
     }
 }
 
@@ -182,12 +248,6 @@ pub fn sync_declared() {
             ui::warn(&format!("{id} was not installed: {e:#} (forge apply tries again next time)"));
         }
     }
-}
-
-fn upgrade_all() -> Result<()> {
-    flatpak(&["update", "--system", "-y", "--noninteractive"])?;
-    let _ = flatpak(&["uninstall", "--system", "--unused", "-y", "--noninteractive"]);
-    Ok(())
 }
 
 /// Install Flatpak applications and record them in the declaration (`forge flatpak install`, and `forge install` for the
