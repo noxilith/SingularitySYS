@@ -464,3 +464,29 @@ mod known_tests {
         assert!(!super::is_known("htop") && !super::is_known("discord"));
     }
 }
+
+/// Is this an upgrade failure caused by a Debian-made package having a file that another package now provides too
+/// (the system's libraries grew something the Debian package carried a copy of)?
+pub fn is_debian_overlap(err: &anyhow::Error) -> bool {
+    let text = format!("{err:#}");
+    text.contains("is provided by both") && text.contains(install::PREFIX)
+}
+
+/// Make the installed Debian packages again against what the system has now (they leave out what the system provides),
+/// then apply everything together. `forge upgrade` does this on its own when it stops on such an overlap.
+pub fn rebuild_installed_and_upgrade(yes: bool) -> Result<()> {
+    let root = Path::new("/");
+    need_root(root)?;
+    upgrade_cmd(&install::Config::new(root), root, yes)
+}
+
+#[cfg(test)]
+mod overlap_tests {
+    #[test]
+    fn only_overlaps_with_a_debian_package_count() {
+        let e = anyhow::anyhow!("usr/lib/libEGL.so.1.1.0 is provided by both deb-librewolf-1-abc and libglvnd-1.7.0_r1-def");
+        assert!(super::is_debian_overlap(&e));
+        let e = anyhow::anyhow!("usr/bin/tool is provided by both a-1-abc and b-1-def");
+        assert!(!super::is_debian_overlap(&e));
+    }
+}

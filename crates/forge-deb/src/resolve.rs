@@ -26,6 +26,14 @@ const NEVER: &[&str] = &[
     "udev",
 ];
 
+/// Debian's GL stack. The system has its own (libglvnd and Mesa, one version of each); a second copy from Debian puts
+/// a different libEGL, libOpenGL, libGLX and libgallium next to it and desktop OpenGL stops working (Xwayland: no glamor).
+const SYSTEM_GL: &[&str] = &[
+    "libglvnd0", "libegl1", "libgl1", "libglx0", "libopengl0", "libgles1", "libgles2", "libglx-mesa0", "libegl-mesa0",
+    "libgl1-mesa-dri", "libgl1-mesa-glx", "libglapi-mesa", "mesa-libgallium", "libgbm1", "libglx-dev", "libegl-dev",
+    "libgl-dev", "libopengl-dev", "libgles-dev",
+];
+
 /// When a package of the first kind is in the set, these come along (Recommends that make the desktop stack work).
 const EXTRAS: &[(&str, &[&str])] = &[
     ("libglib2.0-0t64", &["libglib2.0-bin", "shared-mime-info"]),
@@ -120,6 +128,14 @@ pub fn resolve(
                     res.left_out.push((pkg.name.clone(), "the system has its own"));
                     continue;
                 }
+                if SYSTEM_GL.contains(&pkg.name.as_str()) && forge_has("mesa") && forge_has("libglvnd") {
+                    res.system_deps.insert("mesa".to_string());
+                    res.system_deps.insert("libglvnd".to_string());
+                    satisfied.insert(name.clone());
+                    satisfied.insert(pkg.name.clone());
+                    res.left_out.push((pkg.name.clone(), "the system has its own GL libraries (libglvnd, Mesa)"));
+                    continue;
+                }
                 if forge_has(&pkg.name) {
                     res.system_deps.insert(pkg.name.clone());
                     satisfied.insert(name.clone());
@@ -176,4 +192,38 @@ pub fn resolve(
         }
     }
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::Owners;
+
+    fn pkg(name: &str, depends: &[&str]) -> Pkg {
+        Pkg {
+            name: name.into(),
+            version: "1".into(),
+            arch: "amd64".into(),
+            depends: depends.iter().map(|d| vec![(*d).to_string()]).collect(),
+            provides: vec![],
+            filename: String::new(),
+            sha256: String::new(),
+            size: 0,
+            description: String::new(),
+            source: String::new(),
+            base_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn debians_gl_stack_is_left_to_the_systems_mesa_and_libglvnd() {
+        let pkgs = [pkg("app", &["libegl1", "libgl1", "libglx-mesa0", "libopengl0"]), pkg("libegl1", &[]), pkg("libgl1", &[]), pkg("libglx-mesa0", &[]), pkg("libopengl0", &[])];
+        let owners = Owners::empty();
+        let world = World { root: Path::new("/nonexistent"), owners: &owners };
+        let forge_has = |n: &str| n == "mesa" || n == "libglvnd";
+        let res = resolve("app", "deb-app", &pkgs, &world, Path::new("/nonexistent"), &forge_has, &|_| {}).unwrap();
+        assert_eq!(res.selected.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["app"]);
+        assert!(res.system_deps.contains("mesa") && res.system_deps.contains("libglvnd"));
+        assert_eq!(res.left_out.len(), 4);
+    }
 }

@@ -1,0 +1,31 @@
+# libglvnd: the vendor-neutral GL dispatch libraries. libEGL.so.1, libGLESv2.so.2, libGL.so.1, libGLX.so.0 and
+# libOpenGL.so.0 are the ones programs link or dlopen; each hands the call to the driver that made the context current
+# (Mesa's libEGL_mesa, found through /usr/share/glvnd/egl_vendor.d). Xwayland reaches desktop OpenGL through libepoxy
+# and libOpenGL.so.0, which only works when libEGL.so.1 is this one.
+name        = "libglvnd"
+version     = "1.7.0_r1"
+description = "Vendor-neutral GL dispatch libraries (EGL, GLES, OpenGL, GLX)"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "libX11", "libXext", "libxcb", "libXau", "libXdmcp", "xorgproto"]
+
+[[source]]
+url    = "https://gitlab.freedesktop.org/glvnd/libglvnd/-/archive/v1.7.0/libglvnd-v1.7.0.tar.gz"
+sha256 = "2b6e15b06aafb4c0b6e2348124808cbd9b291c647299eaaba2e3202f51ff2f3d"
+
+[build]
+configure = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --buildtype=release -Dx11=enabled -Dglx=enabled -Degl=true -Dgles1=false -Dgles2=true -Dasm=enabled -Dtls=true
+'''
+compile = "export PYTHONPATH=/usr/lib/python3.12/site-packages; meson compile -C build -j $JOBS"
+install = '''
+export PYTHONPATH=/usr/lib/python3.12/site-packages
+DESTDIR=$DESTDIR meson install -C build
+mkdir -p "$DESTDIR/usr/share/glvnd/egl_vendor.d"
+for l in libEGL.so.1 libGLESv2.so.2 libGL.so.1 libGLX.so.0 libOpenGL.so.0 libGLdispatch.so.0; do
+    test -e "$DESTDIR/usr/lib/$l"
+done
+'''

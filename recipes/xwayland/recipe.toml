@@ -1,6 +1,6 @@
 # X server that runs inside a Wayland compositor (X11 apps)
 name        = "xwayland"
-version     = "24.1.8_r3"
+version     = "24.1.8_r4"
 description = "X server that runs inside a Wayland compositor (X11 apps)"
 license     = "MIT"
 libc        = ["glibc"]

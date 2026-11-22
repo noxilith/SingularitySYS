@@ -709,7 +709,16 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Edit(a) => edit_cmd(a),
         Cmd::Upgrade(a) => {
             let live = a.root == Path::new("/") && !a.dry_run;
-            upgrade(a)?;
+            let yes = a.yes;
+            match upgrade(a) {
+                // A Debian-made package carries a file the system's packages now provide as well (a library moved
+                // into a forge package): make the Debian packages again, leaving that file out, and apply it all.
+                Err(e) if live && deb_cmd::is_debian_overlap(&e) => {
+                    ui::info("a Debian-made package overlaps a package that was updated; making the Debian packages again");
+                    deb_cmd::rebuild_installed_and_upgrade(yes)?;
+                }
+                r => r?,
+            }
             if live {
                 flatpak_cmd::upgrade_declared();
             }

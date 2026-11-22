@@ -1,17 +1,18 @@
-# Mesa: OpenGL ES/EGL and GBM for Wayland compositors, with the iris (Intel), radeonsi (AMD), nouveau (NVIDIA, older open),
+# Mesa: the EGL/OpenGL driver behind libglvnd (libEGL_mesa; libglvnd supplies libEGL.so.1, libGLESv2.so.2, libOpenGL.so.0), and GBM, for Wayland compositors, with the iris (Intel), radeonsi (AMD), nouveau (NVIDIA, older open),
 # llvmpipe and softpipe (software, on any GPU) drivers. No X11/GLX and no Vulkan. iris needs mesa_clc at build time
 # (clang from llvm, libclc, SPIRV-LLVM-Translator, SPIRV-Tools); none of that is needed to run it.
 name        = "mesa"
-version     = "25.2.5_r1"
+version     = "25.2.5_r2"
 description = "Mesa 3D graphics library (EGL, GLES, GBM; iris, radeonsi, nouveau, llvmpipe, softpipe)"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
+run   = ["libglvnd"]
 build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
          "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "python", "ninja", "meson", "bison",
          "flex", "m4", "python-mako", "python-packaging", "python-pyyaml", "python-markupsafe", "llvm", "libdrm",
-         "wayland", "wayland-protocols", "expat", "zlib", "zstd", "libelf", "libclc", "spirv-llvm-translator", "spirv-tools", "spirv-headers"]
+         "wayland", "wayland-protocols", "expat", "zlib", "zstd", "libelf", "libclc", "spirv-llvm-translator", "spirv-tools", "spirv-headers", "libglvnd"]
 
 [[source]]
 url    = "https://archive.mesa3d.org/mesa-25.2.5.tar.xz"
@@ -22,7 +23,7 @@ configure = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
 CC=gcc CXX=g++ meson setup build --prefix=/usr --libdir=lib --buildtype=release -Db_ndebug=true \
     -Dplatforms=wayland -Dgallium-drivers=iris,radeonsi,nouveau,llvmpipe,softpipe -Dvulkan-drivers= \
-    -Dglx=disabled -Degl=enabled -Dgbm=enabled -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dglvnd=disabled \
+    -Dglx=disabled -Degl=enabled -Dgbm=enabled -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dglvnd=enabled \
     -Dllvm=enabled -Dshared-llvm=enabled -Dvideo-codecs= -Dlibunwind=disabled -Dlmsensors=disabled -Dvalgrind=disabled \
     -Dzstd=enabled -Dxlib-lease=disabled -Dbuild-tests=false -Dgallium-va=disabled -Dgallium-vdpau=disabled \
     -Dgallium-rusticl=false -Dteflon=false -Dintel-rt=disabled
@@ -32,8 +33,8 @@ install = '''
 export PYTHONPATH=/usr/lib/python3.12/site-packages
 DESTDIR=$DESTDIR meson install -C build
 rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man"
-test -e "$DESTDIR/usr/lib/libEGL.so.1"
+test -e "$DESTDIR/usr/lib/libEGL_mesa.so.0"
+test -e "$DESTDIR/usr/share/glvnd/egl_vendor.d/50_mesa.json"
 test -e "$DESTDIR/usr/lib/libgbm.so.1"
-test -e "$DESTDIR/usr/lib/libGLESv2.so.2"
 test -e "$DESTDIR"/usr/lib/libgallium-25.2.5.so
 '''

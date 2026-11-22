@@ -276,7 +276,12 @@ pub fn unpack(deb: &Path, tree_dir: &Path, world: &World, self_name: &str, tree:
                 continue;
             }
         } else {
-            let mode = e.header().mode().unwrap_or(0o644) & 0o755;
+            let mut mode = e.header().mode().unwrap_or(0o644) & 0o755;
+            // Debian ships its shared libraries 0644; the system's own are 0755, so these match.
+            let file_name = mapped.rsplit('/').next().unwrap_or("");
+            if mapped.starts_with("usr/lib/") && (file_name.ends_with(".so") || file_name.contains(".so.")) {
+                mode |= 0o111;
+            }
             let _ = fs::remove_file(&dest);
             let mut out = fs::File::create(&dest).with_context(|| format!("creating {mapped}"))?;
             std::io::copy(&mut e, &mut out).with_context(|| format!("unpacking {mapped}"))?;
