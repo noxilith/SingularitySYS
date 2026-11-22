@@ -124,12 +124,26 @@ impl Owners {
                 }
             }
         }
+        for (path, owner) in CLAIMED.lock().unwrap().iter() {
+            by_path.insert(path.clone(), (owner.clone(), String::new()));
+        }
         Ok(Owners { by_path })
     }
 
     pub fn owner(&self, path: &str) -> Option<&(String, String)> {
         self.by_path.get(path)
     }
+}
+
+/// Files the Debian packages built earlier in this run put in their trees. A run that makes several packages (`forge
+/// upgrade` remaking them all) sees the same installed system for each; without this, two of them would each carry a
+/// library the system has no copy of yet, and the system tree would refuse the overlap.
+static CLAIMED: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn claim_paths(paths: &HashSet<String>, owner: &str) {
+    let mut c = CLAIMED.lock().unwrap();
+    c.retain(|(_, o)| o != owner);
+    c.extend(paths.iter().map(|p| (p.clone(), owner.to_string())));
 }
 
 pub struct World<'a> {
@@ -392,5 +406,23 @@ mod tests {
         assert_eq!(map_link("usr/lib/x86_64-linux-gnu/a", "/usr/lib/x86_64-linux-gnu/b"), "/usr/lib/b");
         // from /usr/bin into /bin-moved paths
         assert_eq!(map_link("usr/bin/x", "../../bin/y"), "y");
+    }
+}
+
+#[cfg(test)]
+mod claim_tests {
+    use super::*;
+
+    #[test]
+    fn a_package_built_earlier_in_the_run_owns_what_it_wrote() {
+        let mut written = HashSet::new();
+        written.insert("usr/lib/libclaimtest.so.1.0".to_string());
+        claim_paths(&written, "deb-first");
+        let owners = Owners::load(Path::new("/nonexistent-root")).unwrap();
+        assert_eq!(owners.owner("usr/lib/libclaimtest.so.1.0").map(|o| o.0.as_str()), Some("deb-first"));
+        // making the same package again replaces its claim
+        claim_paths(&HashSet::new(), "deb-first");
+        let owners = Owners::load(Path::new("/nonexistent-root")).unwrap();
+        assert!(owners.owner("usr/lib/libclaimtest.so.1.0").is_none());
     }
 }

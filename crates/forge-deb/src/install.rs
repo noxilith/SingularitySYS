@@ -154,6 +154,7 @@ pub fn build(cfg: &Config, request: &str, forge_indexes: &[forge_store::Index], 
         say(&format!("  [{}/{total}] {} ({})", i + 1, p.name, convert::human(p.size)));
         convert::unpack(&deb, &tree_dir, &world, &forge_name, &mut tree).with_context(|| format!("unpacking {}", p.name))?;
     }
+    convert::claim_paths(&tree.written, &forge_name);
     convert::check_tree_not_empty(&tree, &forge_name)?;
     if let Some(script) = convert::post_apply_script(&tree_dir) {
         let dir = tree_dir.join("usr/lib/forge/post-apply.d");
