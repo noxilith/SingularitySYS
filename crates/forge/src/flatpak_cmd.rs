@@ -20,12 +20,11 @@ const DEFAULT_REMOTE: &str = "flathub";
 const FLATHUB_REPO: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
 
 /// Applications forge knows by a short name: (name, remote, the remote's .flatpakrepo file, application id).
-const KNOWN: &[(&str, &str, &str, &str)] = &[(
-    "astralis",
-    "astralis",
-    "https://noxilith.github.io/Astralis/astralis.flatpakrepo",
-    "app.astralis.desktop",
-)];
+const KNOWN: &[(&str, &str, &str, &str)] = &[
+    ("astralis", "astralis", "https://noxilith.github.io/Astralis/astralis.flatpakrepo", "app.astralis.desktop"),
+    ("discord", DEFAULT_REMOTE, FLATHUB_REPO, "com.discordapp.Discord"),
+    ("vesktop", DEFAULT_REMOTE, FLATHUB_REPO, "dev.vencord.Vesktop"),
+];
 
 #[derive(Args)]
 pub struct FlatpakArgs {
@@ -294,4 +293,18 @@ fn edit_decl(edit: impl FnOnce(&str) -> Result<forge_decl::Edited, forge_decl::E
     std::fs::write(&tmp, &edited.text).with_context(|| format!("writing {tmp}"))?;
     std::fs::rename(&tmp, DECL).with_context(|| format!("replacing {DECL}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_names_map_to_their_flathub_ids() {
+        assert_eq!(known("discord").unwrap().3, "com.discordapp.Discord");
+        assert_eq!(known("Vesktop").unwrap().3, "dev.vencord.Vesktop");
+        assert_eq!(known("vesktop").unwrap().1, DEFAULT_REMOTE);
+        assert_eq!(known("astralis").unwrap().3, "app.astralis.desktop");
+        assert!(known("nothing-like-this").is_none());
+    }
 }
