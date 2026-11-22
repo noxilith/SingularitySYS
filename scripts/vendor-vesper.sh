@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."; ROOT=$PWD
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-VESPER_REV=${VESPER_REV:-65f204ec82ce3fd5cafe54d082a18f296b80e3d7}
+VESPER_REV=${VESPER_REV:-ac97a3b7f4abebeb162b6e5e9dd8e4aa5ca2196a}
 WORK=${WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/forge/vesper-vendor}
 OUT=${OUT:-$WORK}
 NAME=vesper-$VESPER_REV-vendored.tar.gz
