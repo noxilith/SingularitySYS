@@ -329,6 +329,39 @@ mod tests {
         assert_eq!(fs::read_to_string(fx.profile.current_link().join("usr/bin/tool")).unwrap(), "from a");
     }
 
+
+    #[test]
+    fn a_debian_made_package_gives_way_to_a_system_package_in_either_order() {
+        // "deb-a" sorts before "zzsys" and "aa" before "deb-b": both orders of the set are exercised.
+        for sys in ["aa", "zzsys"] {
+            let fx = Fx::new();
+            let system = fx.add(sys, &[("usr/lib/libbrotlicommon.so.1", "system's")]);
+            let deb = fx.add("deb-app", &[("usr/lib/libbrotlicommon.so.1", "Debian's"), ("usr/bin/app", "app")]);
+            fx.profile.switch(&fx.store, &Fx::set(&[&system, &deb]), 1).unwrap();
+            let cur = fx.profile.current_link();
+            assert_eq!(fs::read_to_string(cur.join("usr/lib/libbrotlicommon.so.1")).unwrap(), "system's");
+            assert_eq!(fs::read_to_string(cur.join("usr/bin/app")).unwrap(), "app", "the rest of the Debian package stays");
+        }
+    }
+
+    #[test]
+    fn two_debian_made_packages_with_one_file_are_still_a_conflict() {
+        let fx = Fx::new();
+        let a = fx.add("deb-a", &[("usr/lib/libx.so.1", "1")]);
+        let b = fx.add("deb-b", &[("usr/lib/libx.so.1", "2")]);
+        assert!(fx.profile.switch(&fx.store, &Fx::set(&[&a, &b]), 1).is_err());
+    }
+
+    #[test]
+    fn a_debian_made_package_cannot_put_files_below_a_file_of_the_system() {
+        let fx = Fx::new();
+        let system = fx.add("sys", &[("usr/share/thing", "a file")]);
+        let deb = fx.add("deb-app", &[("usr/share/thing/inner", "x"), ("usr/bin/app", "app")]);
+        fx.profile.switch(&fx.store, &Fx::set(&[&system, &deb]), 1).unwrap();
+        let cur = fx.profile.current_link();
+        assert_eq!(fs::read_to_string(cur.join("usr/share/thing")).unwrap(), "a file");
+        assert!(cur.join("usr/bin/app").exists());
+    }
     #[test]
     fn switching_to_the_same_set_creates_no_new_generation() {
         let fx = Fx::new();

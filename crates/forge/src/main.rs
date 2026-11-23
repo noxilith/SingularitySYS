@@ -8,6 +8,7 @@ use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
 mod deb_cmd;
+mod selfupdate;
 mod flatpak_cmd;
 mod doctor;
 mod maintenance;
@@ -711,6 +712,14 @@ fn run(cli: Cli) -> Result<()> {
             let live = a.root == Path::new("/") && !a.dry_run;
             let yes = a.yes;
             match upgrade(a) {
+                // The upgrade brought a newer forge, which is in the store already but not running: let it do the copying
+                // (it may know how to settle something this one does not), instead of failing the way this one would.
+                Err(e) if live && std::env::var_os("FORGE_REEXEC").is_none() && selfupdate::newer_forge(Path::new("/")).is_some() => {
+                    let next = selfupdate::newer_forge(Path::new("/")).expect("checked above");
+                    ui::info(&format!("this upgrade brought a newer forge; continuing with it ({e:#})"));
+                    let status = std::process::Command::new(&next).args(std::env::args_os().skip(1)).env("FORGE_REEXEC", "1").status().context("starting the newer forge")?;
+                    std::process::exit(status.code().unwrap_or(1));
+                }
                 // A Debian-made package carries a file the system's packages now provide as well (a library moved
                 // into a forge package): make the Debian packages again, leaving that file out, and apply it all.
                 Err(e) if live && deb_cmd::is_debian_overlap(&e) => {
