@@ -1,6 +1,6 @@
 # Select a region of a Wayland screen (screen sharing, screenshots)
 name        = "slurp"
-version     = "1.5.0_r1"
+version     = "1.5.0_r2"
 description = "Select a region of a Wayland screen (screen sharing, screenshots)"
 license     = "MIT"
 libc        = ["glibc"]

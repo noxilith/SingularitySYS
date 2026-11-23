@@ -1,6 +1,6 @@
 # Network connection manager (Wi-Fi, Ethernet; nmcli)
 name        = "networkmanager"
-version     = "1.54.0_r1"
+version     = "1.54.0_r2"
 description = "Network connection manager (Wi-Fi, Ethernet; nmcli)"
 license     = "GPL-2.0-or-later"
 libc        = ["glibc"]
@@ -38,5 +38,10 @@ rm -rf "$DESTDIR/usr/share/doc" "$DESTDIR/usr/share/man" "$DESTDIR/var/run" "$DE
 mkdir -p "$DESTDIR/etc/init.d"
 printf "#!/sbin/openrc-run\ndescription=\"NetworkManager\"\ncommand=/usr/sbin/NetworkManager\ncommand_args=\"--no-daemon\"\ncommand_background=true\npidfile=/run/NetworkManager.pid\ndepend() { need dbus; provide net; }\n" > "$DESTDIR/etc/init.d/NetworkManager"
 chmod 755 "$DESTDIR/etc/init.d/NetworkManager"
+# NetworkManager picks `resolvconf` when it finds one, and /usr/bin/resolvconf here is systemd's resolvectl: it needs
+# systemd-resolved, which does not run, so the name servers a network hands out never reached /etc/resolv.conf and every
+# lookup failed. Write the file directly.
+mkdir -p "$DESTDIR/usr/lib/NetworkManager/conf.d"
+printf "[main]\nrc-manager=file\n" > "$DESTDIR/usr/lib/NetworkManager/conf.d/10-singularity-dns.conf"
 test -e "$DESTDIR/usr/bin/nmcli"
 '''

@@ -1,0 +1,27 @@
+# Brotli: the compression WOFF2 fonts (Godot's editor fonts, web fonts) use. FreeType needs it to open them.
+name        = "brotli"
+version     = "1.1.0"
+description = "Brotli compression library and tool"
+license     = "MIT"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "cmake", "ninja"]
+
+[[source]]
+url    = "https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
+sha256 = "e720a6ca29428b803f4ad165371771f5398faba397edf6778837a18599ea13ff"
+
+[build]
+configure = '''
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=ON -DBROTLI_DISABLE_TESTS=ON
+'''
+compile = "cmake --build build -j $JOBS"
+install = '''
+DESTDIR=$DESTDIR cmake --install build
+rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/doc"
+rm -f "$DESTDIR"/usr/lib/*.a
+test -e "$DESTDIR/usr/lib/libbrotlidec.so.1"
+test -e "$DESTDIR/usr/lib/pkgconfig/libbrotlidec.pc"
+'''

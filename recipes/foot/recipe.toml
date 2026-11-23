@@ -1,6 +1,6 @@
 # Fast, lightweight Wayland terminal emulator
 name        = "foot"
-version     = "1.25.0_r7"
+version     = "1.25.0_r8"
 description = "Fast, lightweight Wayland terminal emulator"
 license     = "MIT"
 libc        = ["glibc"]

@@ -1,6 +1,6 @@
 # Font loading and glyph rasterization library (foot)
 name        = "fcft"
-version     = "3.3.2"
+version     = "3.3.2_r1"
 description = "Font loading and glyph rasterization library (foot)"
 license     = "MIT"
 libc        = ["glibc"]

@@ -1,6 +1,6 @@
 # 2D graphics library
 name        = "cairo"
-version     = "1.18.4_r1"
+version     = "1.18.4_r2"
 description = "2D graphics library"
 license     = "LGPL-2.1-only OR MPL-1.1"
 libc        = ["glibc"]

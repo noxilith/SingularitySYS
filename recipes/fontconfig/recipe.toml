@@ -1,6 +1,6 @@
 # Font configuration and lookup library
 name        = "fontconfig"
-version     = "2.16.0"
+version     = "2.16.0_r1"
 description = "Font configuration and lookup library"
 license     = "MIT"
 libc        = ["glibc"]

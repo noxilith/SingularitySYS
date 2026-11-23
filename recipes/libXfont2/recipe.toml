@@ -1,6 +1,6 @@
 # X font library
 name        = "libXfont2"
-version     = "2.0.7"
+version     = "2.0.7_r1"
 description = "X font library"
 license     = "MIT"
 libc        = ["glibc"]
