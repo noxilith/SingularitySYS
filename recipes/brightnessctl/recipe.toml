@@ -1,13 +1,15 @@
 # brightnessctl: read and set screen and keyboard backlight brightness (Vesper's brightness keys run it). Installed
-# setuid-free; its udev rule gives the "video" group write access to the backlight.
+# setuid-free; its udev rule gives the "video" group write access to the backlight. Built WITHOUT its systemd option: the
+# Makefile tests `ifdef ENABLE_SYSTEMD`, so even ENABLE_SYSTEMD=0 turned it on, which dropped the udev rule and made the program
+# ask systemd-logind, and Vesper's login has no logind session, so brightness could not be changed at all.
 name        = "brightnessctl"
-version     = "0.5.1"
+version     = "0.5.1_r2"
 description = "Backlight and LED brightness control"
 license     = "MIT"
 libc        = ["glibc"]
 
 [depends]
-build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf", "systemd"]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2", "which", "make", "binutils", "gcc", "glibc", "linux-headers", "pkgconf"]
 
 [[source]]
 url    = "https://github.com/Hummer12007/brightnessctl/archive/refs/tags/0.5.1.tar.gz"
@@ -15,9 +17,10 @@ sha256 = "a68869e23f56ac4f2e28f1783002810ddbf10f95e1af9b48b2912fb169f46994"
 
 [build]
 configure = "true"
-compile   = "make -j$JOBS CC=gcc ENABLE_SYSTEMD=0"
+compile   = "make -j$JOBS CC=gcc"
 install   = '''
-make install DESTDIR=$DESTDIR PREFIX=/usr ENABLE_SYSTEMD=0
+make install DESTDIR=$DESTDIR PREFIX=/usr UDEVDIR=/usr/lib/udev/rules.d
 rm -rf "$DESTDIR/usr/share/man" "$DESTDIR/usr/share/zsh" "$DESTDIR/usr/share/bash-completion" "$DESTDIR/usr/share/fish"
 test -x "$DESTDIR/usr/bin/brightnessctl"
+test -f "$DESTDIR/usr/lib/udev/rules.d/90-brightnessctl.rules"
 '''
