@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r56"
+version     = "0.1.0_r57"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
