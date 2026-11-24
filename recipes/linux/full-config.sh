@@ -118,6 +118,7 @@ kmake olddefconfig >/dev/null
 # Everything from that list which the base configuration does not already decide, as modules. A module
 # that depends on another one the base lacks is dropped by olddefconfig, so repeat: each round enables
 # what the previous round made visible.
+module_rounds() {
 for pass in 1 2 3 4; do
     awk 'NR==FNR { if ($0 ~ /^CONFIG_[A-Za-z0-9_]+=[ym]$/) { sub(/^CONFIG_/, ""); sub(/=.*/, ""); have[$0]=1 } next }
          !($0 in have) { print "CONFIG_" $0 "=m" }' .config "$tmp/allmods.txt" >> .config
@@ -125,6 +126,26 @@ for pass in 1 2 3 4; do
     echo "round $pass: $(grep -c '^CONFIG_.*=m' .config) modules"
 done
 kmake olddefconfig
+}
+module_rounds
+
+# Sound Open Firmware. On Intel laptops from Meteor Lake on (Lunar Lake and later) the audio sits behind a DSP: the plain
+# HDA driver cannot find the codec ("Cannot probe codecs, giving up"), there is no sound card at all, and the sound server
+# offers only a "Dummy Output". The SOF driver (with the SOF firmware package) is what makes the speakers work. Its menus
+# stay hidden until SND_SOC is a module, so they are switched on here, after the rounds above, and the drivers they bring
+# in are enabled by another set of rounds.
+for o in SND_SOC_SOF_TOPLEVEL SND_SOC_SOF_INTEL_TOPLEVEL; do $c -e $o; done
+kmake olddefconfig >/dev/null
+for o in SND_SOC_SOF_HDA_LINK SND_SOC_SOF_HDA_AUDIO_CODEC; do $c -e $o; done
+$c -m SND_SOC_SOF_PCI -m SND_SOC_SOF_INTEL_SOUNDWIRE
+kmake olddefconfig >/dev/null
+module_rounds
+missing=
+for o in SND_SOC_SOF_PCI SND_SOC_SOF_LUNARLAKE SND_SOC_SOF_METEORLAKE SND_SOC_SOF_TIGERLAKE SND_SOC_SOF_ALDERLAKE; do
+    grep -q "^CONFIG_$o=m" .config || missing="$missing $o"
+done
+grep -q '^CONFIG_SND_SOC_SOF_HDA_LINK=y' .config || missing="$missing SND_SOC_SOF_HDA_LINK"
+if [ -n "$missing" ]; then echo "sound (SOF) options that did not survive olddefconfig:$missing" >&2; exit 1; fi
 
 # Wi-Fi: every driver the kernel has, as MODULES. (Built-in drivers probe before the root filesystem,
 # and so /lib/firmware, is mounted, and would fail to load their firmware; modules load later.)

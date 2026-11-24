@@ -1,0 +1,31 @@
+# Firmware and topologies for Intel Sound Open Firmware (SOF) audio: the DSP firmware (sof/, sof-ipc4/) and the topology files
+# that tell it how the speakers, microphones and headphone jack are wired (sof-tplg/, sof-ipc4-tplg/). Intel laptops from
+# Meteor Lake on (Lunar Lake, Arrow Lake, Panther Lake...) have no sound without them: the audio sits behind the DSP.
+# Not part of linux-firmware: SOF ships its own releases (https://github.com/thesofproject/sof-bin).
+name        = "linux-firmware-sof"
+version     = "2026.09.2"
+description = "Intel Sound Open Firmware (SOF) audio DSP firmware and topologies"
+license     = "BSD-3-Clause"
+libc        = ["glibc"]
+
+[depends]
+build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffutils", "tar", "gzip", "xz", "bzip2",
+         "which", "make", "binutils", "gcc", "glibc", "linux-headers"]
+
+[[source]]
+url    = "https://github.com/thesofproject/sof-bin/releases/download/v2026.09.2/sof-bin-2026.09.2.tar.gz"
+sha256 = "5f7bc30b2b5c1e6b0da55a33fc44e2b7f56ae9b06952edcde614f51ef6b943e1"
+
+[build]
+install = '''
+fw="$DESTDIR/usr/lib/firmware/intel"
+mkdir -p "$fw"
+# The directories the kernel's SOF driver looks in (the release's own install.sh puts them in the same places).
+for d in sof sof-ipc4 sof-ipc4-lib sof-ipc4-tplg sof-ace-tplg sof-tplg; do
+    if [ -e "$d" ]; then cp -a "$d" "$fw/$d"; fi
+done
+mkdir -p "$DESTDIR/usr/share/licenses/linux-firmware-sof"
+cp LICENCE.Intel LICENCE.NXP Notice.NXP "$DESTDIR/usr/share/licenses/linux-firmware-sof/" 2>/dev/null || true
+test -e "$fw/sof-ipc4/lnl/sof-lnl.ri"
+test -e "$fw/sof-ipc4-tplg/sof-hda-generic-ace3-2ch.tplg"
+'''

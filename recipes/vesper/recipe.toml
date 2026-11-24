@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r55"
+version     = "0.1.0_r56"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -18,7 +18,7 @@ build = ["bash", "dash", "coreutils", "sed", "grep", "gawk", "findutils", "diffu
 run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mesa", "wayland", "dbus", "linux-pam",
          "systemd", "fontconfig", "freetype", "font-jetbrains-mono-nerd", "font-dejavu", "font-noto-color-emoji",
          "xwayland", "xdg-desktop-portal", "xdg-desktop-portal-wlr", "pipewire", "wireplumber", "slurp",
-         "networkmanager", "bluez", "linux-firmware-bluetooth", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
+         "networkmanager", "bluez", "linux-firmware-bluetooth", "linux-firmware-sof", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
 url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-cc5beef64106f6ba35abfe5622f91fa4e91758c7-vendored.tar.gz"

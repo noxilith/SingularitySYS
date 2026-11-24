@@ -39,6 +39,7 @@ for your card to `packages` in `/etc/forge/system.toml` (or `sudo forge install 
 | `linux-firmware-amdgpu` | AMD Radeon (including recent RDNA cards) | `amdgpu`, `radeon` |
 | `linux-firmware-intel-gpu` | Intel graphics | `i915`, `xe` |
 | `linux-firmware-nvidia` | NVIDIA, with the open driver | `nouveau` |
+| `linux-firmware-sof` | Intel laptop audio (Meteor Lake, Lunar Lake and later) | `snd_sof_pci_intel_*` (SOF) |
 
 The driver modules exist in the kernel but are loaded **only when the matching firmware package is installed**. A graphics
 driver that takes the screen over and then finds no firmware leaves the display black; this rule keeps a machine without
