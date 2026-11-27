@@ -325,24 +325,41 @@ fn make_menu_entry(name: &str, file: &Path) -> Result<()> {
                 .stderr(std::process::Stdio::null())
                 .status();
         };
-        extract("*.desktop");
         let root = scratch.join("squashfs-root");
-        let Some(desktop) = fs::read_dir(&root).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "desktop"))) else {
+        // A name in the AppImage's top folder is often a link to a file deeper inside (`foo.desktop -> usr/share/applications/foo.desktop`):
+        // extract the link, then what it points to, until there is a real file.
+        let pull = |rel: &str| -> Option<PathBuf> {
+            extract(rel);
+            let mut rel = PathBuf::from(rel);
+            for _ in 0..8 {
+                let p = root.join(&rel);
+                match fs::symlink_metadata(&p) {
+                    Ok(m) if m.file_type().is_symlink() => {
+                        let target = fs::read_link(&p).ok()?;
+                        rel = link_target(&rel, &target);
+                        extract(&rel.to_string_lossy());
+                    }
+                    Ok(_) => return p.is_file().then_some(p),
+                    Err(_) => return None,
+                }
+            }
+            None
+        };
+        extract("*.desktop");
+        let Some(desktop_name) = fs::read_dir(&root).ok().and_then(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).find(|n| n.ends_with(".desktop"))) else {
             bail!("the AppImage holds no .desktop file");
         };
+        let Some(desktop) = pull(&desktop_name) else { bail!("the AppImage's {desktop_name} could not be read out of it") };
         let text = fs::read_to_string(&desktop)?;
         let icon_name = text.lines().find_map(|l| l.trim().strip_prefix("Icon=")).map(str::trim).unwrap_or("");
         let mut kept: Option<PathBuf> = None;
         if !icon_name.is_empty() && !icon_name.contains('/') {
-            for ext in ["png", "svg", "xpm"] {
-                extract(&format!("{icon_name}.{ext}"));
-            }
-            extract(".DirIcon");
-            for cand in ["png", "svg", "xpm"].iter().map(|e| root.join(format!("{icon_name}.{e}"))).chain(std::iter::once(root.join(".DirIcon"))) {
-                if cand.is_file() {
-                    let ext = cand.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "png".into());
+            let candidates = ["png", "svg", "xpm"].iter().map(|e| format!("{icon_name}.{e}")).chain(std::iter::once(".DirIcon".to_string()));
+            for cand in candidates {
+                if let Some(p) = pull(&cand) {
+                    let ext = Path::new(&cand).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| p.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "png".into()));
                     let dest = Path::new(APPS_DIR).join(format!("{name}.{ext}"));
-                    fs::copy(&cand, &dest)?;
+                    fs::copy(&p, &dest)?;
                     fs::set_permissions(&dest, fs::Permissions::from_mode(0o644))?;
                     kept = Some(dest);
                     break;
@@ -357,6 +374,23 @@ fn make_menu_entry(name: &str, file: &Path) -> Result<()> {
     })();
     let _ = fs::remove_dir_all(&scratch);
     result
+}
+
+/// Where the link `link` (a path inside the AppImage) points, as a path inside the AppImage: relative to the link's folder,
+/// or from the top for an absolute one, with `.` and `..` resolved (it never climbs out of the AppImage).
+fn link_target(link: &Path, target: &Path) -> PathBuf {
+    let base: PathBuf = if target.is_absolute() { PathBuf::new() } else { link.parent().map(Path::to_path_buf).unwrap_or_default() };
+    let mut out: Vec<std::ffi::OsString> = base.components().map(|c| c.as_os_str().to_os_string()).collect();
+    for c in target.components() {
+        match c {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::Normal(s) => out.push(s.to_os_string()),
+            _ => {}
+        }
+    }
+    out.iter().collect()
 }
 
 /// Hand a tree to `uid:gid` (no recursion through links).
@@ -519,6 +553,16 @@ mod tests {
         assert!(!out.contains("TryExec") && !out.contains("X-AppImage"));
         assert!(out.contains("Exec=AppRun --other"), "other sections stay as they are");
         assert!(out.contains("Categories=Utility;"));
+    }
+
+    #[test]
+    fn links_inside_the_appimage_resolve_to_paths_inside_it() {
+        let t = |l: &str, to: &str| link_target(Path::new(l), Path::new(to));
+        assert_eq!(t("foo.desktop", "usr/share/applications/foo.desktop"), Path::new("usr/share/applications/foo.desktop"));
+        assert_eq!(t("usr/share/a/x.png", "../../icons/x.png"), Path::new("usr/icons/x.png"));
+        assert_eq!(t("usr/share/a/x.png", "../icons/x.png"), Path::new("usr/share/icons/x.png"));
+        assert_eq!(t(".DirIcon", "/usr/share/icons/foo.png"), Path::new("usr/share/icons/foo.png"));
+        assert_eq!(t("a.png", "../../../etc/passwd"), Path::new("etc/passwd"), "never above the top");
     }
 
     #[test]
