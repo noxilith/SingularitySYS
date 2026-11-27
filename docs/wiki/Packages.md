@@ -74,11 +74,16 @@ forge appimage list
 sudo forge appimage remove foo
 ```
 
-An AppImage is a program from outside forge's repository: it is **not signed or checked**, and it runs with your rights.
-forge shows its SHA-256 (and checks it against `--sha256` when you give the one from the publisher's page) and asks before
-it installs. It never fetches one on its own, and `forge upgrade` does not touch them: install a newer file to update.
+The AppImage stays one `.AppImage` file: forge keeps it as `/opt/appimages/NAME.AppImage`, adds the command `NAME`
+(`/usr/local/bin`) and an entry in the app launcher, and **declares** it in the `appimages` key of `/etc/forge/system.toml`.
+`forge apply` brings back what is missing: the file (fetched again from the address it was declared with, and checked against
+the SHA-256 there), the launcher and the menu entry. An AppImage installed from a local file is declared by name only, so
+if its file is deleted it has to be installed again.
 
-No FUSE is needed. forge unpacks the AppImage once (with its own `--appimage-extract`, run as `nobody`) into
-`/opt/appimages/NAME/app`, writes a launcher `/usr/local/bin/NAME` and a menu entry in `/usr/local/share/applications`. The
-command name comes from the file name (`Foo-1.2-x86_64.AppImage` becomes `foo`); `--name` picks another. An AppImage that
-needs libraries it does not bundle (GTK, Qt...) needs them installed: `forge search` or `forge deb install`.
+An AppImage is a program from outside forge's repository: it is **not signed or checked**, and it runs with your rights.
+forge shows its SHA-256 (and checks it against `--sha256` when you give the one from the publisher's page) and asks before it
+installs. It never fetches one on its own, and `forge upgrade` does not touch them: install a newer file to update.
+
+No FUSE is needed: the launcher starts it with `APPIMAGE_EXTRACT_AND_RUN=1`, so the AppImage unpacks itself into `/tmp` for
+each run. The command name comes from the file name (`Foo-1.2-x86_64.AppImage` becomes `foo`); `--name` picks another. An
+AppImage that needs libraries it does not bundle (GTK, Qt...) needs them installed: `forge search` or `forge deb install`.

@@ -753,6 +753,7 @@ fn run(cli: Cli) -> Result<()> {
             apply(a)?;
             if live {
                 flatpak_cmd::sync_declared();
+                appimage_cmd::sync_declared();
             }
             Ok(())
         }

@@ -148,6 +148,10 @@ pub struct SystemDecl {
     /// installs them and keeps them updated, and `forge apply` installs the ones that are missing.
     #[serde(default)]
     pub flatpaks: Vec<String>,
+    /// AppImages (`name`, or `name=https://address#sha256=HEX`): `forge appimage` installs them as the .AppImage file with a
+    /// launcher and a menu entry, and `forge apply` brings back the ones whose file or launcher is missing.
+    #[serde(default)]
+    pub appimages: Vec<String>,
 }
 
 fn default_swap() -> String {

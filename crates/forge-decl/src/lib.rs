@@ -197,6 +197,48 @@ pub fn remove_flatpak(text: &str, entry: &str) -> Result<Edited, EditError> {
     Ok(Edited { text: doc.to_string(), changed: true })
 }
 
+
+/// An AppImage entry is `name`, or `name=https://address#sha256=HEX` (the address and checksum it can be fetched with again).
+fn check_appimage(entry: &str) -> Result<(), EditError> {
+    let (name, rest) = entry.split_once('=').map_or((entry, None), |(n, r)| (n, Some(r)));
+    let name_ok = !name.is_empty() && name.len() <= 48 && name.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    let rest_ok = rest.is_none_or(|r| {
+        r.rsplit_once("#sha256=").is_some_and(|(url, hex)| url.starts_with("https://") && !url.contains(char::is_whitespace) && hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+    });
+    if name_ok && rest_ok { Ok(()) } else { Err(EditError::BadName(entry.into())) }
+}
+
+/// Add an AppImage to `appimages`, replacing an entry of the same name (no-op if it is already listed as given).
+pub fn add_appimage(text: &str, entry: &str) -> Result<Edited, EditError> {
+    check_appimage(entry)?;
+    let name = entry.split('=').next().unwrap_or(entry);
+    let mut doc: DocumentMut = text.parse()?;
+    let item = doc.entry("appimages").or_insert(Item::Value(Value::Array(Array::new())));
+    let arr = item.as_array_mut().ok_or(EditError::BadPackages)?;
+    if arr.iter().any(|v| v.as_str() == Some(entry)) {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    }
+    let same = arr.iter().position(|v| v.as_str().is_some_and(|s| s.split('=').next() == Some(name)));
+    if let Some(i) = same {
+        arr.remove(i);
+    }
+    arr.push(entry);
+    Ok(Edited { text: doc.to_string(), changed: true })
+}
+
+/// Remove the AppImage called `name` from `appimages` (whatever its address), no-op if absent.
+pub fn remove_appimage(text: &str, name: &str) -> Result<Edited, EditError> {
+    check_appimage(name)?;
+    let mut doc: DocumentMut = text.parse()?;
+    let Some(arr) = doc.get_mut("appimages").and_then(|i| i.as_array_mut()) else {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    };
+    let Some(idx) = arr.iter().position(|v| v.as_str().is_some_and(|s| s.split('=').next() == Some(name))) else {
+        return Ok(Edited { text: text.to_string(), changed: false });
+    };
+    arr.remove(idx);
+    Ok(Edited { text: doc.to_string(), changed: true })
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +259,23 @@ mod tests {
         assert!(add_flatpak(src, "not an id").is_err());
     }
 
+
+    #[test]
+    fn appimages_are_added_replaced_removed_and_parse() {
+        let src = "hostname = \"x\"\nlibc = \"glibc\"\n";
+        let hex = "a".repeat(64);
+        let a = add_appimage(src, "foo").unwrap();
+        assert!(a.changed);
+        assert!(!add_appimage(&a.text, "foo").unwrap().changed);
+        let url = format!("foo=https://example.org/Foo.AppImage#sha256={hex}");
+        let b = add_appimage(&a.text, &url).unwrap();
+        assert_eq!(forge_schema::SystemDecl::parse(&b.text).unwrap().appimages, [url.clone()], "same name replaces the entry");
+        let c = remove_appimage(&b.text, "foo").unwrap();
+        assert!(forge_schema::SystemDecl::parse(&c.text).unwrap().appimages.is_empty());
+        for bad in ["", "a b", "../x", "foo=http://x/a#sha256=00", "foo=https://x/a", &format!("foo=http://x/a#sha256={hex}")] {
+            assert!(add_appimage(src, bad).is_err(), "{bad:?}");
+        }
+    }
     #[test]
     fn adds_to_empty_file() {
         let e = add_package("", "kitty").unwrap();
