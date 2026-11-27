@@ -8,6 +8,7 @@ use forge_schema::{Recipe, SystemDecl, UserDecl};
 use forge_strap::Firmware;
 
 mod deb_cmd;
+mod appimage_cmd;
 mod selfupdate;
 mod flatpak_cmd;
 mod doctor;
@@ -47,6 +48,8 @@ enum Cmd {
     Deb(deb_cmd::DebArgs),
     /// Install and update Flatpak applications (Astralis and others from Flathub)
     Flatpak(flatpak_cmd::FlatpakArgs),
+    /// Install AppImages (single-file applications) for the whole system
+    Appimage(appimage_cmd::AppimageArgs),
     /// Work with the package store: pack, publish, install, list, gc
     Store(StoreArgs),
     /// Create signing keys and manage which public keys are trusted
@@ -738,6 +741,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Pkg { action } => pkg(action),
         Cmd::Deb(a) => deb_cmd::run(a),
         Cmd::Flatpak(a) => flatpak_cmd::run(a),
+        Cmd::Appimage(a) => appimage_cmd::run(a),
         Cmd::Store(a) => store_cmd(a),
         Cmd::Key(a) => key_cmd(a),
         Cmd::Repo(a) => repo_cmd(a),

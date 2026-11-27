@@ -64,3 +64,21 @@ and `forge edit` never change a package you already have; only `sudo forge upgra
 `/etc/NAME`, `/var/lib/NAME`, `/var/cache/NAME` and `/var/log/NAME`, for the package and for everything that was removed with it.
 The preview lists each one before you confirm. It never deletes forge's own files, anything a package that stays provides, or
 your home directory (`~/.config/...` is yours: delete it by hand if you want it gone).
+
+## AppImages
+
+```bash
+sudo forge appimage install ~/Downloads/Foo-1.2-x86_64.AppImage     # a file
+sudo forge appimage install https://example.org/Foo.AppImage --sha256 HASH   # or an https address
+forge appimage list
+sudo forge appimage remove foo
+```
+
+An AppImage is a program from outside forge's repository: it is **not signed or checked**, and it runs with your rights.
+forge shows its SHA-256 (and checks it against `--sha256` when you give the one from the publisher's page) and asks before
+it installs. It never fetches one on its own, and `forge upgrade` does not touch them: install a newer file to update.
+
+No FUSE is needed. forge unpacks the AppImage once (with its own `--appimage-extract`, run as `nobody`) into
+`/opt/appimages/NAME/app`, writes a launcher `/usr/local/bin/NAME` and a menu entry in `/usr/local/share/applications`. The
+command name comes from the file name (`Foo-1.2-x86_64.AppImage` becomes `foo`); `--name` picks another. An AppImage that
+needs libraries it does not bundle (GTK, Qt...) needs them installed: `forge search` or `forge deb install`.
