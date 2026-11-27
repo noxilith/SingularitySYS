@@ -341,6 +341,22 @@ pub fn post_apply_script(tree_dir: &Path) -> Option<String> {
     Some(format!("#!/bin/sh\n# written by forge deb: what Debian's package scripts would have done\n{}\n", lines.join("\n")))
 }
 
+/// Libraries Debian installs in a folder of their own and links into `/usr/lib` with `update-alternatives` from a package
+/// script (BLAS and LAPACK: the real library is `usr/lib/blas/libblas.so.3`, and `libblas.so.3` itself is the link the script
+/// makes). forge does not run package scripts, so the link is made here, when the package has the library and no link.
+pub fn alternatives_links(tree_dir: &Path) -> Result<usize> {
+    let mut made = 0;
+    for (dir, lib) in [("blas", "libblas.so.3"), ("lapack", "liblapack.so.3")] {
+        let real = tree_dir.join("usr/lib").join(dir).join(lib);
+        let link = tree_dir.join("usr/lib").join(lib);
+        if fs::symlink_metadata(&real).is_ok() && fs::symlink_metadata(&link).is_err() {
+            std::os::unix::fs::symlink(format!("{dir}/{lib}"), &link).with_context(|| format!("linking {lib}"))?;
+            made += 1;
+        }
+    }
+    Ok(made)
+}
+
 /// The directory tree of the `deb-compat` package (the `x86_64-linux-gnu` link).
 pub fn compat_tree(dir: &Path) -> Result<()> {
     let p = dir.join("usr/lib");
@@ -424,5 +440,31 @@ mod claim_tests {
         claim_paths(&HashSet::new(), "deb-first");
         let owners = Owners::load(Path::new("/nonexistent-root")).unwrap();
         assert!(owners.owner("usr/lib/libclaimtest.so.1.0").is_none());
+    }
+}
+
+#[cfg(test)]
+mod alternatives_tests {
+    use super::*;
+
+    #[test]
+    fn blas_and_lapack_get_the_link_debian_scripts_would_make() {
+        let t = tempfile::tempdir().unwrap();
+        let lib = t.path().join("usr/lib");
+        fs::create_dir_all(lib.join("blas")).unwrap();
+        fs::create_dir_all(lib.join("lapack")).unwrap();
+        fs::write(lib.join("blas/libblas.so.3"), "b").unwrap();
+        fs::write(lib.join("lapack/liblapack.so.3"), "l").unwrap();
+        assert_eq!(alternatives_links(t.path()).unwrap(), 2);
+        assert_eq!(fs::read_link(lib.join("libblas.so.3")).unwrap(), Path::new("blas/libblas.so.3"));
+        assert_eq!(fs::read_to_string(lib.join("liblapack.so.3")).unwrap(), "l", "the link resolves");
+        assert_eq!(alternatives_links(t.path()).unwrap(), 0, "nothing to do the second time");
+    }
+
+    #[test]
+    fn nothing_is_made_for_a_package_without_them() {
+        let t = tempfile::tempdir().unwrap();
+        fs::create_dir_all(t.path().join("usr/lib")).unwrap();
+        assert_eq!(alternatives_links(t.path()).unwrap(), 0);
     }
 }

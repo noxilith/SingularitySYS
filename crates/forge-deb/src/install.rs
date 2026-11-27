@@ -162,6 +162,7 @@ pub fn build(cfg: &Config, request: &str, forge_indexes: &[forge_store::Index], 
     }
     convert::claim_paths(&tree.written, &forge_name);
     convert::check_tree_not_empty(&tree, &forge_name)?;
+    convert::alternatives_links(&tree_dir)?;
     if let Some(script) = convert::post_apply_script(&tree_dir) {
         let dir = tree_dir.join("usr/lib/forge/post-apply.d");
         fs::create_dir_all(&dir)?;
