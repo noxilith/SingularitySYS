@@ -8,7 +8,7 @@
 # Also: greetd (login screen), udisks2 (drives), tesseract (copy text from the screen), wf-recorder and ffmpeg (recording).
 # Not packaged: the GTK portal backend (needs GTK).
 name        = "vesper"
-version     = "0.1.0_r57"
+version     = "0.1.0_r58"
 description = "Vesper desktop environment: Rust Wayland compositor with scrollable tiling"
 license     = "GPL-3.0-or-later"
 libc        = ["glibc"]
@@ -21,8 +21,8 @@ run   = ["libxkbcommon", "xkeyboard-config", "libinput", "seatd", "libdrm", "mes
          "networkmanager", "bluez", "linux-firmware-bluetooth", "linux-firmware-sof", "rtkit", "matugen", "brightnessctl", "power-profiles-daemon", "upower", "polkit", "foot", "greetd", "udisks2", "tesseract", "tesseract-data-eng", "wf-recorder", "libnotify", "ffmpeg"]
 
 [[source]]
-url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-cc5beef64106f6ba35abfe5622f91fa4e91758c7-vendored.tar.gz"
-sha256 = "eabc44f54c549020c6377c1d69f21596d9fb4943a45a12cd70a17155c3518922"
+url    = "https://github.com/noxilith/SingularitySYS/releases/download/sources/vesper-070865288f2e3d141bdb9845bac59a0c37f062ac-vendored.tar.gz"
+sha256 = "7df45cff76d45ee6b73ae8463c017e664703aa303768118533720657e87b65ba"
 
 [build]
 compile = '''
